@@ -140,3 +140,39 @@ def test_5_health(client: TestClient):
     h = client.get("/api/health").json()
     assert h["status"] == "ok"
     assert h["papers"] >= 2
+
+
+def test_6_sse_event_protocol(client: TestClient):
+    """协议 v1.1：HTTP SSE 流中可见 plan/tool_call/tool_result/evidence/verifier 事件。"""
+    paper_id = globals().get("PAPER_ID")
+    with client.stream("POST", "/api/chat", json={"question": "How many GPUs was the model trained on?",
+                                                  "paper_ids": [paper_id]}) as resp:
+        assert resp.status_code == 200
+        events = []
+        for line in resp.iter_lines():
+            if line.startswith("event: "):
+                ev = line[7:]
+            elif line.startswith("data: ") and ev:
+                events.append((ev, json.loads(line[6:])))
+    kinds = [e for e, _ in events]
+    for ev in ("plan", "tool_call", "tool_result", "evidence", "verifier"):
+        assert ev in kinds, f"SSE 流缺少 {ev} 事件"
+    final = next(d for e, d in events if e == "final")
+    assert final.get("thread_id"), "final 应携带 thread_id（即 trace_id）"
+    globals()["TRACE_ID"] = final["thread_id"]
+
+
+def test_7_qa_trace_replay(client: TestClient):
+    """回放接口：GET /api/qa/{trace_id} 返回与实时流一致的完整事件序列。"""
+    trace_id = globals().get("TRACE_ID")
+    r = client.get(f"/api/qa/{trace_id}")
+    assert r.status_code == 200, r.text
+    trace = r.json()
+    assert trace["trace_id"] == trace_id and trace["question"]
+    kinds = [e["kind"] for e in trace["events"]]
+    for ev in ("plan", "tool_call", "tool_result", "evidence", "verifier", "final", "done"):
+        assert ev in kinds, f"回放事件流缺少 {ev}"
+    plan = next(e["data"] for e in trace["events"] if e["kind"] == "plan")
+    assert plan["steps"] and all(s["step_id"] for s in plan["steps"])
+    # 不存在的 trace → 404
+    assert client.get("/api/qa/t_nonexistent").status_code == 404

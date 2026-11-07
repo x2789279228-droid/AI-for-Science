@@ -11,6 +11,7 @@ DATA_DIR = Path(os.environ.get("SCHOLAR_DATA_DIR", ROOT / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 DOCIR_DIR = DATA_DIR / "docir"
 DB_PATH = DATA_DIR / "scholar.db"
+CHECKPOINT_DB_PATH = DATA_DIR / "checkpoints.db"  # LangGraph SqliteSaver 断点续跑存储
 
 for d in (DATA_DIR, UPLOAD_DIR, DOCIR_DIR):
     d.mkdir(parents=True, exist_ok=True)
