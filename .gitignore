@@ -21,3 +21,8 @@ out/
 # 系统与编辑器
 .DS_Store
 Thumbs.db
+
+# 测试临时数据目录与构建产物
+api/tests/_agt_*/
+api/tests/_dbg_*/
+web/tsconfig.tsbuildinfo
