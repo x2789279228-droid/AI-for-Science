@@ -28,12 +28,14 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_reasoning_model: str = ""
     llm_temperature: float = 0.1
+    # 火山方舟 doubao-seed 系列默认开思考；QA 场景置 1 关闭（thinking={"type":"disabled"}）
+    llm_thinking_disabled: bool = False
 
     # Embedding / Rerank
     embedding_api_key: str = ""
     embedding_base_url: str = "https://api.siliconflow.cn/v1"
     embedding_model: str = "BAAI/bge-m3"
-    embedding_backend: str = "auto"  # auto | api | off
+    embedding_backend: str = "auto"  # auto | api | local | off
     rerank_api_key: str = ""
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
 
@@ -67,7 +69,23 @@ class Settings(BaseSettings):
 
     @property
     def dense_enabled(self) -> bool:
-        return bool(self.embedding_api_key) and self.embedding_backend != "off"
+        backend = self.embedding_backend
+        if backend == "off":
+            return False
+        if backend == "api":
+            return bool(self.embedding_api_key)
+        if backend == "local":
+            return True
+        # auto：有 API key 走 API，否则尝试本地 fastembed
+        return bool(self.embedding_api_key) or _fastembed_available()
+
+
+def _fastembed_available() -> bool:
+    try:
+        import fastembed  # noqa: F401
+        return True
+    except Exception:
+        return False
 
 
 settings = Settings()

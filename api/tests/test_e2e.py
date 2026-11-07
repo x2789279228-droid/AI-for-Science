@@ -11,6 +11,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("SCHOLAR_DATA_DIR", str(Path(__file__).parent / f"_data_{uuid.uuid4().hex[:8]}"))
+# 测试密闭性：屏蔽一切真实 LLM/Embedding 凭据（机器全局 env 与项目 .env 都不进测试）
+os.environ["LLM_PROVIDER"] = ""
+os.environ["LLM_API_KEY"] = ""
+os.environ["DEEPSEEK_API_KEY"] = ""
+os.environ["MINIMAX_API_KEY"] = ""
+os.environ["LLM_BASE_URL"] = ""
+os.environ["EMBEDDING_BACKEND"] = "off"
+os.environ["EMBEDDING_API_KEY"] = ""
 
 from app.main import app  # noqa: E402  （必须在 env 之后导入）
 from tests.fixtures_pdf import make_paper_pdf  # noqa: E402
@@ -123,9 +131,9 @@ def test_3_semantic_dedup(client: TestClient):
 def test_4_audit_log(client: TestClient):
     logs = client.get("/api/audit/prompts").json()
     assert logs["logs"], "审计日志为空"
-    # 机器上有失效的 MINIMAX_API_KEY → configured=True 但 available 必须 False（真实降级）
+    # 测试环境屏蔽全部凭据（密闭性）：configured/available 都必须为 False（降级路径生效）
+    assert logs["llm_configured"] is False
     assert logs["llm_available"] is False
-    assert logs["llm_configured"] is True
 
 
 def test_5_health(client: TestClient):

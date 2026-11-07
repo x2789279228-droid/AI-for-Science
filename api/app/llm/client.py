@@ -47,6 +47,9 @@ def chat(messages: list[dict], model: str = "", temperature: float | None = None
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if settings.llm_thinking_disabled:
+        # 火山方舟 doubao-seed 系列：关闭默认思考模式（其他兼容端点忽略/需容忍该字段）
+        payload["thinking"] = {"type": "disabled"}
     try:
         resp = httpx.post(f"{base_url}/chat/completions",
                           headers={"Authorization": f"Bearer {api_key}"},
@@ -79,6 +82,8 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
     payload = {"model": model or default_model, "messages": messages, "stream": True,
                "temperature": settings.llm_temperature if temperature is None else temperature,
                "max_tokens": max_tokens}
+    if settings.llm_thinking_disabled:
+        payload["thinking"] = {"type": "disabled"}
     try:
         with httpx.stream("POST", f"{base_url}/chat/completions",
                           headers={"Authorization": f"Bearer {api_key}"},

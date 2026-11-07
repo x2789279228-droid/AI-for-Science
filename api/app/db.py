@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS chunks (
   bbox_json    TEXT DEFAULT '[]',
   section_path TEXT DEFAULT '',
   block_ids    TEXT DEFAULT '[]',
-  kind         TEXT DEFAULT 'detail'   -- detail | summary
+  kind         TEXT DEFAULT 'detail',   -- detail | summary
+  vec          BLOB                     -- 索引时计算的 dense 向量（float32 LE）
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_paper ON chunks(paper_id, seq);
 

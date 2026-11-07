@@ -39,11 +39,15 @@ pnpm build && pnpm start     # http://localhost:3000
 ### 配置
 
 ```bash
-cp .env.example .env         # 填入 DEEPSEEK_API_KEY 等密钥（密钥绝不入仓库）
+cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 ```
 
-无 LLM key 或 key 失效时系统自动降级为**抽取式证据模式**：检索与逐论断溯源照常工作，
-答案为原文摘录并逐句挂页码锚点；配置 key 后无缝升级为生成式溯源问答。
+当前接入：**火山方舟 Agent Plan**——LLM `doubao-seed-2.1-lite` 与 Embedding
+`doubao-embedding-vision` 走订阅专属 OpenAI 兼容面 `/api/plan/v3`（model 直填模型名，
+无需 ep 接入点；QA 关闭思考模式提速）。也支持 DeepSeek/MiniMax/任意 OpenAI 兼容端点，
+`.env` 换三项即可。Embedding 向量在**索引时**计算落库（方舟单批限 10，代码按 8 分批+退避），
+查询时零重算；无 key 时 `EMBEDDING_BACKEND=local` 走 fastembed 本地 BGE-M3，
+或纯 BM25 单路降级，检索管线不变。
 
 ## 当前模块状态（MVP 闭环已通）
 

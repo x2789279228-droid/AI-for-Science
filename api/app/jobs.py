@@ -52,6 +52,13 @@ def _run_parse(job_id: str, paper_id: str) -> None:
         db.update_job(job_id, progress=0.88, message="切块与索引")
         chunks = chunk_docir(docir)
         n = indexing.index_chunks(paper_id, chunks)
+        vec_rows = db.query("SELECT COUNT(*) c FROM chunks WHERE paper_id=? AND vec IS NOT NULL",
+                            (paper_id,))
+        if indexing._backend_mode() != "off":
+            vec_note = (f"，向量 {vec_rows[0]['c']}/{n}"
+                        if vec_rows[0]["c"] else f"，向量 0/{n}（{indexing._EMBED_LAST_ERROR or '未知原因'}）")
+        else:
+            vec_note = ""
 
         # references 落库
         with db.tx() as c:
@@ -68,7 +75,7 @@ def _run_parse(job_id: str, paper_id: str) -> None:
                        docir["meta"].get("page_count", 0), str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
 
         db.update_job(job_id, status="done", progress=1.0,
-                      message=f"完成：{len(chunks)} chunks / refs {len(docir.get('references', []))}")
+                      message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}")
         post_parse_dedup(paper_id)  # 内容级去重（官方用例 1：先 v7 后 v1）
     except Exception as e:  # noqa: BLE001
         db.update_job(job_id, status="error", message=f"{type(e).__name__}: {e}")
