@@ -18,7 +18,7 @@ from .nodes import graph_path
 def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue) -> None:
     """阻塞执行完整状态图，事件逐条入队；最后一条必为 done。"""
     graph = build_graph()
-    config = {"recursion_limit": 25, "configurable": {"queue": q}}
+    config = {"recursion_limit": 40, "configurable": {"queue": q}}  # 恢复循环最坏 ≈17 超步，留余量
     t0 = time.time()
     try:
         final = graph.invoke(

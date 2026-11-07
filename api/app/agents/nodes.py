@@ -1,7 +1,9 @@
 """LangGraph 状态图节点。
 
-主图节点：router / planner / verifier / responder（同步函数，LLM 复用 app/llm/client.py）。
-Executor 子图节点：executor_entry(透传) → retrieve_task(Send 并行扇出) → executor_fuse(RRF)。
+主图节点：router / planner / verifier / recover / responder（同步函数，LLM 复用 app/llm/client.py）。
+recover 为失败恢复统一调度节点，三种策略：①证据不足重检索（改写查询+放宽 top_k→executor）
+②工具失败降级（标记 degraded→responder 抽取式）③格式非法重生成（纠错反馈→responder 定向重写）。
+Executor 子图节点：executor_entry(透传) → retrieve_task(Send 并行扇出，含 BM25 单通道降级) → executor_fuse(RRF)。
 可视化：所有节点完成时经 config.configurable.queue 推送「节点即卡片」trace 事件；
 state.trace 同步累积（最终随 final 事件整体下发，前端以其为准）。
 """
@@ -18,7 +20,7 @@ from ..rag.answering import (
     NO_EVIDENCE, REFUSAL_CHITCHAT, build_qa_messages, extractive_answer,
     format_context, llm_claims, validate_citations,
 )
-from .state import AgentState, Step, trace_card
+from .state import MAX_REGEN, MAX_RECOVER, AgentState, Step, trace_card
 
 _GREETINGS = {"你好", "您好", "hi", "hello", "在吗", "你是谁", "测试", "hello world", "ping"}
 _SUMMARY_HINTS = ("总结", "综述", "概括", "summary", "summarize", "主要讲", "讲了什么")
@@ -150,18 +152,29 @@ def fan_out(state: AgentState):
 def retrieve_task_node(payload: dict, config=None) -> dict:
     step: Step = payload["step"]
     retries = payload.get("retries", 0)
-    top_k = 10 + retries * 6  # 重规划时放宽召回
-    search = indexing.hybrid_search([step["paper_id"]], step["query"], top_k=top_k)
+    top_k = 10 + retries * 6  # 重检索时放宽召回
+    guardrails: list[str] = []
+    failures: list[dict] = []
+    try:
+        search = indexing.hybrid_search([step["paper_id"]], step["query"], top_k=top_k)
+    except Exception as e:  # noqa: BLE001 —— 策略②：混合检索故障 → BM25 单通道降级
+        hits = indexing.fts_search([step["paper_id"]], step["query"], top_k=top_k)
+        search = {"hits": hits, "channels": ["bm25"], "bm25_count": len(hits), "dense_count": 0}
+        guardrails.append("retrieval_degraded:bm25_only")
+        failures.append({"node": "retrieve_task", "kind": "tool_failure",
+                         "detail": f"hybrid_search:{type(e).__name__}:{e}"[:120]})
     tagged = [{**h, "aspect": step["aspect"], "query": step["query"]} for h in search["hits"]]
     stat = {"paper_id": step["paper_id"], "query": step["query"], "aspect": step["aspect"],
             "hits": len(tagged), "channels": search["channels"],
             "bm25": search["bm25_count"], "dense": search["dense_count"]}
+    degraded = "（BM25 降级）" if guardrails else ""
     card = trace_card("retrieve_task", "并行检索",
-                      f"{step['query'][:26]}… → {len(tagged)} 块" if len(step["query"]) > 26
-                      else f"{step['query']} → {len(tagged)} 块",
+                      f"{step['query'][:26]}… → {len(tagged)} 块{degraded}" if len(step["query"]) > 26
+                      else f"{step['query']} → {len(tagged)} 块{degraded}",
                       stat)
     _emit(config, card)
-    return {"raw_hits": tagged, "branch_stats": [stat], "trace": [card]}
+    return {"raw_hits": tagged, "branch_stats": [stat], "trace": [card],
+            "guardrails": guardrails, "failures": failures}
 
 
 def fuse_node(state: AgentState, config=None) -> dict:
@@ -207,12 +220,120 @@ def verifier_node(state: AgentState, config=None) -> dict:
         return {"trace": [card]}
     missing = {s.get("aspect", "") for s in state.get("plan", {}).get("steps", [])} - \
               {h.get("aspect", "") for h in state.get("evidence", [])}
-    card = trace_card("verifier", "证据校验", f"不足 · 缺少 {len(missing)} 个检索面，触发重规划",
-                      {"sufficient": False, "missing": sorted(missing)})
+    missing_sorted = sorted(missing)
+    card = trace_card("verifier", "证据校验",
+                      f"不足 · 缺少 {len(missing_sorted)} 个检索面 → 交由 recover 恢复",
+                      {"sufficient": False, "missing": missing_sorted})
     _emit(config, card)
-    return {"retries": state.get("retries", 0) + 1,
-            "guardrails": [f"insufficient_evidence:{int(state.get('retries', 0)) + 1}"],
+    return {"pending_failure": {"kind": "insufficient_evidence", "missing": missing_sorted,
+                                "node": "verifier"},
+            "failures": [{"node": "verifier", "kind": "insufficient_evidence",
+                          "detail": f"missing:{','.join(missing_sorted)}"[:120]}],
             "trace": [card]}
+
+
+# ---------------- Recover（失败恢复统一调度，第 6 节点） ----------------
+
+_REGEN_FEEDBACK = (
+    "你上一轮的回答未通过引用格式校验（即将进行第 {n} 次生成）。问题：{problems}。\n"
+    "请重新生成完整回答：内容与结论保持不变，为每个事实句补上引用标记，"
+    "格式严格为 [^p{{页码}}-§{{章节}}]，页码只能取自本次证据的页码集合：{valid_pages}。"
+)
+
+
+def _rewrite_aspects(missing: list[str], question: str) -> dict[str, str]:
+    """策略①：为零命中检索面生成替换查询（LLM 换措辞补术语；失败回退原检索面文本）。"""
+    if llm.available() and missing:
+        res = llm.chat(
+            [{"role": "system", "content":
+                "你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
+                "换一种措辞、使用论文正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
+                '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。'},
+             {"role": "user", "content": "检索面：\n" + "\n".join(f"- {m}" for m in missing) +
+              f"\n原问题：{question}"}],
+            json_mode=True, temperature=0.5, module="recover", audit_prompt=question[:200],
+        )
+        data = llm.parse_json(res.get("text", ""))
+        rewrites = data.get("rewrites") if isinstance(data, dict) else None
+        if isinstance(rewrites, dict) and any(str(rewrites.get(m, "")).strip() for m in missing):
+            return {m: str(rewrites.get(m, m)).strip() or m for m in missing}
+    return {m: m for m in missing}  # 规则回退：用回原始措辞（规划器改写可能偏了）
+
+
+def recover_node(state: AgentState, config=None) -> dict:
+    """按 pending_failure 分发三种恢复策略，路由决策写入 recover_route（条件边读取）：
+    ① insufficient_evidence → 改写缺失检索面 + 放宽 top_k → executor 重检索
+    ② tool_failure          → 标记 degraded → responder 抽取式降级
+    ③ format_invalid        → 组装纠错反馈 retry_prompt → responder 定向重生成
+    """
+    pend = state.get("pending_failure") or {}
+    kind = pend.get("kind", "")
+    recover_count = state.get("recover_count", 0) + 1
+    guardrails: list[str] = []
+    upd: dict = {"pending_failure": None, "recover_count": recover_count,
+                 "recover_route": "responder"}
+
+    if kind == "insufficient_evidence":
+        # ---- 策略①：证据不足重检索 ----
+        missing = [m for m in pend.get("missing", []) if m]
+        re_retrieve = state.get("re_retrieve_count", 0) + 1
+        rewrites = _rewrite_aspects(missing, state.get("question", ""))
+        old_aspects = list(dict.fromkeys(
+            s.get("aspect", "") for s in state.get("plan", {}).get("steps", []))) or missing
+        steps = [{"paper_id": pid, "query": rewrites.get(a, a), "aspect": a}
+                 for a in old_aspects for pid in state.get("paper_ids", [])]
+        retries = state.get("retries", 0) + 1
+        upd.update({"plan": {"steps": steps,
+                             "mode": state.get("plan", {}).get("mode", "single")},
+                    "retries": retries, "re_retrieve_count": re_retrieve,
+                    "recover_route": "executor",
+                    "guardrails": [f"insufficient_evidence:{re_retrieve}"]})
+        card = trace_card("recover", "恢复·重检索",
+                          f"#{recover_count} · 改写 {len(missing)} 个检索面 · top_k → {10 + retries * 6}",
+                          {"strategy": "re_retrieve", "missing": missing, "rewrites": rewrites})
+
+    elif kind == "tool_failure":
+        # ---- 策略②：工具失败降级 ----
+        detail = pend.get("detail", "工具调用失败")
+        upd.update({"degraded": True, "guardrails": ["tool_failure_degraded"]})
+        card = trace_card("recover", "恢复·降级",
+                          f"#{recover_count} · {detail} → 抽取式证据模式",
+                          {"strategy": "degrade", "detail": detail})
+
+    elif kind == "format_invalid":
+        # ---- 策略③：格式非法重生成（带错误反馈；预算尽则警告放行收尾） ----
+        regen = state.get("regen_count", 0)
+        invalid_pages = pend.get("invalid_pages", [])
+        valid_pages = pend.get("valid_pages", [])
+        if regen >= MAX_REGEN:
+            answer = state.get("answer", "") + \
+                "\n\n> ⚠️ 该回答未通过引用后验校验（多次重生成仍失败），请人工核对原文。"
+            upd.update({"answer": answer, "recover_route": "end",
+                        "guardrails": ["format_accept_with_warning"]})
+            card = trace_card("recover", "恢复·重生成",
+                              f"#{recover_count} · 重生成预算用尽 → 警告放行",
+                              {"strategy": "regen_exhausted"})
+        else:
+            problems = [f"引用了证据中不存在的页码 p{', p'.join(map(str, invalid_pages))}"
+                        if invalid_pages else "完全缺少 [^p页码-§章节] 引用标记"]
+            prompt = _REGEN_FEEDBACK.format(n=regen + 1, problems="；".join(problems),
+                                            valid_pages=", ".join(map(str, valid_pages)) or "无")
+            upd.update({"retry_prompt": prompt, "regen_count": regen + 1,
+                        "guardrails": [f"format_regen:{regen + 1}"]})
+            card = trace_card("recover", "恢复·重生成",
+                              f"#{recover_count} · 注入纠错反馈 · 第 {regen + 1}/{MAX_REGEN} 次"
+                              + (f" · 非法页 {invalid_pages}" if invalid_pages else " · 缺引用"),
+                              {"strategy": "regen", "invalid_pages": invalid_pages,
+                               "valid_pages": valid_pages})
+    else:
+        card = trace_card("recover", "恢复", f"#{recover_count} · 未知失败类型 → 继续",
+                          {"strategy": "noop"})
+
+    upd["failures"] = [{"node": "recover", "kind": kind or "unknown",
+                        "detail": card["summary"][:120]}]
+    upd["trace"] = [card]
+    _emit(config, card)
+    return upd
 
 
 # ---------------- Responder ----------------
@@ -221,6 +342,8 @@ def responder_node(state: AgentState, config=None) -> dict:
     q = _queue(config)
     question = state["question"]
     intent_type = state.get("intent", {}).get("type", "qa_single")
+    retry_prompt = state.get("retry_prompt", "")
+    prev_answer = state.get("answer", "")
     guardrails: list[str] = []
 
     def finish(answer: str, claims: list[dict], mode: str, summary: str) -> dict:
@@ -228,7 +351,7 @@ def responder_node(state: AgentState, config=None) -> dict:
                           {"mode": mode, "claims": len(claims)})
         _emit(config, card)
         return {"answer": answer, "claims": claims, "mode": mode,
-                "guardrails": guardrails, "trace": [card]}
+                "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
 
     if intent_type == "chitchat":
         return finish(REFUSAL_CHITCHAT, [], "refusal", "寒暄拒答（范围外）")
@@ -239,21 +362,34 @@ def responder_node(state: AgentState, config=None) -> dict:
 
     page_map = format_context(hits)[1]
 
+    # 降级路径（策略②）：recover 标记 degraded → 抽取式证据模式
+    if state.get("degraded"):
+        answer, claims = extractive_answer(question, hits)
+        return finish(answer, claims, "extractive",
+                      f"工具失败降级 → 抽取式 · {len(claims)} 条论断")
+
     if not llm.available():
         answer, claims = extractive_answer(question, hits)
         guardrails.append("llm_unavailable_fallback")
         return finish(answer, claims, "extractive",
                       f"抽取式降级 · {len(claims)} 条论断")
 
-    # 生成式：流式输出 → 引用后验 → ClaimTrace
+    # 生成式（含策略③重生成）：流式输出 → 引用后验 → ClaimTrace
     messages = build_qa_messages(question, hits)
+    if retry_prompt and prev_answer:
+        # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
+        messages += [{"role": "assistant", "content": prev_answer},
+                     {"role": "user", "content": retry_prompt}]
     parts: list[str] = []
     streamed = False
-    for piece in llm.stream_chat(messages, max_tokens=1500):
-        streamed = True
-        parts.append(piece)
-        if q is not None:
-            q.put(("delta", {"text": piece}))
+    try:
+        for piece in llm.stream_chat(messages, max_tokens=1500):
+            streamed = True
+            parts.append(piece)
+            if q is not None:
+                q.put(("delta", {"text": piece}))
+    except Exception:  # noqa: BLE001 —— 流中断走同步兜底
+        streamed = False
     answer = "".join(parts)
     if not streamed or not answer.strip():
         res = llm.chat(messages, max_tokens=1500, module="qa", audit_prompt=question)
@@ -262,22 +398,42 @@ def responder_node(state: AgentState, config=None) -> dict:
             q.put(("delta", {"text": answer}))
 
     if not answer.strip():
-        guardrails.append("llm_unavailable_fallback")
+        # 策略②：生成工具失败 → 交 recover 降级；恢复预算尽则就地抽取式
+        if state.get("recover_count", 0) < MAX_RECOVER:
+            card = trace_card("responder", "生成回答", "生成失败（空响应）→ 请求恢复降级",
+                              {"mode": "pending_degrade"})
+            _emit(config, card)
+            return {"pending_failure": {"kind": "tool_failure", "detail": "LLM 空响应/调用失败"},
+                    "failures": [{"node": "responder", "kind": "tool_failure",
+                                  "detail": "llm_empty_response"}],
+                    "guardrails": ["llm_call_failed"], "trace": [card],
+                    "retry_prompt": ""}
         answer, claims = extractive_answer(question, hits)
-        return finish(answer, claims, "extractive", "流式失败 → 抽取式降级")
+        guardrails.append("tool_failure_degraded")
+        return finish(answer, claims, "extractive", "生成失败且恢复预算用尽 → 就地抽取式")
 
     answer, cited_guards = validate_citations(answer, page_map)
     guardrails += cited_guards
-    if "no_citation_found" in guardrails:
-        retry = llm.chat(messages + [
-            {"role": "assistant", "content": answer},
-            {"role": "user", "content":
-                "你的回答缺少引用标记。请严格按 [^p{页码}-§{章节}] 格式重写，只改引用不改内容。"}],
-            max_tokens=1500, module="qa_retry")
-        if retry.get("text"):
-            answer, g2 = validate_citations(retry["text"], page_map)
-            guardrails += g2
-    if "no_citation_found" in guardrails:
+    invalid = [g for g in cited_guards
+               if g == "no_citation_found" or g.startswith("invalid_citation:")]
+    if invalid:
+        # 策略③：格式非法 → 交 recover 定向重生成；预算尽则警告放行
+        if (state.get("regen_count", 0) < MAX_REGEN
+                and state.get("recover_count", 0) < MAX_RECOVER):
+            invalid_pages = [int(g.split(":p", 1)[1]) for g in cited_guards
+                             if g.startswith("invalid_citation:")]
+            card = trace_card("responder", "生成回答",
+                              f"引用校验未通过（{len(invalid)} 项）→ 请求定向重生成",
+                              {"mode": "pending_regen", "invalid": invalid})
+            _emit(config, card)
+            return {"answer": answer, "mode": "generative",
+                    "pending_failure": {"kind": "format_invalid",
+                                        "invalid_pages": invalid_pages,
+                                        "valid_pages": sorted(page_map)},
+                    "failures": [{"node": "responder", "kind": "format_invalid",
+                                  "detail": ";".join(invalid)[:120]}],
+                    "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
+        guardrails.append("format_accept_with_warning")
         answer += "\n\n> ⚠️ 该回答未通过引用后验校验（无有效页码锚点），请人工核对原文。"
 
     claims = llm_claims(answer, hits)

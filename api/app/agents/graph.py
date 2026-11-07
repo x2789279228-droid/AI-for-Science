@@ -1,8 +1,11 @@
-"""Meridian Agent 主图：Router → Planner → Executor(子图,并行) → Verifier → Responder。
+"""Meridian Agent 主图：Router → Planner → Executor(子图,并行) → Verifier → Recover → Responder。
 
-- 主图 5 节点静态拓扑 + 显式条件边（无 Command 动态跳转），verifier→planner 为唯一回流边
+- 主图 6 节点静态拓扑 + 显式条件边（无 Command 动态跳转）
+- 回流边：verifier→recover→executor（证据不足重检索）、responder→recover→responder（降级/重生成）
+- 失败恢复三策略统一经 recover 节点分发（详见 nodes.recover_node），预算：全局 ≤3，
+  其中重检索 ≤2、格式重生成 ≤2；超预算走现有兜底出答案
 - Executor 子图（独立 ExecutorState）：executor_entry →(Send 扇出)→ retrieve_task×N(并行) → executor_fuse；
-  经 wrapper 节点手动 invoke，只把 evidence/branch_stats/子图自身 trace 传回父图
+  经 wrapper 节点手动 invoke，只把 evidence/branch_stats/子图自身 trace/failures/guardrails 传回父图
   （若直接挂编译子图，父级 trace 会经子图 reducer 回流造成卡片重复）
 - build_graph() 供 FastAPI 与 LangGraph Studio（langgraph.json）共同加载
 """
@@ -12,9 +15,9 @@ from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
     _check_sufficiency, executor_entry_node, fan_out, fuse_node, planner_node,
-    responder_node, retrieve_task_node, router_node, verifier_node,
+    recover_node, responder_node, retrieve_task_node, router_node, verifier_node,
 )
-from .state import AgentState, ExecutorState
+from .state import MAX_RECOVER, MAX_RE_RETRIEVE, AgentState, ExecutorState
 
 
 def _after_router(state: AgentState) -> str:
@@ -22,9 +25,23 @@ def _after_router(state: AgentState) -> str:
 
 
 def _after_verifier(state: AgentState) -> str:
-    if _check_sufficiency(state) or state.get("retries", 0) >= 2:
+    if _check_sufficiency(state):
         return "responder"
-    return "planner"
+    if (state.get("recover_count", 0) >= MAX_RECOVER
+            or state.get("re_retrieve_count", 0) >= MAX_RE_RETRIEVE):
+        return "responder"  # 恢复预算尽：以现有证据作答或拒答
+    return "recover"
+
+
+def _after_responder(state: AgentState) -> str:
+    if state.get("pending_failure") and state.get("recover_count", 0) < MAX_RECOVER:
+        return "recover"
+    return END
+
+
+def _recover_route(state: AgentState) -> str:
+    route = state.get("recover_route", "responder")
+    return END if route == "end" else route
 
 
 def _build_executor():
@@ -50,7 +67,9 @@ def executor_node(state: AgentState, config=None) -> dict:
          "retries": state.get("retries", 0)}, config)
     return {"evidence": out.get("evidence", []),
             "branch_stats": out.get("branch_stats", []),
-            "trace": out.get("trace", [])}
+            "trace": out.get("trace", []),
+            "guardrails": out.get("guardrails", []),
+            "failures": out.get("failures", [])}
 
 
 def build_graph():
@@ -60,13 +79,15 @@ def build_graph():
     g.add_node("planner", planner_node)
     g.add_node("executor", executor_node)
     g.add_node("verifier", verifier_node)
+    g.add_node("recover", recover_node)
     g.add_node("responder", responder_node)
 
     g.add_edge(START, "router")
     g.add_conditional_edges("router", _after_router, ["planner", "responder"])
     g.add_edge("planner", "executor")
     g.add_edge("executor", "verifier")
-    g.add_conditional_edges("verifier", _after_verifier, ["planner", "responder"])
-    g.add_edge("responder", END)
+    g.add_conditional_edges("verifier", _after_verifier, ["recover", "responder"])
+    g.add_conditional_edges("recover", _recover_route, ["executor", "responder", END])
+    g.add_conditional_edges("responder", _after_responder, ["recover", END])
 
     return g.compile()
