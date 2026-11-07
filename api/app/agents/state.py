@@ -8,7 +8,27 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
-IntentType = Literal["qa_single", "qa_compare", "summarize", "graph_query", "writing", "chitchat"]
+IntentType = Literal["qa_single", "qa_compare", "summarize", "graph_query", "writing", "viz", "chitchat"]
+
+AgentName = Literal["reader", "compare", "graph", "writer", "viz", "none"]
+
+# ---- 多智能体路由表（单一事实源：router 决策与 graph 条件边共用） ----
+INTENT_AGENT: dict[str, AgentName] = {
+    "qa_single": "reader", "summarize": "reader",
+    "qa_compare": "compare",
+    "graph_query": "graph", "writing": "writer", "viz": "viz",
+}
+AGENT_INTENT: dict[str, IntentType] = {   # 强制指定时回填意图（免一次 LLM 分类，演示确定性）
+    "reader": "qa_single", "compare": "qa_compare",
+    "graph": "graph_query", "writer": "writing", "viz": "viz",
+}
+READY_AGENTS: set[str] = {"reader", "compare", "graph", "writer", "viz"}   # 五 Agent 全实装
+AGENT_LABEL: dict[str, str] = {
+    "reader": "Reader Agent · 单篇精读", "compare": "Compare Agent · 跨文对比",
+    "graph": "Graph Agent · 图谱综述", "writer": "Writer Agent · 写作",
+    "viz": "Viz Agent · 数据出图", "none": "闲聊应答",
+}
+FORCED_AGENT_VALUES = {"auto", "reader", "compare", "graph", "writer", "viz"}
 
 
 class Intent(TypedDict, total=False):
@@ -21,6 +41,7 @@ class Step(TypedDict):
     paper_id: str
     query: str
     aspect: str
+    step_id: str      # Trace 时间线：步骤唯一标识（"s{round}-{序号}"，planner 与 recover① 分配）
 
 
 class Plan(TypedDict, total=False):
@@ -35,6 +56,14 @@ class AgentState(TypedDict, total=False):
     # 路由 / 规划
     intent: Intent
     plan: Plan
+    # 多智能体分发（本轮新增；与 recover 机制正交）
+    agent: AgentName                                          # router 分发结果（当前承接 Agent）
+    forced_agent: str                                         # UI 强制指定（auto/reader/…；"" 等同 auto）
+    handoffs: Annotated[list[dict[str, Any]], operator.add]   # Agent 交接日志（前端渲染协作流）
+    compare_table: dict[str, Any]                             # Compare Agent 维度对齐表（align 产出）
+    graph_data: dict[str, Any]                                # Graph Agent：引用图 + 指标（graph_build 产出）
+    outline: dict[str, Any]                                   # Writer Agent：写作大纲（responder 产出）
+    chart_spec: dict[str, Any]                                # Viz Agent：声明式图表 spec（viz_extract 产出）
     # 执行
     raw_hits: Annotated[list[dict[str, Any]], operator.add]   # 每路分支原始结果
     branch_stats: Annotated[list[dict[str, Any]], operator.add]

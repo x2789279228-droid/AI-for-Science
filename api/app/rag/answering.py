@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -32,6 +33,82 @@ REFUSAL_CHITCHAT = (
 )
 
 NO_EVIDENCE = "【未找到依据】检索到的片段无法回答该问题。建议：换关键词重问，或确认已选中相关论文。"
+
+COMPARE_REFUSAL = (
+    "【Compare Agent · 范围校验】跨文对比需要选中 **2 篇及以上** 论文，当前只有 {n} 篇。\n\n"
+    "建议：\n"
+    "- 在文献库中再勾选一篇论文后重新提问；\n"
+    "- 或改用 **Reader Agent（单篇精读）** 就当前论文提问。\n"
+    "> 我不会用单篇内容冒充对比结论。"
+)
+
+SYSTEM_QA_COMPARE = (
+    "你是一名严谨的跨论文对比分析助手。回答规则：\n"
+    "1. 只允许使用 <context> 中的原文片段与 <compare_table> 对齐表作答，禁止使用任何外部知识。\n"
+    "2. 按维度组织回答：每个维度一行/一段，行内明确标注结论来自哪篇论文（用其标题或 P1/P2 代号）。\n"
+    "3. 每个事实性论断后必须紧跟引用标记 [^p{页码}-§{章节}]，页码与章节取自片段标签。\n"
+    "4. 两个论文在同一维度结论冲突时，必须双侧并列呈现，禁止擅自合并或替用户裁决。\n"
+    "5. 对齐表中某篇某维度标记「未找到」时，如实写明该篇未检索到相关内容，禁止脑补。\n"
+    "6. 不确定的内容宁可不写；禁止编造数字、结论与引用。"
+)
+
+WRITER_MIN_EVIDENCE = 3
+
+WRITER_REFUSAL = (
+    "【Writer Agent · 证据池校验】当前证据池只有 {n} 块（要求 ≥{m} 块），不足支撑一篇有据可查的写作。\n\n"
+    "我不会在无证据的情况下凭空生成文稿。建议：\n"
+    "- 换更具体的问题让检索命中更多相关段落；\n"
+    "- 或先用 **Reader Agent（单篇精读）** 确认文献里有相关内容。\n"
+    "> Evidence-First：没有证据就没有写作。"
+)
+
+SYSTEM_QA_WRITER = (
+    "你是一名严谨的学术写作助手。根据给定的证据池写一篇带引用的短文（≤600字）。规则：\n"
+    "1. 只允许使用 <context> 中的原文片段作答，禁止使用任何外部知识。\n"
+    "2. 严格按 <outline> 的大纲结构分节输出（小节标题加粗），不要增删小节。\n"
+    "3. 每个事实性论断后必须紧跟引用标记 [^p{页码}-§{章节}]，页码与章节取自片段标签。\n"
+    "4. 证据不足以支撑的小节，如实写「（本节证据不足，仅列出待补要点）」，禁止脑补。\n"
+    "5. 语言学术、克制，不使用感叹号；禁止编造数字、结论与引用。"
+)
+
+SYSTEM_QA_GRAPH = (
+    "你是引用关系分析助手。依据 <graph_metrics>（由 references 元数据真实计算，含 PageRank/度）"
+    "与 <context> 中的原文片段，写一段引用关系综述（≤300字）。规则：\n"
+    "1. 指标数字只允许来自 <graph_metrics>，禁止编造或四舍五入夸大。\n"
+    "2. 原文内容性论断必须带 [^p{页码}-§{章节}] 引用标记。\n"
+    "3. 图中边很少时如实说明（如「库内仅 X 篇论文，引用边 Y 条，指标仅供参考」），禁止夸大图谱结论。\n"
+    "4. external_count>0 时说明存在未能匹配到库内论文的外部引用。"
+)
+
+
+def build_writer_messages(question: str, outline: dict, hits: list[dict]) -> list[dict]:
+    """Writer Agent 专属消息：大纲 + 证据池。"""
+    context, _ = format_context(hits)
+    outline_txt = json.dumps(outline, ensure_ascii=False)
+    return [{"role": "system", "content": SYSTEM_QA_WRITER},
+            {"role": "user", "content":
+                f"<outline>\n{outline_txt}\n</outline>\n\n<context>\n{context}\n</context>"
+                f"\n\n写作请求：{question}"}]
+
+
+def build_graph_messages(metrics: dict, question: str, hits: list[dict]) -> list[dict]:
+    """Graph Agent 专属消息：真实计算的图谱指标 + 证据池。"""
+    context, _ = format_context(hits) if hits else ("（无补充证据片段）", {})
+    metrics_txt = json.dumps(metrics, ensure_ascii=False)
+    return [{"role": "system", "content": SYSTEM_QA_GRAPH},
+            {"role": "user", "content":
+                f"<graph_metrics>\n{metrics_txt}\n</graph_metrics>\n\n<context>\n{context}\n</context>"
+                f"\n\n问题：{question}"}]
+
+
+def build_compare_messages(question: str, table: dict | None, hits: list[dict]) -> list[dict]:
+    """Compare Agent 专属消息：上下文 + 维度对齐表。"""
+    context, _ = format_context(hits)
+    table_txt = json.dumps(table, ensure_ascii=False) if table else "（无对齐表）"
+    return [{"role": "system", "content": SYSTEM_QA_COMPARE},
+            {"role": "user", "content":
+                f"<context>\n{context}\n</context>\n\n<compare_table>\n{table_txt}\n</compare_table>"
+                f"\n\n对比问题：{question}"}]
 
 
 def format_context(hits: list[dict]) -> tuple[str, dict[int, dict]]:

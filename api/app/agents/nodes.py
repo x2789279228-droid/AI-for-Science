@@ -6,10 +6,14 @@ recover 为失败恢复统一调度节点，三种策略：①证据不足重检
 Executor 子图节点：executor_entry(透传) → retrieve_task(Send 并行扇出，含 BM25 单通道降级) → executor_fuse(RRF)。
 可视化：所有节点完成时经 config.configurable.queue 推送「节点即卡片」trace 事件；
 state.trace 同步累积（最终随 final 事件整体下发，前端以其为准）。
+协议 v1.1：另发结构化事件 plan / tool_call / tool_result / evidence / verifier
+（右侧 Trace 时间线数据源），既有事件保持不变。
 """
 from __future__ import annotations
 
+import json
 import queue as queue_mod
+import time
 from typing import Any
 
 from langgraph.types import Send
@@ -17,10 +21,15 @@ from langgraph.types import Send
 from ..llm import client as llm
 from ..rag import indexing
 from ..rag.answering import (
-    NO_EVIDENCE, REFUSAL_CHITCHAT, build_qa_messages, extractive_answer,
-    format_context, llm_claims, validate_citations,
+    NO_EVIDENCE, REFUSAL_CHITCHAT, WRITER_MIN_EVIDENCE, WRITER_REFUSAL,
+    build_compare_messages, build_graph_messages, build_qa_messages,
+    build_writer_messages, extractive_answer, format_context, hit_summary,
+    llm_claims, validate_citations,
 )
-from .state import MAX_REGEN, MAX_RECOVER, AgentState, Step, trace_card
+from .state import (
+    AGENT_INTENT, AGENT_LABEL, INTENT_AGENT, MAX_REGEN, MAX_RECOVER,
+    READY_AGENTS, AgentState, Step, trace_card,
+)
 
 _GREETINGS = {"你好", "您好", "hi", "hello", "在吗", "你是谁", "测试", "hello world", "ping"}
 _SUMMARY_HINTS = ("总结", "综述", "概括", "summary", "summarize", "主要讲", "讲了什么")
@@ -30,10 +39,22 @@ def _queue(config: dict | None) -> queue_mod.Queue | None:
     return ((config or {}).get("configurable") or {}).get("queue")
 
 
-def _emit(config: dict | None, card: dict) -> None:
+def _emit_event(config: dict | None, kind: str, data: dict) -> None:
+    """向 SSE 队列推送协议事件（kind: trace/plan/tool_call/tool_result/evidence/verifier…）。"""
     q = _queue(config)
     if q is not None:
-        q.put(("trace", card))
+        q.put((kind, data))
+
+
+def _emit(config: dict | None, card: dict) -> None:
+    _emit_event(config, "trace", card)
+
+
+def _plan_step(s: dict) -> dict:
+    """plan 事件的步骤投影（前端时间线渲染所需最小字段）。"""
+    return {"step_id": s.get("step_id", ""), "title": s.get("aspect") or s.get("query", ""),
+            "aspect": s.get("aspect", ""), "paper_id": s.get("paper_id", ""),
+            "query": s.get("query", "")}
 
 
 # ---------------- Router ----------------
@@ -52,12 +73,20 @@ def _rule_intent(question: str, paper_ids: list[str]) -> dict:
 def router_node(state: AgentState, config=None) -> dict:
     question = state["question"]
     paper_ids = state["paper_ids"]
+    forced = (state.get("forced_agent") or "").strip().lower()
+    forced_agent = forced if forced in AGENT_INTENT else ""
+
     intent: dict | None = None
-    if llm.available():
+    if forced_agent:
+        # UI 强制指定：确定性路由，免 LLM 分类（现场演示有手动兜底）
+        intent = {"type": AGENT_INTENT[forced_agent], "aspects": [question],
+                  "language": "zh", "source": "forced"}
+    elif llm.available():
         res = llm.chat(
             [{"role": "system", "content":
                 "你是意图路由器。把用户问题分类为以下之一：qa_single(单篇细节问答)、qa_compare(多论文对比)、"
-                "summarize(总结/综述)、graph_query(引用关系)、writing(写作请求)、chitchat(寒暄/无关)。"
+                "summarize(总结/综述)、graph_query(引用关系/研究脉络)、writing(写作请求)、"
+                "viz(把论文中的数据画成图表)、chitchat(寒暄/无关)。"
                 '输出 JSON：{"type":"...","aspects":["面向检索的子问题1","子问题2"]}。'
                 "aspects 为 2~4 个可独立检索的子问题（chitchat 时为空数组），使用与问题相同的语言。"},
              {"role": "user", "content": f"库内论文数：{len(paper_ids)}\n问题：{question}"}],
@@ -65,21 +94,38 @@ def router_node(state: AgentState, config=None) -> dict:
         )
         data = llm.parse_json(res.get("text", ""))
         if data and data.get("type") in {"qa_single", "qa_compare", "summarize",
-                                         "graph_query", "writing", "chitchat"}:
+                                         "graph_query", "writing", "viz", "chitchat"}:
             aspects = [a for a in (data.get("aspects") or []) if isinstance(a, str) and a.strip()]
             if data["type"] != "chitchat" and not aspects:
                 aspects = [question]
-            intent = {"type": data["type"], "aspects": aspects, "language": "zh"}
+            intent = {"type": data["type"], "aspects": aspects, "language": "zh",
+                      "source": "llm"}
         else:
             intent = None  # 解析失败 → 规则兜底
     if intent is None:
         intent = _rule_intent(question, paper_ids)
 
-    card = trace_card("router", "意图识别",
-                      f"{intent['type']} · {len(intent['aspects'])} 个检索面",
-                      {"intent": intent})
+    # Agent 分发（INTENT_AGENT 路由表为单一事实源）；未实装 Agent 降级到 Reader 并如实标注
+    agent: str = "none" if intent["type"] == "chitchat" else INTENT_AGENT.get(intent["type"], "reader")
+    guardrails: list[str] = []
+    handoffs: list[dict] = []
+    if agent != "none" and agent not in READY_AGENTS:
+        guardrails.append(f"agent_unready:{agent}")
+        handoffs.append({"from": "router", "to": "reader",
+                         "note": f"{AGENT_LABEL[agent]} 未实装 → 降级 Reader 执行"})
+        agent = "reader"
+    if agent != "none":
+        note = ("UI 强制指定" if forced_agent else
+                {"llm": "LLM 意图分类", "" : "规则兜底分类"}.get(intent.get("source", ""), "规则分类"))
+        handoffs.append({"from": "router", "to": agent,
+                         "note": f"{intent['type']} → {AGENT_LABEL[agent]}（{note}）"})
+
+    card = trace_card("router", "意图识别 + Agent 分发",
+                      f"{intent['type']} → {AGENT_LABEL[agent]} · {len(intent['aspects'])} 个检索面",
+                      {"intent": intent, "agent": agent})
     _emit(config, card)
-    return {"intent": intent, "trace": [card]}
+    return {"intent": intent, "agent": agent, "trace": [card],
+            "handoffs": handoffs, "guardrails": guardrails}
 
 
 # ---------------- Planner ----------------
@@ -125,11 +171,17 @@ def planner_node(state: AgentState, config=None) -> dict:
         else:
             guardrails.append("planner_llm_fallback")
 
+    # step_id 分配（Trace 时间线）：round = retries+1；重检索轮由 recover① 另行分配
+    round_no = retries + 1
+    for i, s in enumerate(steps, 1):
+        s["step_id"] = f"s{round_no}-{i}"
     plan = {"steps": steps, "mode": mode}
     title = "任务规划" + ("（重规划）" if retries > 0 else "")
     card = trace_card("planner", title, f"{len(steps)} 步 · {len(paper_ids)} 篇 × {len(aspects)} 面",
                       {"steps": steps})
     _emit(config, card)
+    _emit_event(config, "plan", {"round": round_no, "mode": mode,
+                                 "steps": [_plan_step(s) for s in steps]})
     return {"plan": plan, "trace": [card], "guardrails": guardrails}
 
 
@@ -153,6 +205,11 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
     step: Step = payload["step"]
     retries = payload.get("retries", 0)
     top_k = 10 + retries * 6  # 重检索时放宽召回
+    step_id = step.get("step_id", "")
+    t_call = time.time()
+    _emit_event(config, "tool_call", {"step_id": step_id, "tool": "kb_search",
+                                      "args": {"paper_id": step["paper_id"],
+                                               "query": step["query"], "top_k": top_k}})
     guardrails: list[str] = []
     failures: list[dict] = []
     try:
@@ -173,6 +230,14 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
                       else f"{step['query']} → {len(tagged)} 块{degraded}",
                       stat)
     _emit(config, card)
+    _emit_event(config, "tool_result", {
+        "step_id": step_id, "ok": True,
+        **({"degraded": "bm25_only"} if guardrails else {}),
+        "summary": f"{step['query']} → {len(tagged)} 块{degraded}",
+        "refs": [h.get("chunk_id", "") for h in tagged],
+        "elapsed_ms": int((time.time() - t_call) * 1000),
+        "payload": {"hits": len(tagged), "channels": search["channels"],
+                    "bm25": search["bm25_count"], "dense": search["dense_count"]}})
     return {"raw_hits": tagged, "branch_stats": [stat], "trace": [card],
             "guardrails": guardrails, "failures": failures}
 
@@ -193,30 +258,47 @@ def fuse_node(state: AgentState, config=None) -> dict:
                       f"RRF · {len(results)} 路原始 → {len(fused)} 块证据 · 通道 {'+'.join(channels) or 'bm25'}",
                       {"channels": channels, "branch_count": len(state.get("branch_stats", []))})
     _emit(config, card)
+    _emit_event(config, "evidence", {
+        "channels": channels,
+        "bm25_count": sum(b.get("bm25", 0) for b in state.get("branch_stats", [])),
+        "dense_count": sum(b.get("dense", 0) for b in state.get("branch_stats", [])),
+        "hits": hit_summary(fused)})
     return {"evidence": fused, "trace": [card]}
 
 
 # ---------------- Verifier ----------------
 
 def _check_sufficiency(state: AgentState) -> bool:
-    """证据充分性：每个检索面至少 1 条有效命中。"""
+    """证据充分性：每个检索面至少 1 条有效命中；compare 另要求每篇论文覆盖；graph 走元数据证据。"""
+    if state.get("agent") == "graph":
+        return True  # Graph Agent 的证据是 references 元数据（graph_build 产出），不以 chunk 覆盖论充分
     plan = state.get("plan", {})
     evidence = state.get("evidence", [])
     if not evidence:
         return False
     aspects = {s.get("aspect", "") for s in plan.get("steps", [])}
-    if not aspects:
-        return True
-    hit_aspects = {h.get("aspect", "") for h in evidence}
-    return aspects <= hit_aspects
+    if aspects:
+        hit_aspects = {h.get("aspect", "") for h in evidence}
+        if not aspects <= hit_aspects:
+            return False
+    if plan.get("mode") == "compare":
+        # Compare Guardrail：防止一篇论文的证据占满上下文、另一篇零命中被"脑补对比"
+        planned_papers = {s.get("paper_id", "") for s in plan.get("steps", [])}
+        hit_papers = {h.get("paper_id", "") for h in evidence}
+        return planned_papers <= hit_papers
+    return True
 
 
 def verifier_node(state: AgentState, config=None) -> dict:
     ok = _check_sufficiency(state)
+    evidence_count = len(state.get("evidence", []))
     if ok:
-        card = trace_card("verifier", "证据校验", f"通过 · {len(state.get('evidence', []))} 块覆盖全部检索面",
+        card = trace_card("verifier", "证据校验", f"通过 · {evidence_count} 块覆盖全部检索面",
                           {"sufficient": True})
         _emit(config, card)
+        _emit_event(config, "verifier", {"verdict": "pass", "missing": [],
+                                         "evidence_count": evidence_count,
+                                         "action": "respond"})
         return {"trace": [card]}
     missing = {s.get("aspect", "") for s in state.get("plan", {}).get("steps", [])} - \
               {h.get("aspect", "") for h in state.get("evidence", [])}
@@ -225,6 +307,8 @@ def verifier_node(state: AgentState, config=None) -> dict:
                       f"不足 · 缺少 {len(missing_sorted)} 个检索面 → 交由 recover 恢复",
                       {"sufficient": False, "missing": missing_sorted})
     _emit(config, card)
+    _emit_event(config, "verifier", {"verdict": "insufficient", "missing": missing_sorted,
+                                     "evidence_count": evidence_count, "action": "recover"})
     return {"pending_failure": {"kind": "insufficient_evidence", "missing": missing_sorted,
                                 "node": "verifier"},
             "failures": [{"node": "verifier", "kind": "insufficient_evidence",
@@ -270,6 +354,7 @@ def recover_node(state: AgentState, config=None) -> dict:
     kind = pend.get("kind", "")
     recover_count = state.get("recover_count", 0) + 1
     guardrails: list[str] = []
+    plan_evt: dict | None = None   # 策略① 产生新计划时，在恢复卡片后补发 plan 事件
     upd: dict = {"pending_failure": None, "recover_count": recover_count,
                  "recover_route": "responder"}
 
@@ -283,6 +368,9 @@ def recover_node(state: AgentState, config=None) -> dict:
         steps = [{"paper_id": pid, "query": rewrites.get(a, a), "aspect": a}
                  for a in old_aspects for pid in state.get("paper_ids", [])]
         retries = state.get("retries", 0) + 1
+        round_no = retries + 1  # 新一轮步骤 id：s{round}-*
+        for i, s in enumerate(steps, 1):
+            s["step_id"] = f"s{round_no}-{i}"
         upd.update({"plan": {"steps": steps,
                              "mode": state.get("plan", {}).get("mode", "single")},
                     "retries": retries, "re_retrieve_count": re_retrieve,
@@ -291,6 +379,8 @@ def recover_node(state: AgentState, config=None) -> dict:
         card = trace_card("recover", "恢复·重检索",
                           f"#{recover_count} · 改写 {len(missing)} 个检索面 · top_k → {10 + retries * 6}",
                           {"strategy": "re_retrieve", "missing": missing, "rewrites": rewrites})
+        plan_evt = {"round": round_no, "mode": state.get("plan", {}).get("mode", "single"),
+                    "steps": [_plan_step(s) for s in steps]}
 
     elif kind == "tool_failure":
         # ---- 策略②：工具失败降级 ----
@@ -333,6 +423,8 @@ def recover_node(state: AgentState, config=None) -> dict:
                         "detail": card["summary"][:120]}]
     upd["trace"] = [card]
     _emit(config, card)
+    if plan_evt is not None:
+        _emit_event(config, "plan", plan_evt)
     return upd
 
 
@@ -342,25 +434,82 @@ def responder_node(state: AgentState, config=None) -> dict:
     q = _queue(config)
     question = state["question"]
     intent_type = state.get("intent", {}).get("type", "qa_single")
+    agent = state.get("agent", "reader")
     retry_prompt = state.get("retry_prompt", "")
     prev_answer = state.get("answer", "")
     guardrails: list[str] = []
+    is_compare = agent == "compare"
 
     def finish(answer: str, claims: list[dict], mode: str, summary: str) -> dict:
         card = trace_card("responder", "生成回答", summary,
-                          {"mode": mode, "claims": len(claims)})
+                          {"mode": mode, "claims": len(claims), "agent": agent})
         _emit(config, card)
-        return {"answer": answer, "claims": claims, "mode": mode,
-                "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
+        out: dict = {"answer": answer, "claims": claims, "mode": mode,
+                     "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
+        if is_compare:
+            out["compare_table"] = state.get("compare_table") or {}
+        return out
 
     if intent_type == "chitchat":
         return finish(REFUSAL_CHITCHAT, [], "refusal", "寒暄拒答（范围外）")
 
+    # Agent 范围 Guardrail 拒绝（compare_entry 单篇转介 / viz 无表拒绝等）：透传收尾
+    if state.get("mode") == "refusal" and prev_answer and not retry_prompt:
+        return finish(prev_answer, [], "refusal", f"{AGENT_LABEL.get(agent, agent)} · 范围校验拒绝")
+
+    # Viz：不走 chunk 证据管线，chart_spec 即产物（viz_extract 已保证其存在或已拒绝）
+    if agent == "viz":
+        spec = state.get("chart_spec") or {}
+        if not spec:
+            return finish(NO_EVIDENCE, [], "none", "无图表数据")
+        prov = spec.get("provenance") or {}
+        n_points = len(spec.get("data") or [])
+        answer = (f"已生成 **{spec.get('type', 'bar')} 图**（{n_points} 个数据点）："
+                  f"数据来源 {prov.get('paper_id', '')} 第 {(prov.get('page') or 0) + 1} 页"
+                  f" 表格 {prov.get('table_id', '')}。"
+                  f"横轴「{spec.get('x_label', '')}」，纵轴「{spec.get('y_label', '')}」。"
+                  "图表已随本回答下发，可在下方查看。")
+        if llm.available() and not retry_prompt:
+            try:
+                res = llm.chat(
+                    [{"role": "system", "content":
+                        "你是图表解读助手。只依据给出的 chart spec 数据写 ≤80 字的客观解读，"
+                        "禁止引入 spec 之外的信息。"},
+                     {"role": "user", "content": json.dumps(spec, ensure_ascii=False)}],
+                    max_tokens=200, module="viz", audit_prompt=question[:100])
+                insight = (res.get("text") or "").strip()
+                if insight:
+                    answer += "\n\n简要解读：" + insight
+            except Exception:  # noqa: BLE001 —— 解读失败不影响图表交付
+                pass
+        return finish(answer, [], "generative" if llm.available() else "extractive",
+                      f"出图 · {spec.get('type')} · {n_points} 点 · 来源已标注")
+
     hits = state.get("evidence", [])
-    if not hits:
+    if not hits and agent != "graph":
         return finish(NO_EVIDENCE, [], "none", "无证据 → 明确拒答")
 
+    # Writer Guardrail：证据池不足不开写（Evidence-First）
+    if agent == "writer" and len(hits) < WRITER_MIN_EVIDENCE:
+        guardrails.append("writer_insufficient_evidence")
+        return finish(WRITER_REFUSAL.format(n=len(hits), m=WRITER_MIN_EVIDENCE),
+                      [], "refusal", f"Writer · 证据池 {len(hits)}/{WRITER_MIN_EVIDENCE} → 拒写")
+
     page_map = format_context(hits)[1]
+
+    # Graph：图谱证据在元数据层，无 LLM/降级时输出确定性指标摘要（不冒充生成）
+    if agent == "graph" and (state.get("degraded") or not llm.available()):
+        gd = state.get("graph_data") or {}
+        metrics = gd.get("metrics") or {}
+        lines = [f"引用图谱摘要（指标 backend：{metrics.get('backend', 'none')}）："
+                 f"库内节点 {len(gd.get('nodes', []))} 篇 · 引用边 {metrics.get('edge_count', 0)} 条 · "
+                 f"外部引用 {gd.get('external_count', 0)} 条（未匹配库内论文）。"]
+        for i, t in enumerate(metrics.get("nodes", [])[:3], 1):
+            lines.append(f"{i}. {t.get('title', t.get('paper_id', ''))} — "
+                         f"PageRank {t.get('pagerank', 0)} · 被引 {t.get('in_degree', 0)} · "
+                         f"引出 {t.get('out_degree', 0)}")
+        return finish("\n".join(lines), [], "extractive",
+                      f"图谱指标摘要 · backend {metrics.get('backend', 'none')}")
 
     # 降级路径（策略②）：recover 标记 degraded → 抽取式证据模式
     if state.get("degraded"):
@@ -374,8 +523,22 @@ def responder_node(state: AgentState, config=None) -> dict:
         return finish(answer, claims, "extractive",
                       f"抽取式降级 · {len(claims)} 条论断")
 
-    # 生成式（含策略③重生成）：流式输出 → 引用后验 → ClaimTrace
-    messages = build_qa_messages(question, hits)
+    # 生成式（含策略③重生成）：按 Agent 选合成通道 → 流式输出 → 引用后验 → ClaimTrace
+    if is_compare:
+        messages = build_compare_messages(question, state.get("compare_table"), hits)
+    elif agent == "writer":
+        # Writer：大纲先行（artifact 下发），正文随后按同一大纲流式生成
+        aspects = list(dict.fromkeys(
+            s.get("aspect") or s.get("query", "") for s in state.get("plan", {}).get("steps", [])))
+        outline = {"title": question[:40],
+                   "sections": [a for a in aspects if a][:5] or ["背景", "要点", "结论"]}
+        _emit_event(config, "artifact", {"kind": "outline", "outline": outline})
+        messages = build_writer_messages(question, outline, hits)
+    elif agent == "graph":
+        messages = build_graph_messages(state.get("graph_data", {}).get("metrics", {}),
+                                        question, hits)
+    else:
+        messages = build_qa_messages(question, hits)
     if retry_prompt and prev_answer:
         # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
         messages += [{"role": "assistant", "content": prev_answer},
@@ -437,6 +600,15 @@ def responder_node(state: AgentState, config=None) -> dict:
         answer += "\n\n> ⚠️ 该回答未通过引用后验校验（无有效页码锚点），请人工核对原文。"
 
     claims = llm_claims(answer, hits)
+    if is_compare:
+        return finish(answer, claims, "generative",
+                      f"对比合成 · {len(claims)} 条论断 · 引用已后验 · 维度表已下发")
+    if agent == "writer":
+        return finish(answer, claims, "generative",
+                      f"写作完成 · {len(claims)} 条论断 · 引用已后验 · 大纲已下发")
+    if agent == "graph":
+        return finish(answer, [], "generative",
+                      "图谱综述 · 指标来自 references 元数据真实计算")
     return finish(answer, claims, "generative",
                   f"生成式 · {len(claims)} 条论断 · 引用已后验")
 

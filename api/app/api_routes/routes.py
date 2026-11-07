@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .. import db, jobs
+from .. import db, jobs, threads_store, trace_store
 from ..config import settings
 from ..llm import client as llm
 
@@ -86,22 +86,36 @@ def get_job(job_id: str):
 class ChatBody(BaseModel):
     question: str
     paper_ids: list[str] = []
+    conversation_id: str = ""   # 会话标识：断点续跑按会话归属；空则后端生成并经事件返回
+    agent: str = "auto"         # Agent 指定：auto/reader/compare/graph/writer/viz（最高优先级）
 
 
 @router.post("/chat")
 def chat(body: ChatBody):
     import queue as queue_mod
     import threading
+    import uuid as uuid_mod
 
     from ..agents import runner
+    from ..agents.state import FORCED_AGENT_VALUES
+
+    if body.agent not in FORCED_AGENT_VALUES:
+        raise HTTPException(400, f"agent 取值须为 {sorted(FORCED_AGENT_VALUES)}")
 
     paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers")]
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
 
+    conv = body.conversation_id.strip() or uuid_mod.uuid4().hex
+    turn = threads_store.next_turn(conv)          # 每轮独立 thread，避免累加键跨轮污染
+    thread_id = threads_store.make_thread_id(conv, turn)
+
     q: queue_mod.Queue = queue_mod.Queue()
     threading.Thread(target=runner.run_stream,
-                     args=(body.question.strip(), paper_ids, q), daemon=True).start()
+                     args=(body.question.strip(), paper_ids, q),
+                     kwargs={"thread_id": thread_id, "conversation_id": conv, "turn": turn,
+                             "forced_agent": body.agent},
+                     daemon=True).start()
 
     def sse():
         while True:
@@ -142,3 +156,14 @@ def health():
                                     "model": ep[2] if ep else ""},
             "dense": settings.dense_enabled,
             "papers": db.query("SELECT COUNT(*) c FROM papers")[0]["c"]}
+
+
+# ---------- Trace 回放 ----------
+
+@router.get("/qa/{trace_id}")
+def get_qa_trace(trace_id: str):
+    """回放一次问答的完整事件流（trace_id = thread_id，含断点续跑并入的事件）。"""
+    trace = trace_store.get_trace(trace_id)
+    if trace is None:
+        raise HTTPException(404, "trace 不存在")
+    return trace
