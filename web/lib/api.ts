@@ -42,11 +42,20 @@ export interface Claim {
   support: Support[];
 }
 
+export interface TraceCard {
+  node: string;
+  title: string;
+  summary: string;
+  payload: Record<string, unknown>;
+}
+
 export interface FinalEvent {
   answer: string;
   claims: Claim[];
-  mode: "generative" | "extractive" | "none";
+  mode: "generative" | "extractive" | "refusal" | "none";
   guardrails: string[];
+  trace?: TraceCard[];
+  elapsed?: number;
 }
 
 export interface Job {
@@ -83,6 +92,7 @@ export async function streamChat(
   question: string,
   paperIds: string[],
   on: {
+    trace?: (d: TraceCard) => void;
     retrieval?: (d: { channels: string[]; hits: Hit[] }) => void;
     delta?: (t: string) => void;
     final?: (d: FinalEvent) => void;
@@ -110,7 +120,8 @@ export async function streamChat(
         if (line.startsWith("event: ")) event = line.slice(7);
         else if (line.startsWith("data: ") && event) {
           const data = JSON.parse(line.slice(6));
-          if (event === "retrieval") on.retrieval?.(data);
+          if (event === "trace") on.trace?.(data);
+          else if (event === "retrieval") on.retrieval?.(data);
           else if (event === "delta") on.delta?.(data.text);
           else if (event === "final") on.final?.(data);
         }

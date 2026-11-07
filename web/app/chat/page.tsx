@@ -2,16 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Claim, FinalEvent, Hit, Paper, listPapers, streamChat,
+  Claim, FinalEvent, Hit, Paper, TraceCard, listPapers, streamChat,
 } from "@/lib/api";
 import { ChevronRight, Spark } from "@/components/icons";
 
 interface Turn {
   question: string;
   answer: string;
+  trace: TraceCard[];
   retrieval: { channels: string[]; hits: Hit[] } | null;
   final: FinalEvent | null;
-  seconds?: number;
 }
 
 const GUARD_LABEL: Record<string, string> = {
@@ -54,10 +54,15 @@ export default function ChatPage() {
     setShowScope(false);
     setBusy(true);
     const t0 = performance.now();
-    const turn: Turn = { question: q, answer: "", retrieval: null, final: null };
+    const turn: Turn = { question: q, answer: "", trace: [], retrieval: null, final: null };
     setTurns((t) => [...t, turn]);
     try {
       await streamChat(q, Array.from(selected), {
+        trace: (card) => setTurns((t) => {
+          const c = [...t];
+          c[c.length - 1] = { ...c[c.length - 1], trace: [...c[c.length - 1].trace, card] };
+          return c;
+        }),
         retrieval: (d) => setTurns((t) => {
           const c = [...t]; c[c.length - 1] = { ...c[c.length - 1], retrieval: d }; return c;
         }),
@@ -71,8 +76,8 @@ export default function ChatPage() {
           c[c.length - 1] = {
             ...c[c.length - 1],
             answer: c[c.length - 1].answer || d.answer,  // 抽取式模式无 delta，答案在 final 里
+            trace: d.trace?.length ? d.trace : c[c.length - 1].trace,
             final: d,
-            seconds: (performance.now() - t0) / 1000,
           };
           return c;
         }),
@@ -144,7 +149,7 @@ export default function ChatPage() {
                 <h2>向文献提问</h2>
                 <p>
                   例如「模型用了多少块 GPU？」「BLEU 分数是多少？」——
-                  每句回答都可点击查看原文出处；查无依据时明确拒答。
+                  Agent 状态图（Router→Plan→并行检索→校验→回答）全程可视化，每句可溯源。
                 </p>
               </div>
             </div>
@@ -153,21 +158,19 @@ export default function ChatPage() {
             <div key={ti}>
               <div className="msg user"><span>{turn.question}</span></div>
               <div className="msg bot">
-                {turn.retrieval && (
-                  <p className="kv" style={{ marginBottom: "var(--space-2)", display: "flex",
-                    gap: "var(--space-2)", flexWrap: "wrap" }}>
-                    <span className="chip">检索通道：{turn.retrieval.channels.join(" + ")}</span>
-                    <span className="chip">召回 {turn.retrieval.hits.length} 块</span>
-                    <details style={{ minWidth: 220 }}>
+                {turn.trace.length > 0 && <Pipeline cards={turn.trace} />}
+                {turn.retrieval && turn.retrieval.hits.length > 0 && (
+                  <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
+                    <details>
                       <summary className="chip" style={{ cursor: "pointer", listStyle: "none" }}>
-                        检索明细
+                        检索明细（{turn.retrieval.hits.length} 块）
                       </summary>
                       <div style={{ marginTop: "var(--space-2)" }}>
                         {turn.retrieval.hits.slice(0, 5).map((h) => (
                           <div key={h.chunk_id} className="kv" style={{
                             borderBottom: "1px dashed var(--line)", padding: "6px 0" }}>
                             <b style={{ color: "var(--accent)" }}>p{h.page + 1} §{secName(h.section_path)}</b>
-                            {h.rrf ? ` · RRF ${h.rrf}` : ` · BM25 ${h.score}`}
+                            {h.rrf ? ` · RRF ${h.rrf}` : ` · ${h.score}`}
                             <br />{h.text.slice(0, 110)}…
                           </div>
                         ))}
@@ -195,7 +198,7 @@ export default function ChatPage() {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && ask()}
-              placeholder={busy ? "生成中…" : "对选中的论文提问，每句回答可溯源到原文…"}
+              placeholder={busy ? "Agent 执行中…" : "对选中的论文提问，每句回答可溯源到原文…"}
               disabled={busy}
             />
             <button className="send-btn" onClick={ask} disabled={busy || !selected.size}
@@ -205,19 +208,62 @@ export default function ChatPage() {
             <span className="chip">检索范围 {selected.size} 篇</span>
             {lastTurn?.final && (
               <span className={`chip ${lastTurn.final.mode === "generative" ? "ok" : "warn"}`}>
-                {lastTurn.final.mode === "generative" ? "生成式 · 引用已后验" : "抽取式证据模式"}
+                {lastTurn.final.mode === "generative" ? "生成式 · 引用已后验"
+                  : lastTurn.final.mode === "refusal" ? "范围外拒答"
+                  : lastTurn.final.mode === "none" ? "未找到依据"
+                  : "抽取式证据模式"}
               </span>
             )}
           </div>
         </div>
         <div className="statusbar">
-          {lastTurn?.retrieval
-            ? `通道 ${lastTurn.retrieval.channels.join("+")} · 召回 ${lastTurn.retrieval.hits.length} 块`
+          {lastTurn?.final
+            ? `图执行完成 · 用时 ${lastTurn.final.elapsed ?? "-"}s · 论断 ${lastTurn.final.claims.length} 条`
+            : busy ? "状态图执行中：Router → Planner → Executor → Verifier → Responder"
             : "就绪"}
-          {lastTurn?.seconds !== undefined && ` · 用时 ${lastTurn.seconds.toFixed(1)}s`}
-          {lastTurn?.final && ` · 论断 ${lastTurn.final.claims.length} 条`}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 节点即卡片：内嵌可展开执行管线（官方 Graph Execution Cards 模式的自有协议实现）。 */
+function Pipeline({ cards }: { cards: TraceCard[] }) {
+  const [open, setOpen] = useState(false);
+  const retrieveCount = cards.filter((c) => c.node === "retrieve_task").length;
+  const chips: string[] = [];
+  for (const c of cards) {
+    if (c.node === "retrieve_task") {
+      if (!chips.includes("__rt__")) chips.push("__rt__");
+    } else chips.push(c.title);
+  }
+  return (
+    <div className="pipeline" onClick={() => setOpen((o) => !o)}>
+      <div className="pipe-row">
+        {chips.map((t, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            {i > 0 && <span className="pipe-arrow">→</span>}
+            <span className="chip">
+              {t === "__rt__" ? `并行检索 ×${retrieveCount}` : t}
+            </span>
+          </span>
+        ))}
+        <ChevronRight size={12} className="pipe-caret"
+          style={{ transform: open ? "rotate(90deg)" : "none", color: "var(--ink-3)" }} />
+      </div>
+      {open && (
+        <div className="pipe-cards">
+          {cards.map((c, i) => (
+            <div key={i} className="pipe-card">
+              <b>{c.title}</b>
+              <span className="kv"> · {c.summary}</span>
+              {Object.keys(c.payload).length > 0 && (
+                <pre className="pipe-payload">{JSON.stringify(c.payload, null, 1).slice(0, 420)}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

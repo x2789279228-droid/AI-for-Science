@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "meridian": "app.agents.graph:build_graph"
+  },
+  "env": ".env"
+}

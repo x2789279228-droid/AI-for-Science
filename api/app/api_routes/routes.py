@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from .. import db, jobs
 from ..config import settings
 from ..llm import client as llm
-from ..rag import qa as qa_mod
 
 router = APIRouter(prefix="/api")
 
@@ -91,15 +90,31 @@ class ChatBody(BaseModel):
 
 @router.post("/chat")
 def chat(body: ChatBody):
+    import queue as queue_mod
+    import threading
+
+    from ..agents import runner
+
     paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers")]
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
 
-    def sse():
-        for ev in qa_mod.answer_stream(body.question.strip(), paper_ids):
-            payload = json.dumps(ev["data"], ensure_ascii=False)
-            yield f"event: {ev['event']}\ndata: {payload}\n\n"
+    q: queue_mod.Queue = queue_mod.Queue()
+    threading.Thread(target=runner.run_stream,
+                     args=(body.question.strip(), paper_ids, q), daemon=True).start()
 
+    def sse():
+        while True:
+            try:
+                kind, data = q.get(timeout=300)
+            except queue_mod.Empty:
+                yield 'event: final\ndata: {"answer":"[执行超时]","claims":[],"mode":"none","guardrails":["timeout"],"trace":[]}\n\n'
+                yield "event: done\ndata: {}\n\n"
+                return
+            payload = json.dumps(data, ensure_ascii=False)
+            yield f"event: {kind}\ndata: {payload}\n\n"
+            if kind == "done":
+                return
     return StreamingResponse(sse(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
