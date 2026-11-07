@@ -1,0 +1,23 @@
+# 密钥与本地数据绝不入仓库
+.env
+data/
+data-*/
+api/tests/_data_*/
+*.pdf
+!docs/**/*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
