@@ -80,14 +80,15 @@ def _title_norm(t: str) -> str:
     return "".join(ch.lower() for ch in t if ch.isalnum())
 
 
-def check_duplicate(title: str, arxiv_id: str, file_hash: str) -> dict | None:
+def check_duplicate(title: str, arxiv_id: str, file_hash: str,
+                    exclude_paper_id: str = "") -> dict | None:
     """标题归一化 + arXiv id 辅助比对。MVP 字符级；后续可升级 embedding 余弦。"""
     if not title:
         return None
     nt = _title_norm(title)
     if len(nt) < 8:
         return None
-    for row in db.query("SELECT id,title,arxiv_id,version FROM papers WHERE id != ''"):
+    for row in db.query("SELECT id,title,arxiv_id,version FROM papers WHERE id != ?", (exclude_paper_id,)):
         if _title_norm(row["title"]) == nt and len(nt) >= 8:
             same_arxiv = bool(arxiv_id) and arxiv_id == row["arxiv_id"]
             return {"duplicate_of": row["id"], "title": row["title"],
@@ -127,7 +128,7 @@ def post_parse_dedup(paper_id: str) -> dict | None:
     if not rows:
         return None
     p = rows[0]
-    dup = check_duplicate(p["title"], p["arxiv_id"], p["file_hash"])
+    dup = check_duplicate(p["title"], p["arxiv_id"], p["file_hash"], exclude_paper_id=paper_id)
     if dup:
         with db.tx() as c:
             c.execute("UPDATE papers SET supersedes=? WHERE id=?", (dup["duplicate_of"], paper_id))

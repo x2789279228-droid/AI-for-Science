@@ -1,0 +1,88 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --ink: #1a2233;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --brand: #2456e6;
+  --brand-soft: #eef3ff;
+  --warn: #b25e09;
+  --warn-soft: #fff4e5;
+  --ok: #067647;
+  --ok-soft: #e6f4ee;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.6 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 28px; background: var(--card); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 10; }
+.topbar .brand { font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; }
+.topbar nav a { margin-left: 22px; color: var(--muted); text-decoration: none; font-size: 14px; }
+.topbar nav a:hover { color: var(--brand); }
+
+.container { max-width: 1100px; margin: 26px auto; padding: 0 22px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px 22px; margin-bottom: 18px; }
+.card h2 { margin: 0 0 12px; font-size: 16px; }
+
+.btn { background: var(--brand); color: #fff; border: 0; border-radius: 8px;
+  padding: 8px 16px; font-size: 14px; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: var(--brand-soft); color: var(--brand); }
+
+.badge { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 12px;
+  background: var(--brand-soft); color: var(--brand); margin-right: 8px; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.gray { background: #eef0f3; color: var(--muted); }
+
+.progress { height: 8px; background: #eef0f3; border-radius: 99px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--brand); transition: width .4s; }
+
+.paper-row { display: flex; align-items: center; gap: 14px; padding: 13px 0;
+  border-bottom: 1px solid var(--line); }
+.paper-row:last-child { border-bottom: 0; }
+.paper-row .t { flex: 1; }
+.paper-row .t b { display: block; }
+.paper-row .t small { color: var(--muted); }
+.paper-row .actions a { margin-left: 6px; font-size: 13px; color: var(--brand); text-decoration: none; }
+
+.alert { border: 1px solid #f2c94c; background: #fffaeb; border-radius: 10px;
+  padding: 12px 16px; margin-bottom: 14px; font-size: 14px; }
+
+/* ---- chat ---- */
+.chat-wrap { display: grid; grid-template-columns: 1fr 340px; gap: 18px; }
+@media (max-width: 900px) { .chat-wrap { grid-template-columns: 1fr; } }
+.chat-main { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; min-height: 60vh; display: flex; flex-direction: column; }
+.msgs { flex: 1; overflow-y: auto; }
+.msg.user { text-align: right; margin: 14px 0; }
+.msg.user span { background: var(--brand); color: #fff; padding: 8px 14px;
+  border-radius: 12px 12px 2px 12px; display: inline-block; max-width: 80%; }
+.msg.bot { margin: 14px 0; }
+.msg.bot .bubble { background: #f8f9fb; border: 1px solid var(--line); padding: 12px 16px;
+  border-radius: 2px 12px 12px 12px; white-space: pre-wrap; }
+.ask { display: flex; gap: 10px; margin-top: 14px; }
+.ask input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+  font-size: 14px; outline: none; }
+.ask input:focus { border-color: var(--brand); }
+
+.claim { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+  margin: 10px 0; font-size: 14px; cursor: pointer; background: #fff; }
+.claim:hover { border-color: var(--brand); }
+.claim.unverified { background: var(--warn-soft); border-color: #f0b25c; }
+.claim .anchor { font-size: 12px; color: var(--brand); margin-top: 4px; }
+.claim .evidence { margin-top: 8px; background: var(--brand-soft); border-radius: 8px;
+  padding: 8px 12px; font-size: 13px; color: #334; }
+.claim .evidence i { color: var(--muted); }
+
+.hit { font-size: 12.5px; color: var(--muted); border-bottom: 1px dashed var(--line);
+  padding: 7px 0; }
+.hit b { color: var(--brand); font-size: 12px; }
+
+.kv { font-size: 13px; color: var(--muted); margin: 4px 0; }
+h1 { font-size: 20px; margin: 4px 0 18px; }

@@ -22,16 +22,19 @@ uv sync                      # 安装依赖
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-- 健康检查：`GET http://localhost:8000/api/health`
-- 完整 API：见 `docs/api.md`（上传 / 任务进度 / DocIR / SSE 溯源问答 / 审计）
+- 健康检查：`GET http://localhost:8000/api/health`（LLM 连通性真实 ping 检测）
+- 完整 API：见 [docs/api.md](docs/api.md)（上传 / 任务进度 / DocIR / SSE 溯源问答 / 审计）
 
 ### 前端（Next.js）
 
 ```bash
 cd web
 pnpm install
-pnpm dev                     # http://localhost:3000
+pnpm build && pnpm start     # http://localhost:3000
 ```
+
+页面：`/` 文献库（上传+进度条+去重预警） · `/chat` 溯源问答（SSE+ClaimTrace 论断卡片） ·
+`/reader/{id}` DocIR 阅读器（标题树+结构块） · `/audit` 透明度中心（Prompt 审计日志）
 
 ### 配置
 
@@ -39,8 +42,19 @@ pnpm dev                     # http://localhost:3000
 cp .env.example .env         # 填入 DEEPSEEK_API_KEY 等密钥（密钥绝不入仓库）
 ```
 
-无 LLM key 时系统自动降级为**抽取式证据模式**：检索与逐论断溯源照常工作，
+无 LLM key 或 key 失效时系统自动降级为**抽取式证据模式**：检索与逐论断溯源照常工作，
 答案为原文摘录并逐句挂页码锚点；配置 key 后无缝升级为生成式溯源问答。
+
+## 当前模块状态（MVP 闭环已通）
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 一 PDF 解析 | ✅ | PyMuPDF 快速路径：双栏重排/标题树/表格/图注/References；扫描件 VLM 兜底待接 |
+| 二 溯源问答 | ✅ | BM25(+可选 Dense)→RRF；引用后验校验；ClaimTrace 逐论断；SSE 流式 |
+| 三 阅读器 | 🔶 | DocIR 结构视图+标题树跳转；PDF 原版渲染/中英联动为 D5-D6 排期 |
+| 四 检索追踪 | ⏳ | 按排期 D9 |
+| 五 引用图谱 | ⏳ | 按排期 D7 |
+| 六 写作 Copilot | ⏳ | 按排期 D10 |
 
 ## 核心机制（对应参赛方案评分点）
 
@@ -56,5 +70,8 @@ cp .env.example .env         # 填入 DEEPSEEK_API_KEY 等密钥（密钥绝不�
 ## 测试
 
 ```bash
-cd api && uv run pytest -q   # E2E：上传→解析→索引→溯源问答→去重→审计 全链路
+cd api && uv run pytest -q
+# E2E：上传→解析→索引→溯源问答→去重→审计（6 passed）
+# 集成：真实论文 1706.03762v7（无该 PDF 时自动跳过；
+#       下载 https://arxiv.org/pdf/1706.03762v7 到 downloads/1706.03762/）
 ```

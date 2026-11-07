@@ -42,24 +42,39 @@ def _has_text_layer(doc: fitz.Document) -> bool:
 # ---------- 阅读顺序（双栏重排） ----------
 
 def _reading_order(blocks: list[dict]) -> list[dict]:
-    """x 坐标聚类分栏：页面中线左右各一列，先左列后右列，列内按 y 排序。
-    单栏（宽块占比高）时退化为纯 y 排序。"""
+    """阅读顺序重排 v2（归一化 bbox，页宽=1）。
+
+    规则：跨中线的宽块视为分隔符（标题/通栏摘要/表格），flush 已积攒的
+    左右栏队列后插入；非跨栏块按中心 x 分入左/右队列，flush 时左列全出
+    再出右列（双栏先左后右）。竖排页边横幅（arXiv 侧边条）为 furniture 置底。
+    """
     if not blocks:
         return blocks
-    page_w = max(b["bbox"][2] for b in blocks)
-    mid = page_w * 0.5
+    mid = 0.5
     def crosses(b: dict) -> bool:
         x0, _, x1, _ = b["bbox"]
-        return x0 < mid - page_w * 0.05 and x1 > mid + page_w * 0.05
-    wide = sum(1 for b in blocks if crosses(b))
-    if wide > len(blocks) * 0.35:  # 单栏
-        return sorted(blocks, key=lambda b: (round(b["bbox"][1], 1), b["bbox"][0]))
-    left = [b for b in blocks if not crosses(b) and b["bbox"][2] <= mid + page_w * 0.02]
-    right = [b for b in blocks if not crosses(b) and b not in left]
-    spans = [b for b in blocks if crosses(b)]
-    return sorted(left, key=lambda b: b["bbox"][1]) + \
-           sorted(right, key=lambda b: b["bbox"][1]) + \
-           sorted(spans, key=lambda b: b["bbox"][1])
+        return x0 < mid - 0.04 and x1 > mid + 0.04
+    furniture = [b for b in blocks if (b["bbox"][2] - b["bbox"][0]) < 0.08
+                 and (b["bbox"][3] - b["bbox"][1]) > 0.25]
+    body = [b for b in blocks if b not in furniture]
+
+    left: list[dict] = []
+    right: list[dict] = []
+    out: list[dict] = []
+    for b in sorted(body, key=lambda b: b["bbox"][1]):
+        if crosses(b):
+            out += sorted(left, key=lambda x: (x["bbox"][1], x["bbox"][0]))
+            out += sorted(right, key=lambda x: (x["bbox"][1], x["bbox"][0]))
+            left, right = [], []
+            out.append(b)
+        elif (b["bbox"][0] + b["bbox"][2]) / 2 < mid:
+            left.append(b)
+        else:
+            right.append(b)
+    out += sorted(left, key=lambda x: (x["bbox"][1], x["bbox"][0]))
+    out += sorted(right, key=lambda x: (x["bbox"][1], x["bbox"][0]))
+    out += sorted(furniture, key=lambda x: (x["bbox"][1], x["bbox"][0]))
+    return out
 
 
 # ---------- 标题层级 ----------
@@ -237,7 +252,7 @@ def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
             blk["type"] = "heading" if blk["text"] == sections[si]["title"] else blk["type"]
             blk["section_path"] = sections[si]["title"]
 
-    meta = _extract_meta(doc, blocks)
+    meta = _extract_meta(doc, blocks, blocks_by_page.get(0, []))
     docir: dict[str, Any] = {
         "paper_id": meta.get("arxiv_id") or pdf_path.stem,
         "meta": {**meta, "page_count": n, "file": pdf_path.name},
@@ -270,14 +285,23 @@ def _table_to_md(rows: list[list[str | None]]) -> str:
     return md
 
 
-def _extract_meta(doc: fitz.Document, blocks: list[dict]) -> dict:
-    text = " ".join(b["text"] for b in blocks[:8])
+_ARXIV_BANNER = re.compile(r"arxiv:\d{4}\.\d{4,5}", re.I)
+
+
+def _extract_meta(doc: fitz.Document, blocks: list[dict], first_page_internal: list[dict]) -> dict:
+    # arXiv id 可能在任意块（含被排到尾部的侧边横幅），全首页搜
+    text = " ".join(b["text"] for b in blocks[:10]) + " " + \
+           " ".join(b["text"] for b in first_page_internal)
     m = _ARXIV_ID.search(text)
+    # 标题 = 首页上部（y<0.45）字号最大的非横幅块
+    cands = [b for b in first_page_internal
+             if b["bbox"][1] < 0.45 and not _ARXIV_BANNER.search(b["text"])
+             and (b["bbox"][2] - b["bbox"][0]) > 0.15]
     title = ""
-    for b in blocks[:3]:
-        t = b["text"].replace("\n", " ").strip()
-        if 8 < len(t) < 300:
+    if cands:
+        best = max(cands, key=lambda b: b["size"])
+        t = re.sub(r"\s+", " ", best["text"]).strip()
+        if 8 <= len(t) <= 200 and not t[0].islower() and t.count("@") < 2:
             title = t
-            break
     return {"title": title or (doc.metadata.get("title") or ""),
             "authors": [], "arxiv_id": m.group(1) if m else "", "pub_date": "", "venue": ""}
