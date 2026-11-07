@@ -8,6 +8,7 @@ export interface Paper {
   supersedes: string;
   parsed: boolean;
   docir_path: string;
+  created_at: number;
   references_count?: number;
   dedup_alert?: {
     duplicate_of: string;
@@ -53,6 +54,18 @@ export interface Job {
   status: "queued" | "running" | "done" | "error";
   progress: number;
   message: string;
+}
+
+export interface Health {
+  status: string;
+  llm: { configured: boolean; available: boolean; provider: string; model: string };
+  dense: boolean;
+  papers: number;
+}
+
+export async function fetchHealth(): Promise<Health> {
+  const r = await fetch(`${API}/api/health`, { cache: "no-store" });
+  return r.json();
 }
 
 export async function listPapers(): Promise<Paper[]> {

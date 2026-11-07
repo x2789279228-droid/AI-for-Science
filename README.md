@@ -1,4 +1,4 @@
-# 科研助手 Agent（Scholar Agent）
+# Meridian — 科研助手 Agent
 
 > 传智杯「AI 大模型创新应用挑战赛」参赛作品 —— PDF 深度解析 + 抗幻觉溯源问答 + 中英联动阅读 + arXiv 检索推荐 + 引用图谱挖掘 + 学术写作 Copilot，六大模块共用一套 **DocIR** 数据底座。
 

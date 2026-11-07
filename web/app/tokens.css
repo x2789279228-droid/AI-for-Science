@@ -1,0 +1,82 @@
+/* ============================================================
+ * Meridian 设计令牌（唯一取值依据）
+ * 三层：Primitive → Semantic → Component
+ * 规则：组件样式只准引用 Semantic / Component 层，禁止写死色值。
+ * 详见 docs/design-tokens.md
+ * ============================================================ */
+
+:root {
+  /* ---------- 1. Primitive：中性灰阶 ---------- */
+  --gray-0: #ffffff;
+  --gray-25: #fcfcfd;
+  --gray-50: #f7f8fa;
+  --gray-100: #f2f4f7;
+  --gray-200: #e4e7ec;
+  --gray-300: #d0d5dd;
+  --gray-400: #98a2b3;
+  --gray-500: #667085;
+  --gray-600: #475467;
+  --gray-700: #344054;
+  --gray-800: #1d2939;
+  --gray-900: #101828;
+  --gray-950: #0c111d;
+
+  /* ---------- 1. Primitive：品牌蓝阶 ---------- */
+  --blue-50: #eef3ff;
+  --blue-100: #e0eaff;
+  --blue-200: #c2d3fe;
+  --blue-300: #9ab5fc;
+  --blue-400: #6f93f8;
+  --blue-500: #4a6ff2;
+  --blue-600: #2456e6;
+  --blue-700: #1d43b8;
+
+  /* ---------- 2. Semantic：语义色（组件唯一取色层） ---------- */
+  --bg: var(--gray-50);            /* 主区底色 */
+  --surface: var(--gray-0);        /* 卡片/侧边栏 */
+  --surface-2: var(--gray-100);    /* 悬停/嵌套块 */
+  --ink: var(--gray-900);          /* 主文字 */
+  --ink-2: var(--gray-500);        /* 次级文字 */
+  --ink-3: var(--gray-400);        /* 弱化/占位 */
+  --line: var(--gray-200);         /* 常规 1px 边 */
+  --line-strong: var(--gray-300);  /* 强边/控件边 */
+  --accent: var(--blue-600);
+  --accent-hover: var(--blue-700);
+  --accent-soft: var(--blue-50);   /* 选中/强调底 */
+  --accent-border: var(--blue-200);
+  --ok: #067647;
+  --ok-soft: #e6f4ee;
+  --warn: #b25e09;
+  --warn-soft: #fff4e5;
+  --danger: #d92d20;
+  --danger-soft: #fee4e2;
+
+  /* ---------- 3. Component / Layout ---------- */
+  --sidebar-w: 272px;
+  --topbar-h: 56px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+  --text-2xl: 20px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
