@@ -38,3 +38,4 @@ web/tsconfig.tsbuildinfo
 api/scripts/eval_quick_last.json
 runs/
 api/_papers_check.json
+api/tests/_tr_*.txt
