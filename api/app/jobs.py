@@ -15,6 +15,7 @@ import psutil
 
 from . import db
 from .config import DOCIR_DIR, UPLOAD_DIR, settings
+from .log import logger
 from .parsing.router import parse_document, write_docir
 from .rag import indexing
 from .rag.chunking import chunk_docir
@@ -111,10 +112,17 @@ def _run_parse(job_id: str, paper_id: str) -> None:
                       (docir["meta"].get("title", ""), base_arxiv, ver,
                        docir["meta"].get("page_count", 0), str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
 
+        # 内容级去重先于置 done（官方用例 3.1：done 的瞬间 dedup_alert 必须已在；
+        # P0-2 根因之二——旧顺序先 done 后去重，前端拿到 done 时预警尚不存在）
+        try:
+            post_parse_dedup(paper_id)
+        except Exception as e:  # noqa: BLE001 —— 去重失败不影响 parse 成功，job message 如实标注
+            logger.warning(f"post_parse_dedup 失败（不阻塞 parse）: {type(e).__name__}: {e}",
+                           module="dedup")
+
         db.update_job(job_id, status="done", progress=1.0,
                       message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}"
                               f" · {docir['meta'].get('parse_engine', '')}{long_note}")
-        post_parse_dedup(paper_id)  # 内容级去重（官方用例 1：先 v7 后 v1）
     except Exception as e:  # noqa: BLE001
         db.update_job(job_id, status="error", message=f"{type(e).__name__}: {e}")
 
@@ -137,6 +145,13 @@ def _split_arxiv(arxiv_id: str) -> tuple[str, int]:
 
 
 def _version_from_name(name: str) -> str:
+    """文件名抽版本：优先 arXiv id 后缀（1706.03762v7.pdf → v7），退化 \bvN\b。
+
+    旧正则 `\bv(\\d+)\b` 对 "…03762v7" 不命中（digit→v 无词边界）——官方用例 3.1 根因之一。
+    """
+    m = re.search(r"(\d{4}\.\d{4,5})v(\d+)", name or "")
+    if m:
+        return f"v{m.group(2)}"
     m = re.search(r"\bv(\d+)\b", name or "")
     return f"v{m.group(1)}" if m else ""
 
