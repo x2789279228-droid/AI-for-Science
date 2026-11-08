@@ -24,6 +24,7 @@ Thumbs.db
 
 # 测试临时数据目录与构建产物
 api/tests/_agt_*/
+api/.langgraph_api/
 api/tests/_ses_*/
 api/tests/_prs_*/
 api/tests/_smoke_seal*/
