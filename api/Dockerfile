@@ -12,8 +12,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /bin/
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
 
-# 先装依赖再拷代码（层缓存友好）
-COPY pyproject.toml ./
+# 先装依赖再拷代码（层缓存友好）；uv sync --frozen 需要 uv.lock 在场（P0-4）
+COPY pyproject.toml uv.lock ./
 COPY app ./app
 RUN uv sync --no-dev --frozen
 
