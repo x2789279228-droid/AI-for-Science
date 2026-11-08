@@ -40,11 +40,12 @@ _EN_FACTS = [
     ("What is the model dimension d_model?", "512"),
     ("Which regularization prevented overfitting?", "dropout"),
 ]
+# 中文问句 × 英文语料：金标为「答案所在的英文证据词」（考察跨语言检索，字面中文词在英文正文不可能出现）
 _ZH_FACTS = [
-    ("注意力机制是怎么计算的？", "注意力"),
+    ("注意力机制是怎么计算的？", "attention"),
     ("训练用了多少块 GPU？", "GPU"),
     ("模型在 WMT14 英德翻译上拿到了多少 BLEU？", "BLEU"),
-    ("编码器和解码器各有几层？", "层"),
+    ("编码器和解码器各有几层？", "encoder"),
     ("使用了什么优化器？", "Adam"),
 ]
 _REFUSALS = [
@@ -57,12 +58,17 @@ _REFUSALS = [
 
 
 def pick_paper() -> str:
+    """金标题组针对 Attention 论文设计 → 优先按标题匹配；否则退化最新已解析。"""
     from app import db
     rows = db.query("SELECT id, title FROM papers WHERE docir_path IS NOT NULL AND docir_path != '' "
-                    "ORDER BY created_at DESC LIMIT 1")
+                    "ORDER BY created_at DESC")
     if not rows:
         raise SystemExit("库内无已解析论文：先上传或 make demo")
-    print(f"评测对象：{rows[0]['title']} ({rows[0]['id']})")
+    for r in rows:
+        if "attention" in (r["title"] or "").lower():
+            print(f"评测对象：{r['title']} ({r['id']})（金标题组目标论文）")
+            return r["id"]
+    print(f"评测对象：{rows[0]['title']} ({rows[0]['id']})（未找到 Attention 论文，退化最新）")
     return rows[0]["id"]
 
 
