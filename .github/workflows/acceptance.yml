@@ -23,6 +23,10 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
+  # uv 改用 PyPI 安装，禁止其自行下载 Python（避免 GitHub Releases 504 直接拖垮 job）
+  UV_PYTHON: "3.12"
+  UV_PYTHON_DOWNLOADS: "never"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
   # —— 密闭：CI 不使用任何真实密钥（官方用例/冒烟/测试都能在无 key 下跑通）——
   LLM_PROVIDER: ""
   LLM_API_KEY: ""
@@ -43,8 +47,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install uv (PyPI)
+        run: python -m pip install --retries 5 --timeout 60 "uv>=0.13,<0.14"
       - name: sync (frozen)
         working-directory: api
         run: uv sync --frozen
@@ -66,8 +73,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install uv (PyPI)
+        run: python -m pip install --retries 5 --timeout 60 "uv>=0.13,<0.14"
       - working-directory: api
         run: uv sync --frozen
       - name: run official cases
@@ -118,8 +128,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: install uv (PyPI)
+        run: python -m pip install --retries 5 --timeout 60 "uv>=0.13,<0.14"
       - working-directory: api
         run: uv sync --frozen
       - name: start api
