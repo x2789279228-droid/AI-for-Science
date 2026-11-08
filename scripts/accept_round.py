@@ -79,6 +79,7 @@ def run(ctx: Ctx, name: str, cmd: list[str], *, cwd: Path | None = None,
     full_env = os.environ.copy()
     full_env.setdefault("PYTHONUTF8", "1")
     full_env.setdefault("PYTHONIOENCODING", "utf-8")
+    strip_proxies(full_env)  # 验收子进程一律不走宿主代理（避免 NO_PROXY [::1] 假阴性）
     if env:
         full_env.update({k: str(v) for k, v in env.items()})
     t0 = time.time()
@@ -140,6 +141,17 @@ def free_port(default: int = 18100) -> int:
             if s.connect_ex(("127.0.0.1", port)) != 0:
                 return port
     return default
+
+
+_PROXY_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+               "http_proxy", "https_proxy", "all_proxy", "no_proxy")
+
+
+def strip_proxies(env: dict) -> dict:
+    """清理代理变量：httpx 解析 NO_PROXY 中的 [::1] 会抛 InvalidURL，导致 smoke 假阴性。"""
+    for k in _PROXY_KEYS:
+        env.pop(k, None)
+    return env
 
 
 # ---------------------------------------------------------------- 各步骤
@@ -297,7 +309,7 @@ def step_smoke(ctx: Ctx, skip: bool) -> None:
         return
     port = free_port()
     tmp = ctx.outdir / "tmp_smoke"
-    env = os.environ.copy()
+    env = strip_proxies(os.environ.copy())
     env.update({
         "SCHOLAR_DATA_DIR": str(tmp), "MINERU_ENABLED": "off", "VLM_ENABLED": "0",
         "EMBEDDING_BACKEND": "off", "EMBEDDING_API_KEY": "",
