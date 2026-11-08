@@ -1,0 +1,4 @@
+$ D:\传智杯\scholar-agent\api\.venv\Scripts\python.exe -m ruff check app tests
+(cwd=D:\传智杯\scholar-agent\api)
+
+All checks passed!

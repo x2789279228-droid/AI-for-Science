@@ -1,0 +1,4 @@
+$ C:\Program Files\nodejs\node.EXE D:\传智杯\scholar-agent\web\node_modules\next\dist\bin\next lint
+(cwd=D:\传智杯\scholar-agent\web)
+
+✔ No ESLint warnings or errors

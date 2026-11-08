@@ -1,0 +1,16 @@
+$ D:\传智杯\scholar-agent\api\.venv\Scripts\python.exe scripts/run_official_cases.py
+(cwd=D:\传智杯\scholar-agent\api)
+
+== 官方用例验收 · SCHOLAR_DATA_DIR=D:\传智杯\scholar-agent\scripts\runs\20261108-103755\tmp_cases ==
+[PASS] 3.1 版本去重（先 v7 后 v1）（真素材） · v7=done v1=done · dedup_alert=有 · suggestion含「建议保留」=True
+[PASS] 3.2a 扫描件诚实兜底（OCR 引擎不可用环境） · engine=pymupdf · scanned=True · 解析=done；OCR≥60% 在宿主机 MinerU/VLM 环境验收（accept_real_materials.py 已实测 93.3%）
+[PASS] 3.2b 超长书（大纲先出+索引降级+内存<2GB）（UDL 真素材） · 187s · toc=181 · 页数=537 · 峰值内存=627.5MB · chunk 最大页=116(<120) 共 399 chunks
+
+== 汇总：3/3 PASS ==
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-08 10:39:20.210[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=off n=72 model=doubao-embedding-vision[0m
+[32m2026-11-08 10:39:27.419[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=off n=64 model=doubao-embedding-vision[0m
+[32m2026-11-08 10:42:41.685[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=off n=399 model=doubao-embedding-vision[0m

@@ -1,0 +1,37 @@
+$ C:\Program Files\nodejs\node.EXE D:\传智杯\scholar-agent\web\node_modules\next\dist\bin\next build
+(cwd=D:\传智杯\scholar-agent\web)
+
+  ▲ Next.js 14.2.15
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/11) ...
+   Generating static pages (2/11) 
+   Generating static pages (5/11) 
+   Generating static pages (8/11) 
+ ✓ Generating static pages (11/11)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    1.9 kB         92.7 kB
+├ ○ /_not-found                          870 B          88.1 kB
+├ ○ /audit                               4.15 kB        91.4 kB
+├ ○ /chat                                10.5 kB         108 kB
+├ ○ /copilot                             178 B          94.2 kB
+├ ○ /discover                            4.94 kB          99 kB
+├ ○ /graph                               409 kB          503 kB
+├ ○ /ideas                               4.61 kB        98.7 kB
+├ ○ /judge                               178 B          94.2 kB
+└ ƒ /reader/[id]                         87.1 kB         174 kB
++ First Load JS shared by all            87.3 kB
+  ├ chunks/330-0b22719c32c394de.js       31.6 kB
+  ├ chunks/c56bfed3-e47b64199ca38bb9.js  53.6 kB
+  └ other shared chunks (total)          2.05 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

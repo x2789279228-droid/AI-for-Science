@@ -1,0 +1,67 @@
+$ docker build -t scholar-api:accept api
+(cwd=D:\传智杯\scholar-agent)
+
+
+[stderr]
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.05kB 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.6s
+
+#3 [internal] load metadata for ghcr.io/astral-sh/uv:0.7
+#3 DONE 1.5s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 146B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [stage-0 1/7] FROM docker.io/library/python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+#6 resolve docker.io/library/python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 0.1s done
+#6 DONE 0.1s
+
+#7 FROM ghcr.io/astral-sh/uv:0.7@sha256:629240833dd25d03949509fc01ceff56ae74f5e5f0fd264da634dd2f70e9cc70
+#7 resolve ghcr.io/astral-sh/uv:0.7@sha256:629240833dd25d03949509fc01ceff56ae74f5e5f0fd264da634dd2f70e9cc70 0.1s done
+#7 DONE 0.1s
+
+#5 [internal] load build context
+#5 transferring context: 6.33kB 0.0s done
+#5 DONE 0.0s
+
+#8 [stage-0 2/7] RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [stage-0 3/7] COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /bin/
+#9 CACHED
+
+#10 [stage-0 4/7] WORKDIR /app
+#10 CACHED
+
+#11 [stage-0 5/7] COPY pyproject.toml uv.lock ./
+#11 CACHED
+
+#12 [stage-0 6/7] COPY app ./app
+#12 CACHED
+
+#13 [stage-0 7/7] RUN uv sync --no-dev --frozen
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 exporting manifest sha256:5f529df71f2747685c441252ac78a77e39b92f09f03dbce41c73dc1cbce2d9d5 done
+#14 exporting config sha256:faca91560c51d28997de0b1f382edaa33defbc0a1d7716afdaf237322f3dd276 done
+#14 exporting attestation manifest sha256:a6680438a8cd4b0138086099bbd49456c8b2c75388d576a5cde1e2035608434c
+#14 exporting attestation manifest sha256:a6680438a8cd4b0138086099bbd49456c8b2c75388d576a5cde1e2035608434c 0.1s done
+#14 exporting manifest list sha256:2ae91f575e09a93cc6dd2892286546a2d7433694b1c9204b919936d5ef73d552 0.0s done
+#14 naming to docker.io/library/scholar-api:accept
+#14 naming to docker.io/library/scholar-api:accept done
+#14 unpacking to docker.io/library/scholar-api:accept 0.0s done
+#14 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/likqvz8lf65mg9mtbwf7zc5wr

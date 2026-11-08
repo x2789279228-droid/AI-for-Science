@@ -1,0 +1,18 @@
+$ D:\传智杯\scholar-agent\api\.venv\Scripts\python.exe scripts/smoke_web.py
+(cwd=D:\传智杯\scholar-agent\api)
+
+[PASS] health · papers=0
+[PASS] upload · paper_id=p_8d5c4079d427
+[PASS] parse job · status=done
+[PASS] outline 载荷 · 999 bytes · toc=5
+[PASS] 按页正文 · blocks=2
+[PASS] chat SSE 溯源链路 · 锚点引用=False · 如实拒答=True · claims=0
+[PASS] translate 缓存端点 
+[PASS] terminology 增删 
+[PASS] graph 端点 · nodes=1 edges=0
+
+== 冒烟：9/9 PASS ==
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(

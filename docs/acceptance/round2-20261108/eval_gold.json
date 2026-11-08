@@ -1,0 +1,269 @@
+{
+  "time": "2026-11-08 10:31:44",
+  "paper_id": "p_a19a95dbf468",
+  "recall_at5": 0.8,
+  "recall_at5_detail": {
+    "How many GPUs were the base models trained on?": 1,
+    "How long did the big model train for?": 1,
+    "What BLEU score did the big model achieve on EN-DE?": 1,
+    "What attention mechanism computes in constant memory?": 0,
+    "Which optimizer was used?": 1,
+    "What learning rate schedule was applied?": 1,
+    "What is the dropout applied to the sum of embeddings?": 1,
+    "How many encoder and decoder layers?": 1,
+    "What is the model dimension d_model?": 0,
+    "Which regularization prevented overfitting?": 1
+  },
+  "zh_top8_hit": 1.0,
+  "zh_nonempty": 5,
+  "refusal_accuracy": 1.0,
+  "generative": {
+    "claims": {
+      "total": 10,
+      "supported": 10,
+      "needs_check": 0,
+      "unsupported": 0
+    },
+    "supported_ratio": 1.0,
+    "hallucination_rate": 0.0,
+    "best_anchors_ok": true
+  },
+  "generative_trace": {
+    "question": "How many GPUs were the base models trained on?",
+    "answer": "The base models were trained on 8 NVIDIA P100 GPUs [E2].",
+    "mode": "generative",
+    "claims": [
+      {
+        "text": "The base models were trained on 8 NVIDIA P100 GPUs.",
+        "status": "supported",
+        "support": [
+          {
+            "eid": "E2",
+            "page": 7,
+            "section_path": "5.2 Hardware and Schedule",
+            "chunk_id": "c_645d76163ae9",
+            "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds."
+          }
+        ],
+        "quote_status": "verified"
+      }
+    ],
+    "anchors": {
+      "E1": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_0e9a2b3eed51",
+        "block_ids": [
+          "b90"
+        ]
+      },
+      "E2": {
+        "page": 7,
+        "section_path": "5.2 Hardware and Schedule",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1732,
+          0.1907,
+          0.8252,
+          0.2614
+        ],
+        "chunk_id": "c_645d76163ae9",
+        "block_ids": [
+          "b73"
+        ]
+      },
+      "E3": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_e63453b66219",
+        "block_ids": [
+          "b87",
+          "b88"
+        ]
+      },
+      "E4": {
+        "page": 8,
+        "section_path": "6.3 English Constituency Parsing",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.2092,
+          0.1174,
+          0.7892,
+          0.3081
+        ],
+        "chunk_id": "c_c1a4e7f13232",
+        "block_ids": [
+          "t2"
+        ]
+      },
+      "E5": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_534a355c9a4d",
+        "block_ids": [
+          "b89"
+        ]
+      },
+      "E6": {
+        "page": 9,
+        "section_path": "6.3 English Constituency Parsing",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1716,
+          0.1604,
+          0.8333,
+          0.4697
+        ],
+        "chunk_id": "c_5b27f90c987a",
+        "block_ids": [
+          "t3"
+        ]
+      },
+      "E7": {
+        "page": 1,
+        "section_path": "1 Introduction",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.7172,
+          0.8252,
+          0.7866
+        ],
+        "chunk_id": "c_a88bfb14e273",
+        "block_ids": [
+          "b19"
+        ]
+      },
+      "E8": {
+        "page": 7,
+        "section_path": "5.4 Regularization",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1732,
+          0.4672,
+          0.5425,
+          0.4836
+        ],
+        "chunk_id": "c_5bfbee5a3e94",
+        "block_ids": [
+          "b79",
+          "b80",
+          "b81"
+        ]
+      }
+    },
+    "guardrails": [],
+    "elapsed_s": 5.6,
+    "conversation_id": "gold_daee3871",
+    "thread_id": "gold_daee3871:1"
+  },
+  "replay_race": {
+    "rounds": 10,
+    "ok": 10,
+    "detail": [
+      {
+        "round": 1,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 2,
+        "status": 200,
+        "events": 38
+      },
+      {
+        "round": 3,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 4,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 5,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 6,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 7,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 8,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 9,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 10,
+        "status": 200,
+        "events": 37
+      }
+    ]
+  },
+  "translate": [
+    {
+      "page": 0,
+      "ok": true,
+      "elapsed_s": 0.0,
+      "cached_blocks": 27,
+      "within_60s": true
+    },
+    {
+      "page": 1,
+      "ok": true,
+      "elapsed_s": 0.0,
+      "cached_blocks": 27,
+      "within_60s": true
+    }
+  ],
+  "gates": {
+    "recall_at5>=0.8": true,
+    "refusal>=0.9": true,
+    "zh_top8>=0.8": true,
+    "supported>=0.8": true,
+    "hallucination<=0.1": true,
+    "replay_10_10": true
+  }
+}

@@ -1,0 +1,8 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+== 官方用例验收 · SCHOLAR_DATA_DIR=D:\传智杯\scholar-agent\api\tests\_cases_1794100884 ==
+[32m2026-11-08 09:25:32.815[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=api n=65 model=doubao-embedding-vision[0m
+[32m2026-11-08 09:29:26.700[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=api n=62 model=doubao-embedding-vision[0m
+[PASS] 3.1 版本去重（先 v7 后 v1）（真素材） · v7=done v1=done · dedup_alert=有 · suggestion含「建议保留」=True
+[32m2026-11-08 09:36:47.431[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m64[0m - [1membed 启动 mode=api n=80 model=doubao-embedding-vision[0m
+[PASS] 3.2a 扫描件 OCR 覆盖率 ≥60%（真素材） · engine=mineru · scanned=True · coverage=0.933
