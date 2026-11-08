@@ -55,10 +55,12 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 |---|---|---|
 | 一 PDF 解析 | ✅ | **解析路由**（docs/01 §4.1）：probe→native(MinerU 2.5.4 middle.json)/scanned(Qwen-VL 逐页)/gray(逐页 VLM 救援)/long(50 页/批流式+大纲先出+前 120 页索引)；失败→PyMuPDF 兜底；公式 LaTeX→KaTeX；表格 html+markdown+headers/rows；解析报告六指标（`docs/adr-001-bbox.md` 标定记录） |
 | 二 溯源问答 | ✅ | BM25(中文 bigram)+可选 Dense→RRF→Rerank；Evidence Pack `[E#]` 编号引用；L1-L4 Claim-Citation 校验器；ClaimTrace 三态徽章；引用点击跳 PDF bbox 高亮；SSE 流式 |
-| 三 阅读器 | ✅ | PDF 原文画布渲染（pdf.js）+ bbox 高亮 + DocIR 文本双视图；`?page&bbox` URL 定位 |
-| 四 检索追踪 | ⏳ | 按排期 D9 |
-| 五 引用图谱 | ⏳ | 按排期 D7 |
-| 六 写作 Copilot | ⏳ | 按排期 D10 |
+| 三 阅读器 | ✅ | 四视图：PDF 原文（pdf.js bbox 高亮）/ DocIR 文本 / **双语对照**（block 级对齐+防回环滚动同步）/ 原版对照（公式→bbox 联动）；`?page&bbox` URL 定位；**按需加载**（outline 秒开+按页正文）；阅读顺序红绿开关；划词翻译+术语表；[n]↔References 双向跳转；解析报告（含峰值内存曲线） |
+| 四 检索追踪 | ✅ | **检索发现闭环**：研究方向→arXiv 检索→勾选下载（主备源+精确去重）→解析→检索（13 个 ToolSpec 工具白名单矩阵；`/discover` SSE） |
+| 五 引用图谱 | ✅ | louvain 社区+模块度+基石🪨/边缘衍生🌿+引用含金量加权（规则+LLM 两档）；**AntV G6 交互图谱**；社区演进综述（[E#] 强制+ClaimTrace 校验）；**/ideas Future Work 去重两栏**（无后继引用→open） |
+| 六 写作 Copilot | ✅ | Writer Agent 大纲先行（artifact+final.outline）→按大纲流式生成→逐论断校验；证据池 ≥3 才写（Evidence-First 拒答） |
+| 翻译 | ✅ | block 级占位符保护（公式/代码/[n]）+术语表优先+缓存续译+2 并发限流；`/api/papers/{id}/translate` SSE |
+| Prompt 审计 | ✅ | `app/prompts/*.yaml` 版本化（changelog+default/strict A/B 运行时切档）；qa_logs.prompt_version；`/audit` 版本分布 |
 
 ## 核心机制（对应参赛方案评分点）
 
@@ -66,7 +68,7 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 |---|---|
 | **DocIR 统一底座** | PyMuPDF 解析 → blocks(page,bbox 锚点) / 标题树 / 表格 / 图注 / References，六大模块共用 |
 | **混合检索** | SQLite FTS5(BM25，CJK bigram 中文可命中) + 可选 Dense(OpenAI 兼容 embeddings) → RRF(k=60) → bge-reranker 全局精排（失败静默降级融合排序 + guardrail），表格单独成块支撑数值类问题 |
-| **四层防御** | ① 混合检索+Rerank ② Evidence Pack（块级 page/bbox/章节，显式编号 E1..En）③ 强制 `[E#]` 引用生成（无效编号剔除+定向重生成环）④ **Claim-Citation 校验器**：L1 编号存在性 / L2 引文原文覆盖率≥0.85（失败重抽）/ L3 数值·型号逐字比对（未命中标「需核对」）/ L4 语义 judge（LLM 批量判定，no→未验证，失败兜底跳过） |
+| **四层防御** | ① 混合检索+Rerank（SiliconFlow bge-reranker-v2-m3，未配 RERANK_API_KEY 时降级 RRF 融合排序+guardrail 如实标注） ② Evidence Pack（块级 page/bbox/章节，显式编号 E1..En）③ 强制 `[E#]` 引用生成（无效编号剔除+定向重生成环）④ **Claim-Citation 校验器**：L1 编号存在性 / L2 引文原文覆盖率≥0.85（失败重抽）/ L3 数值·型号逐字比对（未命中标「需核对」）/ L4 语义 judge（LLM 批量判定，no→未验证，失败兜底跳过） |
 | **ClaimTrace 三态** | 已验证（绿）/ 需核对（黄：数值或引文待人工核对）/ 未验证；`final.anchors` 携带 E#→块级锚点，前端点击弹 PDF 对应页 + bbox 红框高亮 |
 | **拒答策略** | 查无依据明确拒答并附「最接近的 3 条证据」；寒暄/范围外拒答；无 LLM 抽取式降级（停用词过滤防噪声命中） |
 | **页码口径** | SSE 对外统一 1 基人读页码；DB/DocIR 内部 0 基 |
