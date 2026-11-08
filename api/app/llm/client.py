@@ -172,21 +172,32 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
 
 # 连通性探测缓存：key 存在 ≠ key 有效，失效 key 必须真实降级
+# P0-7：成功缓存 300s；失败只缓存 30s（瞬时网络抖动不应把可用服务锁死 5 分钟），且失败前重试
 _ping_cache: dict[str, Any] = {"ts": 0.0, "ok": False}
 _PING_TTL = 300.0
+_PING_TTL_FAIL = 30.0
+_PING_RETRIES = 2
 
 
 def available(force: bool = False) -> bool:
-    """LLM 端点是否真正可用（真实 ping，5 分钟缓存）。"""
+    """LLM 端点是否真正可用（真实 ping；成功 TTL 300s / 失败 TTL 30s + 探测前重试）。"""
     if not _endpoint():
         return False
     now = time.time()
-    if not force and now - _ping_cache["ts"] < _PING_TTL:
+    ttl = _PING_TTL if _ping_cache["ok"] else _PING_TTL_FAIL
+    if not force and now - _ping_cache["ts"] < ttl:
         return _ping_cache["ok"]
-    res = chat([{"role": "user", "content": "ping"}], max_tokens=1, module="health_ping")
-    _ping_cache["ts"] = now
-    _ping_cache["ok"] = bool(res.get("text") or not res.get("error"))
-    return _ping_cache["ok"]
+    ok = False
+    for attempt in range(_PING_RETRIES + 1):
+        res = chat([{"role": "user", "content": "ping"}], max_tokens=1, module="health_ping")
+        ok = bool(res.get("text") or not res.get("error"))
+        if ok:
+            break
+        if attempt < _PING_RETRIES:
+            time.sleep(0.5)
+    _ping_cache["ts"] = time.time()
+    _ping_cache["ok"] = ok
+    return ok
 
 
 def parse_json(text: str) -> dict | None:
