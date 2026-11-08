@@ -33,10 +33,17 @@ async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastA
 def list_papers():
     rows = db.query("SELECT id,title,arxiv_id,page_count,version,supersedes,created_at,docir_path"
                     " FROM papers ORDER BY created_at DESC")
+    # 去重预警 map（P0-1：前端黄色预警条数据源；每篇取最新一条 dedup_alert payload）
+    alerts: dict[str, dict] = {}
+    for j in db.query("SELECT paper_id, payload FROM jobs WHERE kind='dedup_alert' "
+                      "ORDER BY created_at DESC"):
+        alerts.setdefault(j["paper_id"], json.loads(j["payload"] or "{}"))
     out = []
     for r in rows:
         d = dict(r)
         d["parsed"] = bool(r["docir_path"])
+        if r["id"] in alerts:
+            d["dedup_alert"] = alerts[r["id"]]
         out.append(d)
     return {"papers": out}
 
