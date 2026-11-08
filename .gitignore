@@ -26,6 +26,7 @@ Thumbs.db
 api/tests/_agt_*/
 api/tests/_ses_*/
 api/tests/_prs_*/
+api/tests/_smoke_seal*/
 api/tests/_cases_*/
 api/tests/_p43_*/
 api/tests/_pmp_*/
