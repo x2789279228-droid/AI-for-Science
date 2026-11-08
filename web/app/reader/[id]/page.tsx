@@ -42,11 +42,21 @@ interface DocIRMeta {
   quality?: Quality;
   demo_raw_order?: DemoRawOrder;
   parse_memory?: { peak_mb: number; samples: number };
+  // 模块一：结构化元数据 / 附录 / 批切页降级记录
+  authors?: { name: string; affiliation: string }[];
+  abstract?: string;
+  venue?: string;
+  year?: number;
+  doi?: string;
+  meta_source?: string;
+  appendix?: { start_page: number; sections: string[] };
+  fallback_segments?: { start: number; end: number; reason: string }[];
+  chunked?: { segments: number; mineru_ok: number };
 }
-interface PagePayload { blocks: Block[]; tables: { id: string; page: number; markdown: string }[]; figures: Figure[] }
+interface PagePayload { blocks: Block[]; tables: { id: string; page: number; markdown: string; headers?: string[]; rows?: string[][] }[]; figures: Figure[] }
 interface OutlinePayload {
   meta: DocIRMeta;
-  toc: { level: number; title: string; page: number }[];
+  toc: { level: number; title: string; page: number; appendix?: boolean }[];
   references: RefEntry[];
   figures: Figure[];
   pages: number[];
@@ -123,7 +133,8 @@ function FormulaBlock({ latex, onLocate }: { latex: string; onLocate?: () => voi
 }
 
 /** 解析报告面板：六指标 + 解析引擎 + 峰值内存（4.3）。 */
-function QualityPanel({ meta }: { meta: DocIRMeta }) {
+function QualityPanel({ meta, paperId }: { meta: DocIRMeta; paperId?: string }) {
+  const [reparsing, setReparsing] = useState(false);
   const q = meta.quality ?? {};
   const row = (k: string, v: React.ReactNode) => (
     <div key={k} style={{ display: "flex", justifyContent: "space-between",
@@ -163,6 +174,90 @@ function QualityPanel({ meta }: { meta: DocIRMeta }) {
         <p className="kv" style={{ color: "var(--warn)", marginTop: "var(--space-2)" }}>
           ⚠ 本文档含扫描/OCR 识别页，识别结果可能不准确，请人工核对。
         </p>
+      )}
+      {meta.fallback_segments?.length ? (
+        <p className="kv" style={{ color: "var(--warn)", marginTop: "var(--space-2)" }}>
+          ⚠ 批切页解析中 {meta.fallback_segments.length} 段走 PyMuPDF 兜底
+          （{meta.fallback_segments.map((f) => `p${f.start + 1}-${f.end}`).join("、")}
+          ），该段无公式 LaTeX，如实标注。
+        </p>
+      ) : null}
+      {meta.appendix && (
+        <p className="kv" style={{ marginTop: "var(--space-2)" }}>
+          附录：{meta.appendix.sections.length} 节（起 p{(meta.appendix.start_page ?? 0) + 1}）
+        </p>
+      )}
+      {paperId && (
+        <button className="mini-btn" style={{ marginTop: "var(--space-2)" }}
+          disabled={reparsing}
+          onClick={async () => {
+            setReparsing(true);
+            try {
+              const { reparsePaper } = await import("@/lib/api");
+              await reparsePaper(paperId);
+              window.location.reload();
+            } finally { setReparsing(false); }
+          }}>
+          {reparsing ? "已提交…" : "重新解析"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** 文献信息卡（模块一 P0：作者+机构 / 摘要 / venue·DOI·年份，meta_source 如实标注）。 */
+function PaperMetaCard({ meta, arxivId }: { meta: DocIRMeta; arxivId?: string }) {
+  const [showAbstract, setShowAbstract] = useState(false);
+  const authors = meta.authors ?? [];
+  const sourceLabel: Record<string, string> = {
+    arxiv_api: "arXiv API", llm: "LLM 抽取", heuristic: "启发式",
+    "arxiv_api+llm": "arXiv API + LLM", engine: "解析引擎", "": "未抽取",
+  };
+  return (
+    <div className="card paper-meta-card">
+      <h2>文献信息 {meta.meta_source != null && (
+        <span className="chip" style={{ fontSize: 10, marginLeft: 6 }}
+          title="元数据抽取来源（诚实标注降级路径）">
+          来源：{sourceLabel[meta.meta_source] ?? meta.meta_source}
+        </span>
+      )}</h2>
+      {authors.length > 0 ? (
+        <div className="meta-authors">
+          {authors.map((a, i) => (
+            <span key={i} className="chip" style={{ fontSize: 11 }}
+              title={a.affiliation || undefined}>
+              {a.name}{a.affiliation ? ` · ${a.affiliation}` : ""}
+            </span>
+          ))}
+        </div>
+      ) : <p className="kv muted">作者信息未抽取到（扫描件或非标准版式可能缺失）。</p>}
+      {(meta.venue || meta.year || meta.doi || arxivId) && (
+        <div className="meta-authors" style={{ marginTop: 8 }}>
+          {meta.venue && <span className="chip" style={{ fontSize: 11 }}>{meta.venue}</span>}
+          {meta.year ? <span className="chip" style={{ fontSize: 11 }}>{meta.year} 年</span> : null}
+          {arxivId && (
+            <a className="chip" style={{ fontSize: 11 }}
+              href={`https://arxiv.org/abs/${arxivId.split("v")[0]}`} target="_blank">
+              arXiv:{arxivId.split("v")[0]}
+            </a>
+          )}
+          {meta.doi && (
+            <a className="chip" style={{ fontSize: 11 }} href={`https://doi.org/${meta.doi}`}
+              target="_blank">DOI</a>
+          )}
+        </div>
+      )}
+      {meta.abstract && (
+        <div style={{ marginTop: 10 }}>
+          <b className="kv" style={{ cursor: "pointer" }}
+            onClick={() => setShowAbstract((v) => !v)}>
+            摘要 {showAbstract ? "▾" : "▸"}
+          </b>
+          {showAbstract && (
+            <p style={{ fontSize: "var(--text-sm)", lineHeight: 1.6, margin: "6px 0 0",
+              color: "var(--ink-2)" }}>{meta.abstract}</p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -235,6 +330,7 @@ function ReaderInner() {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewMode>("pdf");
   const [showReport, setShowReport] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
   const [orderOn, setOrderOn] = useState(true);              // 阅读顺序开关（4.3）
   const [focusBbox, setFocusBbox] = useState<number[] | undefined>(undefined); // 公式联动
 
@@ -488,6 +584,9 @@ function ReaderInner() {
             长文档 · 按需加载
           </span>
         )}
+        <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowMeta((v) => !v)}>
+          文献信息{meta.authors?.length ? ` · ${meta.authors.length} 作者` : ""}
+        </button>
         <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowReport((s) => !s)}>
           解析报告 <span style={{ opacity: 0.7 }}>{meta.parse_engine ?? ""}</span>
         </button>
@@ -499,7 +598,10 @@ function ReaderInner() {
             {outline.toc.map((t, i) => (
               <div key={i} style={{ paddingLeft: (t.level - 1) * 14 }}>
                 <span className="toc-item" onClick={() => setPage(t.page + 1)}>
-                  {t.level === 1 ? <b>{t.title}</b> : t.title} <span className="toc-page">p{t.page + 1}</span>
+                  {t.level === 1 ? <b>{t.title}</b> : t.title}
+                  {t.appendix && <span className="chip" style={{ fontSize: 9, marginLeft: 6 }}
+                    title="附录章节（结构化标记）">附录</span>}
+                  <span className="toc-page">p{t.page + 1}</span>
                 </span>
               </div>
             ))}
@@ -546,7 +648,8 @@ function ReaderInner() {
               )}
             </div>
 
-            {showReport && <QualityPanel meta={meta} />}
+            {showMeta && <PaperMetaCard meta={meta} arxivId={meta.arxiv_id} />}
+            {showReport && <QualityPanel meta={meta} paperId={id as string} />}
 
             {view === "pdf" ? (
               <div className="card" style={{ marginBottom: 0, flex: 1, overflowY: "auto" }}>
@@ -652,7 +755,22 @@ function ReaderInner() {
             {(pageData?.tables ?? []).filter((t) => t.page === page - 1).map((t) => (
               <div className="card" key={t.id} style={{ marginBottom: 0 }}>
                 <h2>表格 {t.id}（第 {t.page + 1} 页）</h2>
-                <pre style={{ fontSize: "var(--text-xs)", overflowX: "auto", margin: 0 }}>{t.markdown}</pre>
+                {t.headers?.length ? (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="three-line">
+                      <thead>
+                        <tr>{t.headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {(t.rows ?? []).map((row, ri) => (
+                          <tr key={ri}>{row.map((c, ci) => <td key={ci}>{c}</td>)}</tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <pre style={{ fontSize: "var(--text-xs)", overflowX: "auto", margin: 0 }}>{t.markdown}</pre>
+                )}
               </div>
             ))}
           </div>

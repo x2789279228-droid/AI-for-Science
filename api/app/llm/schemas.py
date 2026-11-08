@@ -88,3 +88,30 @@ class IdeaVerdict(BaseModel):
 
 class IdeaVerdictList(BaseModel):
     verdicts: list[IdeaVerdict] = Field(default_factory=list)
+
+
+# ---- 模块一 P0 升级：去重 LLM 判重（dedup-judge-v1） ----
+
+class DedupVerdict(BaseModel):
+    """成对判重结论：same_family=同一论文的不同版本/重复入库（而非仅主题相似）。
+    confidence 0~1 自报置信度；reason 进预警文案（可审计）。"""
+    same_family: bool = False
+    confidence: float = Field(default=0.5)
+    reason: str = ""
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _coerce_conf(cls, v: object) -> float:
+        try:
+            return max(0.0, min(1.0, float(v)))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.5
+
+    @field_validator("same_family", mode="before")
+    @classmethod
+    def _coerce_bool(cls, v: object) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in ("true", "yes", "1", "是", "同族", "same")
+        return bool(v)

@@ -13,6 +13,7 @@ from typing import Any
 
 import fitz  # PyMuPDF
 
+from ._types import CancelCheck, ParseCancelled
 from .tables import table_to_md as _table_to_md  # 共享表格工具（tools/vlm/mineru 引擎复用）
 
 # ---------- 工具 ----------
@@ -21,6 +22,20 @@ _REF_HEAD = re.compile(r"^\s*(references|bibliography|文献)\s*$", re.IGNORECAS
 _REF_ITEM = re.compile(r"^\[(\d{1,3})\]\s*(.*)$")
 _ARXIV_ID = re.compile(r"arxiv[:\s]*(\d{4}\.\d{4,5})(v\d+)?", re.IGNORECASE)
 _DOI = re.compile(r"10\.\d{4,9}/[\w.\-/:]+", re.IGNORECASE)
+_APPENDIX_HEAD = re.compile(r"^(appendix|appendices|附录|附錄)\b", re.IGNORECASE)
+
+
+def _mark_appendix(toc: list[dict], meta: dict) -> None:
+    """附录结构化（P1）：Appendix/附录 起的 toc 条目打标 + meta.appendix 汇总。"""
+    idx = next((i for i, t in enumerate(toc)
+                if _APPENDIX_HEAD.match((t.get("title") or "").strip())), None)
+    if idx is None:
+        return
+    appendix_toc = toc[idx:]
+    for t in appendix_toc:
+        t["appendix"] = True
+    meta["appendix"] = {"start_page": appendix_toc[0].get("page"),
+                        "sections": [t.get("title", "") for t in appendix_toc]}
 
 
 def file_sha256(path: Path) -> str:
@@ -156,11 +171,13 @@ def _parse_references(ref_text: str) -> list[dict]:
 # ---------- 主流程 ----------
 
 def parse_pdf(pdf_path: str | Path, progress=None,
-              pages: tuple[int, int] | None = None) -> dict:
+              pages: tuple[int, int] | None = None,
+              cancel_check: CancelCheck | None = None) -> dict:
     """PDF → DocIR JSON。progress: 可选回调 (frac 0~1, msg)。
 
     pages: (start, end) 0 基页码范围（长文档分批解析用）；None = 全文。
     块的 page/bbox 始终为文档绝对坐标。
+    cancel_check: 协作式取消，逐页边界轮询，命中抛 ParseCancelled。
     """
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
@@ -186,6 +203,8 @@ def parse_pdf(pdf_path: str | Path, progress=None,
     n = doc.page_count
     bid = 0
     for pageno in range(p_start, p_end):
+        if cancel_check is not None and cancel_check():
+            raise ParseCancelled(f"PyMuPDF 解析已取消（第 {pageno} 页边界）")
         page = doc[pageno]
         pw, ph = page.rect.width, page.rect.height
         raw = page.get_text("dict")
@@ -218,20 +237,32 @@ def parse_pdf(pdf_path: str | Path, progress=None,
             elif ref_start_page is not None:
                 ref_text_parts.append(text)
 
-        # 表格
+        # 表格：GFM markdown + headers/rows 拆分（P1：三线表渲染需要结构化字段）
         try:
             for t in (page.find_tables() or []):
                 cells = t.extract()
                 md = _table_to_md(cells)
-                if md:
-                    tables.append({"id": f"t{len(tables)+1}", "page": pageno,
-                                   "bbox": [round(v / pw, 4) if i % 2 == 0 else round(v / ph, 4)
-                                            for i, v in enumerate(t.bbox)],
-                                   "markdown": md})
+                if not md:
+                    continue
+                entry: dict = {"id": f"t{len(tables)+1}", "page": pageno,
+                               "bbox": [round(v / pw, 4) if i % 2 == 0 else round(v / ph, 4)
+                                        for i, v in enumerate(t.bbox)],
+                               "markdown": md}
+                try:   # 表头识别：header.external=False 时 extract() 首行即表头
+                    hdr = t.header
+                    names = list(getattr(hdr, "names", None) or [])
+                    if names and not getattr(hdr, "external", False):
+                        entry["headers"] = [str(h).strip() if h is not None else ""
+                                            for h in names]
+                        entry["rows"] = [["" if c is None else str(c).strip() for c in r]
+                                         for r in cells[1:]]
+                except Exception:  # noqa: BLE001, S110 —— 表头探测失败仅少结构化字段
+                    pass
+                tables.append(entry)
         except Exception:  # noqa: BLE001, S110 —— 单表 HTML 解析失败跳过该表
             pass
 
-        # 图片 + caption 关联（图块下方最近文本块）
+        # 图片 + caption 关联（图块下方最近文本块）；P1：裁剪图落盘（快速通道也有真图）
         for blk in raw.get("blocks", []):
             if blk["type"] != 1:
                 continue
@@ -243,9 +274,20 @@ def parse_pdf(pdf_path: str | Path, progress=None,
                 if b["bbox"][1] >= y1 / ph and b["bbox"][1] - y1 / ph < 0.06:
                     cap = b["text"][:200]
                     break
-            figures.append({"id": f"f{len(figures)+1}", "page": pageno, "caption": cap,
-                            "bbox": [round(x0 / pw, 4), round(y0 / ph, 4),
-                                     round(x1 / pw, 4), round(y1 / ph, 4)]})
+            entry = {"id": f"f{len(figures)+1}", "page": pageno, "caption": cap,
+                     "bbox": [round(x0 / pw, 4), round(y0 / ph, 4),
+                              round(x1 / pw, 4), round(y1 / ph, 4)]}
+            try:   # 裁剪渲染（150 DPI，与 VLM 通道一致）；落 data/figures（figure 端点可达）
+                fig_dir = _figures_dir()
+                fname = f"{pdf_path.stem}_p{pageno}_{entry['id']}.png"
+                fpath = fig_dir / fname
+                if not fpath.exists():   # 重解析幂等：同名覆盖语义，存在即跳过
+                    page.get_pixmap(clip=fitz.Rect(x0, y0, x1, y1),
+                                    dpi=150).save(str(fpath))
+                entry["image_path"] = str(fpath)
+            except Exception:  # noqa: BLE001, S110 —— 裁图失败保留 caption（不阻断）
+                pass
+            figures.append(entry)
         span = max(p_end - p_start, 1)
         report(0.05 + 0.75 * (pageno + 1 - p_start) / span, f"解析第 {pageno+1}/{n} 页")
 
@@ -253,6 +295,7 @@ def parse_pdf(pdf_path: str | Path, progress=None,
     backfill_sections(blocks, toc, blocks_by_page)
 
     meta = _extract_meta(doc, blocks, blocks_by_page.get(0, []))
+    _mark_appendix(toc, meta)
     if demo_raw_x0:
         meta["demo_raw_order"] = {"page": 2, "x0_order": demo_raw_x0}
     docir: dict[str, Any] = {
@@ -295,6 +338,15 @@ def backfill_sections(blocks: list[dict], toc: list[dict],
 def page_char_counts(doc: fitz.Document) -> list[int]:
     """每页文本字符数（VLM 逐页救援的空白页探测用）。"""
     return [len(p.get_text("text").strip()) for p in doc]
+
+
+def _figures_dir():
+    """裁剪图落盘目录 data/figures（figure 端点守卫：必须在数据目录内）。"""
+    from ..config import DOCIR_DIR
+
+    d = DOCIR_DIR.parent / "figures"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 _ARXIV_BANNER = re.compile(r"arxiv:\d{4}\.\d{4,5}", re.IGNORECASE)

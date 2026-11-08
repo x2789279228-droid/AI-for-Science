@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     vlm_enabled: bool = True       # 0 关闭（扫描件回退 MinerU OCR / 诚实标注）
     # 长文档：全文 chunk/索引的页数上限（超出部分仅入 DocIR 按需阅读）
     long_doc_index_pages: int = 120
+    # 长文档批切页 MinerU：每段页数（0=关闭批切、维持整本单次调用）
+    mineru_chunk_pages: int = 100
+    # 语义去重综合分阈值（scripts/calibrate_dedup.py 扫 0.80~0.95 标定）
+    dedup_threshold: float = 0.85
+    # 去重 cross-encoder 精判：每次扫描最多精判的对数（blocking 后候选通常 <10）
+    dedup_rerank_max: int = 10
+    # 去重 LLM 灰区复核（默认开）：只对规则分最不可信的对调用，≤上限次/扫描
+    dedup_llm_judge: bool = True
+    dedup_llm_judge_max: int = 6
+    # 灰区带宽：阈值下方该带宽内的近失对触发 LLM 复核（补警/否决）
+    dedup_gray_zone: float = 0.10
+    # 批量上传单次文件数上限
+    batch_upload_max: int = 20
 
     # 运行时
     daily_llm_limit: int = 2000

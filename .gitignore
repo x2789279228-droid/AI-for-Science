@@ -40,3 +40,10 @@ api/scripts/eval_quick_last.json
 runs/
 api/_papers_check.json
 api/tests/_tr_*.txt
+api/tests/_cal_*/
+api/tests/_fanout_*
+api/dbg_*/
+api/docir/
+api/parsing/
+api/fastembed_cache/
+api/scholar.db

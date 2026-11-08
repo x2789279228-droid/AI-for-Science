@@ -104,7 +104,7 @@ def _citation_graph(paper_ids: list[str]) -> dict:
     自环剔除；外部引用记入 external_count 但不成边（不编造节点）。返回 nodes/edges 原料。
     """
     papers = {r["id"]: dict(r) for r in db.query(
-        "SELECT id,title,arxiv_id FROM papers") if r["id"]}
+        "SELECT id,title,arxiv_id FROM papers WHERE status= 'active'") if r["id"]}
     by_arxiv = {p["arxiv_id"]: pid for pid, p in papers.items() if p.get("arxiv_id")}
     by_title = {p["title"].strip().lower(): pid for pid, p in papers.items() if p.get("title")}
 
@@ -456,7 +456,8 @@ def _python_sandbox(code: str) -> dict:
     script.write_text(_SANDBOX_PREAMBLE.format(fig=fig) + code, encoding="utf-8")
     try:
         proc = subprocess.run([sys.executable, "-I", str(script)], check=False,
-                              capture_output=True, text=True, timeout=30, cwd=str(tmp))
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=30, cwd=str(tmp))
         image_path = None
         if fig.exists():
             dest = DATA_DIR / "figures" / "sandbox" / \

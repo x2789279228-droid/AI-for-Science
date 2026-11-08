@@ -18,8 +18,8 @@ from typing import Any
 import fitz  # PyMuPDF
 
 from ..config import DOCIR_DIR, settings
-from ._types import ProgressCb
-from .pipeline import _REF_HEAD, _parse_references, backfill_sections
+from ._types import CancelCheck, ParseCancelled, ProgressCb
+from .pipeline import _REF_HEAD, _mark_appendix, _parse_references, backfill_sections
 from .tables import html_table_to_rows, table_to_md
 
 
@@ -34,10 +34,12 @@ def available() -> bool:
 
 def parse(pdf_path: str | Path, progress: ProgressCb | None = None,
           page_offset: int = 0, out_dir: str | Path | None = None,
-          timeout_s: int | None = None) -> dict:
+          timeout_s: int | None = None,
+          cancel_check: CancelCheck | None = None) -> dict:
     """MinerU CLI 解析 → DocIR。page_offset：子 PDF 批次解析时块页码换算。
 
-    timeout_s：覆盖默认超时（长文档整本调用按页数扩展，见 longdoc._parse_whole_mineru）。
+    timeout_s：覆盖默认超时（长文档批切页按段页数收窄，见 longdoc.parse_long_pdf）。
+    cancel_check：协作式取消——每秒轮询，命中即 terminate/kill 子进程并抛 ParseCancelled。
     """
     pdf_path = Path(pdf_path)
     out_dir = Path(out_dir) if out_dir else DOCIR_DIR.parent / "parsing" / \
@@ -48,15 +50,32 @@ def parse(pdf_path: str | Path, progress: ProgressCb | None = None,
         progress(0.05, f"MinerU 解析中（{pdf_path.name}）…")
     env = dict(os.environ)
     env["MINERU_MODEL_SOURCE"] = env.get("MINERU_MODEL_SOURCE", "modelscope")
-    try:
-        subprocess.run(
-            [settings.mineru_cmd, "-p", str(pdf_path), "-o", str(out_dir), "-m", "auto"],
-            check=True, capture_output=True, timeout=timeout_s or settings.mineru_timeout_s,
-            env=env)
-    except FileNotFoundError as e:
-        raise RuntimeError(f"mineru CLI 不存在：{settings.mineru_cmd}") from e
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"MinerU 超时（>{timeout_s or settings.mineru_timeout_s}s）") from e
+    deadline = time.monotonic() + (timeout_s or settings.mineru_timeout_s)
+    # stderr 落临时文件而非 PIPE：避免长时运行撑满管道缓冲把子进程卡死
+    import tempfile
+
+    with tempfile.TemporaryFile() as err_f:
+        try:
+            proc = subprocess.Popen(
+                [settings.mineru_cmd, "-p", str(pdf_path), "-o", str(out_dir), "-m", "auto"],
+                stdout=subprocess.DEVNULL, stderr=err_f, env=env)
+        except FileNotFoundError as e:
+            raise RuntimeError(f"mineru CLI 不存在：{settings.mineru_cmd}") from e
+        while True:
+            code = proc.poll()
+            if code is not None:
+                break
+            if cancel_check is not None and cancel_check():
+                _kill(proc)
+                raise ParseCancelled(f"MinerU 解析已取消（{pdf_path.name}）")
+            if time.monotonic() > deadline:
+                _kill(proc)
+                raise RuntimeError(f"MinerU 超时（>{timeout_s or settings.mineru_timeout_s}s）")
+            time.sleep(1.0)
+        if code != 0:
+            err_f.seek(max(0, err_f.seek(0, 2) - 2000))
+            err_tail = err_f.read().decode("utf-8", "ignore")[-400:]
+            raise RuntimeError(f"MinerU 失败 rc={code}: {err_tail or '无 stderr 输出'}")
 
     middle_path = _find_middle(out_dir)
     if middle_path is None:
@@ -71,6 +90,19 @@ def parse(pdf_path: str | Path, progress: ProgressCb | None = None,
         progress(0.75, f"middle.json → {len(docir['blocks'])} blocks / "
                        f"{len(docir['tables'])} tables / {len(docir['figures'])} figures")
     return docir
+
+
+def _kill(proc: subprocess.Popen) -> None:
+    """先 terminate 给 MinerU 落盘机会，2s 不退再 kill。"""
+    proc.terminate()
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def _find_middle(out_dir: Path) -> Path | None:
@@ -223,6 +255,7 @@ def middle_to_docir(middle: dict, pdf_path: str | Path, *,
         "figures": figures,
         "references": _parse_references("\n".join(ref_parts)) if ref_parts else [],
     }
+    _mark_appendix(toc, docir["meta"])
     return docir
 
 

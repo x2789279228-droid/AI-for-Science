@@ -46,10 +46,12 @@ def _two_version_pdfs() -> tuple[Path, Path]:
     v7p, v1p = tmp / "1706.03762v7.pdf", tmp / "1706.03762v1.pdf"
     make_paper_pdf(v7p, "P0 Regression Paper",
                    body_facts=["Version 7 trains on 8 GPUs reaching 27.3 BLEU."],
-                   refs=["Vaswani et al. 2017. arXiv:1706.03762"])
+                   refs=["Vaswani et al. 2017. arXiv:1706.03762"],
+                   arxiv_line="arXiv:1706.03762v7")
     make_paper_pdf(v1p, "P0 Regression Paper",
                    body_facts=["Version 1 trains on 8 GPUs reaching 26.1 BLEU."],
-                   refs=["Vaswani et al. 2017. arXiv:1706.03762"])
+                   refs=["Vaswani et al. 2017. arXiv:1706.03762"],
+                   arxiv_line="arXiv:1706.03762v1")
     return v7p, v1p
 
 
@@ -118,14 +120,15 @@ def test_p0_2_dedup_alert_before_job_done(monkeypatch):
     while time.time() - t0 < 300:
         j = client.get(f"/api/jobs/{p2['job_id']}").json()
         if j.get("status") == "done":
-            rows = db.query("SELECT payload FROM jobs WHERE kind='dedup_alert' AND paper_id=? "
-                            "ORDER BY created_at DESC LIMIT 1", (p2["paper_id"],))
+            rows = db.query("SELECT reason FROM dedup_alerts WHERE status='pending' "
+                            "AND (new_paper_id=? OR existing_paper_id=?) "
+                            "ORDER BY created_at DESC LIMIT 1", (p2["paper_id"], p2["paper_id"]))
             break
         time.sleep(0.05)
     assert j["status"] == "done"
     assert stamps["dedup_end"] > 0 and stamps["done"] >= stamps["dedup_end"],         "done 必须晚于 dedup 完成（先去重后置 done）"
     assert rows, "done 首次可见的瞬间 dedup_alert 必须已在库"
-    payload = json.dumps(json.loads(rows[0]["payload"]), ensure_ascii=False)
+    payload = json.dumps(dict(rows[0]), ensure_ascii=False)
     assert "建议保留" in payload and "v7" in payload
 
 

@@ -8,17 +8,15 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import fitz  # PyMuPDF
 
 from ..llm import vision
+from ._types import CancelCheck, ParseCancelled, ProgressCb
 from .pipeline import _REF_HEAD, _parse_references, backfill_sections
 from .tables import parse_md_table
-
-ProgressCb = Callable[[float, str], None]
 
 PAGE_PROMPT = (
     "识别这张学术文档页面图，输出 Markdown（禁止编造页面中不存在的内容）：\n"
@@ -174,7 +172,8 @@ def _assemble(docir: dict, parts: list[dict], pdf_path: Path, page_count: int) -
     return docir
 
 
-def parse_scanned(pdf_path: str | Path, progress: ProgressCb | None = None) -> dict:
+def parse_scanned(pdf_path: str | Path, progress: ProgressCb | None = None,
+                  cancel_check: CancelCheck | None = None) -> dict:
     """扫描件全文档：逐页 VLM（跳过有文本层的页，只对失败页调用）。"""
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
@@ -185,6 +184,8 @@ def parse_scanned(pdf_path: str | Path, progress: ProgressCb | None = None) -> d
     done = 0
     try:
         for pageno in scanned_pages:
+            if cancel_check is not None and cancel_check():
+                raise ParseCancelled(f"VLM 逐页识别已取消（第 {pageno} 页边界）")
             md = vision.vlm_chat(PAGE_PROMPT, [render_page_png(doc, pageno)],
                                  module="vlm_parse", audit_prompt=f"scanned p{pageno + 1}")
             if md:
@@ -206,7 +207,8 @@ def parse_scanned(pdf_path: str | Path, progress: ProgressCb | None = None) -> d
 
 
 def rescue_blank_pages(pdf_path: str | Path, docir: dict,
-                       progress: ProgressCb | None = None) -> dict:
+                       progress: ProgressCb | None = None,
+                       cancel_check: CancelCheck | None = None) -> dict:
     """灰区文档救援：对 PyMuPDF 解析后仍近乎空白的页逐页 VLM，块并入 DocIR。"""
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
@@ -222,6 +224,8 @@ def rescue_blank_pages(pdf_path: str | Path, docir: dict,
 
     rescued: list[dict] = []
     for i, pageno in enumerate(blank):
+        if cancel_check is not None and cancel_check():
+            raise ParseCancelled(f"VLM 逐页救援已取消（第 {pageno} 页边界）")
         d = fitz.open(pdf_path)
         try:
             png = render_page_png(d, pageno)

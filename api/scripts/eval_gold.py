@@ -130,6 +130,7 @@ def qa_round(client, paper_id: str, question: str, agent: str = "reader") -> tup
 
 
 def generative_metrics(client, paper_id: str) -> dict:
+    from app import db
     """生成式：claims supported 占比 / 锚点可映射 / 端到端耗时；选最优一条导出 trace。"""
     claims_stat = {"total": 0, "supported": 0, "needs_check": 0, "unsupported": 0}
     best = None
@@ -157,9 +158,18 @@ def generative_metrics(client, paper_id: str) -> dict:
                 best = (score, cand)
     sup_ratio = (claims_stat["supported"] / claims_stat["total"]) if claims_stat["total"] else 0.0
     halluc = (claims_stat["unsupported"] / claims_stat["total"]) if claims_stat["total"] else 1.0
+    # trace 补 usage/model（来自 qa_logs 最新流式行；验收 A5：无 usage = 证据不全）
+    usage_row = db.query("SELECT model, prompt_tokens, completion_tokens, latency_ms "
+                         "FROM qa_logs WHERE guardrail='stream' ORDER BY id DESC LIMIT 1")
+    usage = dict(usage_row[0]) if usage_row else {}
+    if best[1] is not None and usage:
+        best[1]["model"] = usage.get("model", "")
+        best[1]["usage"] = {"prompt_tokens": usage.get("prompt_tokens", 0),
+                            "completion_tokens": usage.get("completion_tokens", 0),
+                            "latency_ms": usage.get("latency_ms", 0)}
     return {"claims": claims_stat, "supported_ratio": round(sup_ratio, 2),
             "hallucination_rate": round(halluc, 2), "best": best[1] if best else None,
-            "best_anchors_ok": bool(best and best[0][1])}
+            "best_anchors_ok": bool(best and best[0][1]), "stream_usage": usage}
 
 
 def refusal_metrics(client, paper_id: str) -> dict:

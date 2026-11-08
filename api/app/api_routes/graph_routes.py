@@ -24,7 +24,7 @@ def _parse_paper_ids(paper_ids: str | None) -> list[str]:
 
 def _db_all_papers():
     from .. import db
-    return db.query("SELECT id FROM papers ORDER BY created_at")
+    return db.query("SELECT id FROM papers WHERE status='active' ORDER BY created_at")
 
 
 @router.get("/graph")

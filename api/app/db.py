@@ -112,6 +112,32 @@ CREATE TABLE IF NOT EXISTS qa_logs (
   guardrail   TEXT DEFAULT '',               -- 记录 guardrail 事件
   prompt_version TEXT DEFAULT ''             -- 本次调用所用 prompt 版本（审计）
 );
+
+-- 模块一 P0：内容级去重预警（独立于 jobs 表，三态决策落库）
+CREATE TABLE IF NOT EXISTS dedup_alerts (
+  id               TEXT PRIMARY KEY,
+  new_paper_id     TEXT NOT NULL,
+  existing_paper_id TEXT NOT NULL,
+  score            REAL DEFAULT 0,
+  breakdown_json   TEXT DEFAULT '{}',   -- 特征分量 {title,vector,author,minhash,containment,ngram,rerank,llm,year} + 旗标
+  reason           TEXT DEFAULT '',
+  status           TEXT NOT NULL DEFAULT 'pending',  -- pending|covered|kept|coexisted（LLM 判异族否决 → pending 直接删除，决策审计走 qa_logs）
+  created_at       REAL NOT NULL,
+  decided_at       REAL
+);
+CREATE INDEX IF NOT EXISTS idx_dedup_new ON dedup_alerts(new_paper_id, status);
+CREATE INDEX IF NOT EXISTS idx_dedup_existing ON dedup_alerts(existing_paper_id, status);
+
+-- 模块一 P0：DiffLens 版本差异结果缓存
+CREATE TABLE IF NOT EXISTS version_diffs (
+  id           TEXT PRIMARY KEY,
+  base_id      TEXT NOT NULL,             -- 旧版本 paper_id
+  target_id    TEXT NOT NULL,             -- 新版本 paper_id
+  stats_json   TEXT DEFAULT '{}',         -- {sections_changed, paras_changed, numbers_changed}
+  payload_json TEXT DEFAULT '{}',         -- 完整对齐 diff 载荷（前端 DiffLens 渲染）
+  created_at   REAL NOT NULL,
+  UNIQUE(base_id, target_id)
+);
 """
 
 
@@ -132,7 +158,48 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         _migrate_cjk_index(conn)
         _migrate_qa_prompt_version(conn)
+        _migrate_papers_module1(conn)
+        _migrate_papers_dedup2(conn)
         conn.commit()
+
+
+def _migrate_papers_module1(conn: sqlite3.Connection) -> None:
+    """旧库升级：papers 加模块一 P0 列（软归档/语义去重/结构化元数据）。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)")]
+    if not cols:
+        return
+    add = {
+        "family_id":    "TEXT DEFAULT ''",     # 同族键：arxiv 基 id 优先，否则标题归一
+        "status":       "TEXT DEFAULT 'active'",   # active | archived（软归档）
+        "superseded_by": "TEXT DEFAULT ''",    # 被谁取代（archived 时指向 canonical）
+        "abstract":     "TEXT DEFAULT ''",
+        "authors_json": "TEXT DEFAULT '[]'",
+        "content_sig":  "BLOB",                # 正文 MinHash 指纹（128×f4）
+        "paper_vec":    "BLOB",                # title+abstract 论文级向量（float32 LE）
+        "meta_source":  "TEXT DEFAULT ''",     # arxiv_api | llm | heuristic（诚实标注）
+    }
+    for name, decl in add.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE papers ADD COLUMN {name} {decl}")
+    # file_hash 精确去重唯一性（TOCTOU 最后一道防线：并发插入撞唯一索引而失败的一方可安全重查复用）
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_file_hash ON papers(file_hash)")
+
+
+def _migrate_papers_dedup2(conn: sqlite3.Connection) -> None:
+    """旧库升级（9 层方案 L2）：papers 加标识符/元数据列——DOI/年份/ venue。
+    metadata.py 三层抽取本就产出这三个字段，落列后进入标识符精确层与 year 特征。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)")]
+    if not cols:
+        return
+    add = {
+        "doi":      "TEXT DEFAULT ''",   # 标识符精确层（_norm_doi 归一后比对）
+        "pub_year": "INTEGER DEFAULT 0", # year 特征 exp(-|Δ|/3) + LLM 判重提示
+        "venue":    "TEXT DEFAULT ''",   # LLM 判重提示（期刊/会议线索）
+    }
+    for name, decl in add.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE papers ADD COLUMN {name} {decl}")
 
 
 def _migrate_qa_prompt_version(conn: sqlite3.Connection) -> None:
@@ -220,6 +287,93 @@ def get_job(job_id: str) -> dict | None:
         return None
     d = dict(row[0])
     d["payload"] = json.loads(d["payload"] or "{}")
+    return d
+
+
+def job_cancel_requested(job_id: str) -> bool:
+    """协作式取消探测：解析阶段边界轮询（SQLite 读，开销可忽略）。"""
+    rows = query("SELECT status FROM jobs WHERE id=?", (job_id,))
+    return bool(rows) and rows[0]["status"] == "cancel_requested"
+
+
+# ---------- dedup_alerts（模块一 P0：三态去重决策） ----------
+
+def create_dedup_alert(new_paper_id: str, existing_paper_id: str, score: float,
+                       breakdown: dict, reason: str) -> str | None:
+    """幂等插入：同 (new, existing) 对已有 pending alert 时复用其 id。"""
+    alert_id = new_id("da_")
+    with tx() as c:
+        row = c.execute(
+            "SELECT id FROM dedup_alerts WHERE new_paper_id=? AND existing_paper_id=? "
+            "AND status='pending'", (new_paper_id, existing_paper_id)).fetchone()
+        if row:
+            return row["id"]
+        c.execute(
+            "INSERT INTO dedup_alerts(id,new_paper_id,existing_paper_id,score,breakdown_json,"
+            "reason,status,created_at) VALUES(?,?,?,?,?,?,'pending',?)",
+            (alert_id, new_paper_id, existing_paper_id, score,
+             json.dumps(breakdown, ensure_ascii=False), reason, now()))
+    return alert_id
+
+
+def pending_alerts_for(paper_id: str) -> list[dict]:
+    """某篇论文相关的全部 pending 预警（双向：它是新上传方或既有方）。"""
+    rows = query(
+        "SELECT * FROM dedup_alerts WHERE status='pending' "
+        "AND (new_paper_id=? OR existing_paper_id=?) ORDER BY created_at DESC",
+        (paper_id, paper_id))
+    return [dict(r) | {"breakdown": json.loads(r["breakdown_json"] or "{}")} for r in rows]
+
+
+def delete_pending_alert_pair(id_a: str, id_b: str) -> int:
+    """删除双向 pending 预警（L7 LLM 复核重写前置步骤；已决策的终态不受影响）。"""
+    with tx() as c:
+        cur = c.execute(
+            "DELETE FROM dedup_alerts WHERE status='pending' AND "
+            "((new_paper_id=? AND existing_paper_id=?) OR "
+            "(new_paper_id=? AND existing_paper_id=?))",
+            (id_a, id_b, id_b, id_a))
+        return cur.rowcount
+
+
+def get_dedup_alert(alert_id: str) -> dict | None:
+    rows = query("SELECT * FROM dedup_alerts WHERE id=?", (alert_id,))
+    if not rows:
+        return None
+    d = dict(rows[0])
+    d["breakdown"] = json.loads(d["breakdown_json"] or "{}")
+    return d
+
+
+# ---------- version_diffs（模块一 P0：DiffLens） ----------
+
+def save_version_diff(base_id: str, target_id: str, stats: dict, payload: dict) -> str:
+    with tx() as c:
+        row = c.execute("SELECT id FROM version_diffs WHERE base_id=? AND target_id=?",
+                        (base_id, target_id)).fetchone()
+        if row:
+            c.execute("UPDATE version_diffs SET stats_json=?, payload_json=?, created_at=? "
+                      "WHERE id=?",
+                      (json.dumps(stats, ensure_ascii=False),
+                       json.dumps(payload, ensure_ascii=False), now(), row["id"]))
+            return row["id"]
+        did = new_id("vd_")
+        c.execute(
+            "INSERT INTO version_diffs(id,base_id,target_id,stats_json,payload_json,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (did, base_id, target_id, json.dumps(stats, ensure_ascii=False),
+             json.dumps(payload, ensure_ascii=False), now()))
+        return did
+
+
+def get_version_diff(base_id: str, target_id: str) -> dict | None:
+    rows = query("SELECT * FROM version_diffs WHERE base_id=? AND target_id=?",
+                 (base_id, target_id))
+    if not rows:
+        return None
+    d = dict(rows[0])
+    d["stats"] = json.loads(d["stats_json"] or "{}")
+    d["payload"] = json.loads(d["payload_json"] or "{}")
     return d
 
 

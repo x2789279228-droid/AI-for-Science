@@ -1,21 +1,53 @@
 export const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8100";
 
+/** 去重预警（双向 pending；direction=new 为新上传侧 / existing 为库中既有侧）。 */
+export interface DedupAlert {
+  id: string;
+  score: number;
+  breakdown: Record<string, number | boolean>;
+  reason: string;
+  direction: "new" | "existing";
+  other_paper_id: string;
+  other_title: string;
+  other_version: string;
+  /** 旧口径别名（兼容既有断言/展示） */
+  duplicate_of: string;
+  title: string;
+}
+
 export interface Paper {
   id: string;
   title: string;
   arxiv_id: string;
   page_count: number;
   supersedes: string;
+  superseded_by?: string;
+  family_id?: string;
+  status?: "active" | "archived";
+  abstract?: string;
+  authors?: { name: string; affiliation: string }[];
+  venue?: string;
+  year?: number;
+  doi?: string;
+  meta_source?: string;
   parsed: boolean;
   docir_path: string;
   created_at: number;
   references_count?: number;
-  dedup_alert?: {
-    duplicate_of: string;
-    title: string;
-    existing_version: string;
-    reason: string;
-  };
+  dedup_alert?: DedupAlert;
+  dedup_alerts?: DedupAlert[];
+}
+
+export interface PaperMeta {   // DocIR meta（outline 载荷），文献信息卡数据源
+  title?: string;
+  authors?: { name: string; affiliation: string }[];
+  abstract?: string;
+  venue?: string;
+  year?: number;
+  doi?: string;
+  arxiv_id?: string;
+  meta_source?: string;
+  appendix?: { start_page: number; sections: string[] };
 }
 
 export interface Hit {
@@ -153,7 +185,7 @@ export interface ArtifactEvent {
 
 export interface Job {
   id: string;
-  status: "queued" | "running" | "done" | "error";
+  status: "queued" | "running" | "done" | "error" | "cancel_requested" | "cancelled";
   progress: number;
   message: string;
 }
@@ -170,13 +202,210 @@ export async function fetchHealth(): Promise<Health> {
   return r.json();
 }
 
-export async function listPapers(): Promise<Paper[]> {
-  const r = await fetch(`${API}/api/papers`, { cache: "no-store" });
+export async function listPapers(includeArchived = false): Promise<Paper[]> {
+  const q = includeArchived ? "?include_archived=1" : "";
+  const r = await fetch(`${API}/api/papers${q}`, { cache: "no-store" });
   return (await r.json()).papers;
+}
+
+/** 族视图（union-find 版本链）：canonical=族内最新 active；versions 按版本号升序。 */
+export interface FamilyVersion {
+  id: string;
+  title: string;
+  version: string;
+  arxiv_id: string;
+  status: "active" | "archived";
+  page_count: number;
+  pending_alerts: number;
+  created_at: number;
+}
+
+export interface FamilyGroup {
+  family_id: string;
+  canonical_id: string;
+  canonical_title: string;
+  canonical_version: string;
+  pending_alerts: number;
+  versions: FamilyVersion[];
+}
+
+export async function fetchFamilies(): Promise<FamilyGroup[]> {
+  const r = await fetch(`${API}/api/families`, { cache: "no-store" });
+  return (await r.json()).families;
 }
 
 export async function getPaper(id: string): Promise<Paper> {
   const r = await fetch(`${API}/api/papers/${id}`, { cache: "no-store" });
+  return r.json();
+}
+
+// ---------------- 模块一：CRUD / 批量上传 / 去重决策 / DiffLens ----------------
+
+export interface UploadResult {
+  paper_id?: string;
+  job_id?: string | null;
+  dedup?: "exact_file" | null;
+  existing_title?: string;
+}
+
+/** 单文件上传（XHR 带字节进度，onProgress 0~1）。 */
+export function uploadPaperWithProgress(
+  file: File, onProgress: (frac: number) => void
+): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API}/api/papers`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error(data.detail || `HTTP ${xhr.status}`));
+      } catch {
+        reject(new Error(`HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("网络错误"));
+    const fd = new FormData();
+    fd.append("file", file);
+    xhr.send(fd);
+  });
+}
+
+export interface BatchItemResult {
+  filename: string;
+  paper_id?: string;
+  job_id?: string | null;
+  dedup?: string | null;
+  existing_title?: string;
+  error?: string;
+}
+
+/** 批量上传（后端逐文件独立处理，单个失败不影响其他）。 */
+export async function batchUploadPapers(
+  files: File[], onProgress?: (done: number, total: number, item: BatchItemResult) => void
+): Promise<BatchItemResult[]> {
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  const r = await fetch(`${API}/api/papers/batch`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  const data = await r.json();
+  data.results.forEach((item: BatchItemResult, i: number) =>
+    onProgress?.(i + 1, data.results.length, item));
+  return data.results;
+}
+
+export async function deletePaper(id: string): Promise<{ deleted: string; title: string }> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function renamePaper(id: string, title: string): Promise<{ id: string }> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function restorePaper(id: string): Promise<{ id: string; status: string }> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}/restore`, { method: "POST" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function reparsePaper(id: string): Promise<{ paper_id: string; job_id: string }> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}/reparse`, { method: "POST" });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function cancelJob(jobId: string): Promise<Job> {
+  const r = await fetch(`${API}/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export type DedupDecision = "cover" | "keep" | "coexist";
+
+export interface DecisionResult {
+  decision: DedupDecision;
+  new: { id: string; title: string; status: string; supersedes: string; superseded_by: string; family_id: string };
+  target: { id: string; title: string; status: string; supersedes: string; superseded_by: string; family_id: string };
+  diff_available: boolean;
+}
+
+/** 去重三态决策：cover=旧归档（新接管）/ keep=新归档（保留既有）/ coexist=并存。 */
+export async function dedupDecision(
+  paperId: string, decision: DedupDecision, targetId: string
+): Promise<DecisionResult> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(paperId)}/dedup-decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, target_id: targetId }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  return r.json();
+}
+
+// ---------------- DiffLens：版本差异总结 ----------------
+
+export interface DiffPara {
+  op: "added" | "removed" | "replaced" | "refs_changed";
+  base: string;
+  target: string;
+  hl?: { a: [number, number]; b: [number, number]; tag: string }[];
+  numbers?: { direction: string; value: string; section: string }[];
+}
+
+export interface DiffSection {
+  status: "aligned" | "added" | "removed";
+  title: string;
+  base_title: string;
+  base_page?: number | null;
+  target_page?: number | null;
+  changed?: number;
+  is_references?: boolean;
+  detail_omitted?: boolean;
+  paras?: DiffPara[];
+  numbers?: { direction: string; value: string; section: string }[];
+}
+
+export interface DiffPayload {
+  sections: DiffSection[];
+  numbers: { direction: string; value: string; section: string }[];
+  summary: { bullets: { type: string; text: string }[]; engine: "llm" | "extractive" };
+  stats: {
+    sections_added: number; sections_removed: number; sections_changed: number;
+    paras_changed: number; numbers_changed: number;
+  };
+}
+
+/** 启动 DiffLens 任务（已有缓存时直接返回 cached=true）。 */
+export async function startVersionDiff(
+  targetId: string, baseId: string
+): Promise<{ cached: boolean; job_id: string | null; stats?: DiffPayload["stats"] }> {
+  const r = await fetch(`${API}/api/papers/${encodeURIComponent(targetId)}/version-diff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_id: baseId }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchVersionDiff(
+  targetId: string, baseId: string
+): Promise<{ diff_id: string; stats: DiffPayload["stats"]; payload: DiffPayload }> {
+  const r = await fetch(
+    `${API}/api/papers/${encodeURIComponent(targetId)}/version-diff?base_id=${encodeURIComponent(baseId)}`,
+    { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 

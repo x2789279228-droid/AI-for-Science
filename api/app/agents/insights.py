@@ -63,7 +63,7 @@ def enrich(graph: dict) -> dict:
     """在 _citation_graph 产物上补 community/year/time_rank/role/modularity。"""
     nodes = graph.get("nodes", [])
     edges = graph.get("edges", [])
-    papers = {r["id"]: dict(r) for r in db.query("SELECT id,title,arxiv_id,created_at FROM papers")}
+    papers = {r["id"]: dict(r) for r in db.query("SELECT id,title,arxiv_id,created_at FROM papers WHERE status='active'")}
     years = {n["id"]: _year_of(papers.get(n["id"], {})) for n in nodes}
 
     communities: dict[str, int] = {}
@@ -178,7 +178,7 @@ def classify_citations(paper_ids: list[str]) -> dict:
     """
     graph = _citation_graph(paper_ids)
     # ref idx → 库内目标（与 _citation_graph 相同的匹配规则）
-    papers = {r["id"]: dict(r) for r in db.query("SELECT id,title,arxiv_id FROM papers")}
+    papers = {r["id"]: dict(r) for r in db.query("SELECT id,title,arxiv_id FROM papers WHERE status='active'")}
     by_arxiv = {p["arxiv_id"]: pid for pid, p in papers.items() if p.get("arxiv_id")}
     by_title = {p["title"].strip().lower(): pid for pid, p in papers.items() if p.get("title")}
 

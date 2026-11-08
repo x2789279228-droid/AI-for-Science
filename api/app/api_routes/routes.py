@@ -16,7 +16,63 @@ from ..llm import prompts as prompts_mod
 router = APIRouter(prefix="/api")
 
 
+# ---------- 请求体模型 ----------
+
+class PaperRename(BaseModel):
+    title: str
+
+
+class DedupDecisionBody(BaseModel):
+    decision: str            # cover | keep | coexist
+    target_id: str           # 既有论文 id（预警的 existing 侧）
+
+
+class VersionDiffBody(BaseModel):
+    base_id: str             # 旧版本 paper_id
+
+
 # ---------- papers ----------
+
+@router.get("/families")
+def list_families():
+    """族视图（L8/L9）：family 分组 + 版本链排序。canonical=族内最新 active；
+    versions 按 _ver_int 升序；pending_alerts 为该族关联的双向待决策预警数。
+    archived 成员包含在内（版本链完整性），前端自行折叠。"""
+    rows = db.query("SELECT id,title,version,arxiv_id,family_id,status,page_count,"
+                    "created_at FROM papers WHERE family_id!=''")
+    if not rows:
+        return {"families": []}
+    pids = [r["id"] for r in rows]
+    qm = ",".join("?" * len(pids))
+    pend: dict[str, int] = {}
+    for a in db.query(f"SELECT new_paper_id, existing_paper_id FROM dedup_alerts "
+                      f"WHERE status='pending' AND (new_paper_id IN ({qm}) "
+                      f"OR existing_paper_id IN ({qm}))", (*pids, *pids)):
+        for pid in {a["new_paper_id"], a["existing_paper_id"]} & set(pids):
+            pend[pid] = pend.get(pid, 0) + 1
+    groups: dict[str, list] = {}
+    for r in rows:
+        groups.setdefault(r["family_id"], []).append(dict(r))
+    out = []
+    for fid, members in groups.items():
+        members.sort(key=lambda m: (jobs._ver_int(m), m["created_at"]))
+        active = [m for m in members if m["status"] == "active"]
+        canon = max(active or members, key=jobs._ver_int)
+        out.append({
+            "family_id": fid,
+            "canonical_id": canon["id"],
+            "canonical_title": canon["title"],
+            "canonical_version": canon["version"] or "",
+            "pending_alerts": sum(pend.get(m["id"], 0) for m in members),
+            "versions": [{"id": m["id"], "title": m["title"],
+                          "version": m["version"] or "", "arxiv_id": m["arxiv_id"],
+                          "status": m["status"], "page_count": m["page_count"],
+                          "pending_alerts": pend.get(m["id"], 0),
+                          "created_at": m["created_at"]} for m in members],
+        })
+    out.sort(key=lambda f: -(f["versions"][-1]["created_at"] or 0))
+    return {"families": out}
+
 
 @router.post("/papers")
 async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastAPI 惯用法
@@ -29,24 +85,87 @@ async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastA
     return result
 
 
-@router.get("/papers")
-def list_papers():
-    rows = db.query("SELECT id,title,arxiv_id,page_count,version,supersedes,created_at,docir_path"
-                    " FROM papers ORDER BY created_at DESC")
-    # 去重预警 map（P0-1：前端黄色预警条数据源；每篇取最新一条 dedup_alert payload）
-    alerts: dict[str, dict] = {}
-    for j in db.query("SELECT paper_id, payload FROM jobs WHERE kind='dedup_alert' "
-                      "ORDER BY created_at DESC"):
-        try:   # 坏 payload 不拖垮整个列表（P2-1）
-            alerts.setdefault(j["paper_id"], json.loads(j["payload"] or "{}"))
+@router.post("/papers/batch")
+async def upload_papers_batch(files: list[UploadFile] = File(...)):  # noqa: B008
+    """批量上传（P0）：逐文件独立处理，单个失败不影响其他；每文件返回独立结果。"""
+    if not files:
+        raise HTTPException(400, "未提供文件")
+    if len(files) > settings.batch_upload_max:
+        raise HTTPException(413, f"单次批量最多 {settings.batch_upload_max} 个文件")
+    results: list[dict] = []
+    for f in files:
+        name = f.filename or "unnamed.pdf"
+        item: dict = {"filename": name}
+        try:
+            if not name.lower().endswith(".pdf"):
+                raise HTTPException(400, "仅支持 PDF")
+            content = await f.read()
+            if len(content) > 200 * 1024 * 1024:
+                raise HTTPException(413, "文件超过 200MB")
+            item.update(jobs.upload_pdf(name, content))
+        except HTTPException as e:
+            item["error"] = e.detail
+        except Exception as e:  # noqa: BLE001 —— 单文件失败隔离（批量要求）
+            item["error"] = f"{type(e).__name__}: {e}"
+        results.append(item)
+    return {"results": results, "ok_count": sum(1 for r in results if not r.get("error"))}
+
+
+def _pending_alert_map(paper_ids: list[str]) -> dict[str, list[dict]]:
+    """双向 pending 去重预警 map：{paper_id: [alert...]}，带对方标题/版本与方向。"""
+    if not paper_ids:
+        return {}
+    qm = ",".join("?" * len(paper_ids))
+    rows = db.query(
+        f"SELECT * FROM dedup_alerts WHERE status='pending' "
+        f"AND (new_paper_id IN ({qm}) OR existing_paper_id IN ({qm})) "
+        f"ORDER BY created_at DESC", (*paper_ids, *paper_ids))
+    pmeta = {r["id"]: r for r in db.query("SELECT id,title,version,arxiv_id FROM papers")}
+    out: dict[str, list[dict]] = {}
+    for a in rows:
+        try:
+            breakdown = json.loads(a["breakdown_json"] or "{}")
         except ValueError:
-            continue
+            breakdown = {}
+        is_new_side = a["new_paper_id"] in set(paper_ids)
+        other_id = a["existing_paper_id"] if is_new_side else a["new_paper_id"]
+        # 同一篇既是 alert 的新方又是旧方（对称补警）→ 归一为 new 侧语义
+        other = pmeta.get(other_id)
+        for pid in {a["new_paper_id"], a["existing_paper_id"]} & set(paper_ids):
+            direction = "new" if pid == a["new_paper_id"] else "existing"
+            out.setdefault(pid, []).append({
+                "id": a["id"], "score": a["score"], "breakdown": breakdown,
+                "reason": a["reason"], "direction": direction,
+                "other_paper_id": other_id,
+                "other_title": other["title"] if other else "",
+                "other_version": other["version"] if other else "",
+                # 旧口径别名（duplicate_of/title）：官方用例断言与既有前端兼容
+                "duplicate_of": other_id,
+                "title": other["title"] if other else "",
+            })
+    return out
+
+
+@router.get("/papers")
+def list_papers(include_archived: bool = False):
+    """文献列表：默认只回 active（软归档过滤）；include_archived=1 时全量并带 status。"""
+    where = "" if include_archived else "WHERE status='active'"
+    rows = db.query("SELECT id,title,arxiv_id,page_count,version,supersedes,superseded_by,"
+                    "family_id,status,created_at,docir_path,abstract,authors_json,meta_source"
+                    f" FROM papers {where} ORDER BY created_at DESC")
+    alerts = _pending_alert_map([r["id"] for r in rows])
     out = []
     for r in rows:
         d = dict(r)
         d["parsed"] = bool(r["docir_path"])
-        if r["id"] in alerts:
-            d["dedup_alert"] = alerts[r["id"]]
+        try:
+            d["authors"] = json.loads(d.pop("authors_json") or "[]")
+        except ValueError:
+            d["authors"] = []
+        lst = alerts.get(r["id"], [])
+        if lst:
+            d["dedup_alerts"] = lst
+            d["dedup_alert"] = lst[0]   # 兼容旧前端单数口径
         out.append(d)
     return {"papers": out}
 
@@ -58,15 +177,116 @@ def get_paper(paper_id: str):
         raise HTTPException(404, "not found")
     p = dict(rows[0])
     p.pop("meta_json", None)
+    p.pop("content_sig", None)   # BLOB 不入 JSON（bytes 无法被 jsonable_encoder 编码）
+    p.pop("paper_vec", None)
     refs = db.query('SELECT idx,title,arxiv_id,doi FROM "references" WHERE paper_id=? ORDER BY idx',
                     (paper_id,))
     p["references_count"] = len(refs)
-    # 去重预警（官方用例 1）
-    alert = db.query("SELECT payload FROM jobs WHERE paper_id=? AND kind='dedup_alert'"
-                     " ORDER BY created_at DESC LIMIT 1", (paper_id,))
-    if alert:
-        p["dedup_alert"] = json.loads(alert[0]["payload"])
+    try:
+        p["authors"] = json.loads(p.pop("authors_json") or "[]")
+    except ValueError:
+        p["authors"] = []
+    alerts = _pending_alert_map([paper_id]).get(paper_id, [])
+    if alerts:
+        p["dedup_alerts"] = alerts
+        p["dedup_alert"] = alerts[0]
     return p
+
+
+@router.patch("/papers/{paper_id}")
+def rename_paper(paper_id: str, body: PaperRename):
+    """改名（CRUD）：papers.title 同步 DocIR meta.title；family 归一重算。"""
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(400, "标题不能为空")
+    if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
+        raise HTTPException(404, "not found")
+    from ..rag import fingerprint
+    base_arxiv = db.query("SELECT arxiv_id FROM papers WHERE id=?", (paper_id,))[0]["arxiv_id"]
+    fam = fingerprint.family_id((base_arxiv or "").split("v")[0], title)
+    with db.tx() as c:
+        c.execute("UPDATE papers SET title=?, family_id=? WHERE id=?", (title, fam, paper_id))
+    data = _resolve_paper_data(paper_id)
+    if data is not None:
+        data.setdefault("meta", {})["title"] = title
+        from ..config import DOCIR_DIR
+        (DOCIR_DIR / f"{paper_id}.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return {"id": paper_id, "title": title, "family_id": fam}
+
+
+@router.delete("/papers/{paper_id}")
+def delete_paper(paper_id: str):
+    """硬删除（CRUD 级联）：文件/DocIR/chunks/FTS/refs/alerts/diffs/jobs/translations。"""
+    try:
+        return jobs.delete_paper(paper_id)
+    except LookupError:
+        raise HTTPException(404, "not found") from None
+
+
+@router.post("/papers/{paper_id}/restore")
+def restore_paper(paper_id: str):
+    """归档恢复：archived → active（保留 supersedes/superseded_by 供版本链展示）。"""
+    if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
+        raise HTTPException(404, "not found")
+    with db.tx() as c:
+        c.execute("UPDATE papers SET status='active', superseded_by='' WHERE id=?", (paper_id,))
+    return {"id": paper_id, "status": "active"}
+
+
+@router.post("/papers/{paper_id}/reparse")
+def reparse_paper(paper_id: str):
+    """重新解析（CRUD）：同篇已有排队/运行中任务则 409；旧 chunks/references 由解析流程自清。"""
+    if not db.query("SELECT id,docir_path FROM papers WHERE id=?", (paper_id,)):
+        raise HTTPException(404, "not found")
+    running = db.query("SELECT id FROM jobs WHERE paper_id=? AND status IN ('queued','running',"
+                       "'cancel_requested')", (paper_id,))
+    if running:
+        raise HTTPException(409, "该文献已有进行中的任务，请先取消或等待完成")
+    job_id = jobs.submit_parse(paper_id)
+    return {"paper_id": paper_id, "job_id": job_id}
+
+
+@router.post("/papers/{paper_id}/dedup-decision")
+def dedup_decision(paper_id: str, body: DedupDecisionBody):
+    """去重三态决策（覆盖/保留/并存，软归档语义）。
+
+    cover=旧 archived+superseded_by→新；keep=新 archived（「仅归档 v1」）；
+    coexist=双方 active+family 关联。幂等；决策后双向 pending alert 落终态。
+    """
+    try:
+        result = jobs.apply_dedup_decision(paper_id, body.target_id, body.decision)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except LookupError:
+        raise HTTPException(404, "not found") from None
+    result["diff_available"] = bool(
+        db.query("SELECT id FROM papers WHERE docir_path!='' AND id IN (?,?)",
+                 (paper_id, body.target_id)))
+    return result
+
+
+@router.post("/papers/{paper_id}/version-diff")
+def start_version_diff(paper_id: str, body: VersionDiffBody):
+    """DiffLens：对 target（本文）与 base（旧版）跑差异总结任务（job 轮询取进度）。"""
+    if not db.query("SELECT id,docir_path FROM papers WHERE id=?", (paper_id,)):
+        raise HTTPException(404, "target not found")
+    if not db.query("SELECT id,docir_path FROM papers WHERE id=?", (body.base_id,)):
+        raise HTTPException(404, "base not found")
+    cached = db.get_version_diff(body.base_id, paper_id)
+    if cached:
+        return {"cached": True, "diff_id": cached["id"], "job_id": None,
+                "stats": cached["stats"]}
+    job_id = jobs.submit_version_diff(body.base_id, paper_id)
+    return {"cached": False, "job_id": job_id}
+
+
+@router.get("/papers/{paper_id}/version-diff")
+def get_version_diff(paper_id: str, base_id: str):
+    cached = db.get_version_diff(base_id, paper_id)
+    if not cached:
+        raise HTTPException(404, "暂无缓存差异结果（先 POST 启动任务）")
+    return {"diff_id": cached["id"], "stats": cached["stats"], "payload": cached["payload"]}
 
 
 @router.get("/papers/{paper_id}/pdf")
@@ -157,6 +377,18 @@ def get_job(job_id: str):
     return job
 
 
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str):
+    """取消任务（协作式）：queued/running → cancel_requested → 引擎阶段边界终止。
+
+    MinerU 子进程会被 terminate（parsing/mineru_engine）；终态 cancelled。
+    """
+    job = jobs.cancel_job(job_id)
+    if job is None:
+        raise HTTPException(404, "not found")
+    return job
+
+
 # ---------- chat（SSE 溯源问答） ----------
 
 class ChatBody(BaseModel):
@@ -178,7 +410,7 @@ def chat(body: ChatBody):
     if body.agent not in FORCED_AGENT_VALUES:
         raise HTTPException(400, f"agent 取值须为 {sorted(FORCED_AGENT_VALUES)}")
 
-    paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers")]
+    paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers WHERE status='active'")]
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
     paper_cap_note = ""

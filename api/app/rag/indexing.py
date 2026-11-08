@@ -28,11 +28,39 @@ _RERANK_LAST_ERROR: str = ""  # 最近一次 rerank 失败原因（诊断用）
 
 # ---------- 本地 fastembed ----------
 
+# fastembed 支持的本地多语模型（BGE-M3 不在本机 fastembed 版本列表内；
+# 按可用性选最优：e5-large 多语最强，依次降级）。向量维度不同源——dense 通道
+# 全库同源即可自洽；跨后端混用会在检索质量上如实降级。
+_LOCAL_FALLBACK_MODELS = ["intfloat/multilingual-e5-large",
+                          "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"]
+
+
 def _local_model():
+    from fastembed import TextEmbedding
     key = f"local:{settings.embedding_model}"
     if key not in _MODEL_CACHE:
-        from fastembed import TextEmbedding
-        _MODEL_CACHE[key] = TextEmbedding(model_name=settings.embedding_model)
+        try:
+            _MODEL_CACHE[key] = TextEmbedding(model_name=settings.embedding_model)
+        except ValueError:
+            # embedding_model 配的是云端模型名（如方舟 doubao-embedding-vision）时
+            # fastembed 不支持 → 按可用性回退本地多语模型
+            global _EMBED_LAST_ERROR
+            resolved = ""
+            last_err: Exception | None = None
+            for name in _LOCAL_FALLBACK_MODELS:
+                try:
+                    resolved = name
+                    _MODEL_CACHE[key] = TextEmbedding(model_name=name)
+                    break
+                except Exception as e:  # noqa: BLE001 —— 逐个探测（含模型下载失败）
+                    last_err = e
+            if key not in _MODEL_CACHE:
+                raise RuntimeError(
+                    f"本地嵌入不可用：{settings.embedding_model} 与回退模型均失败"
+                    f"（最后错误 {type(last_err).__name__}）") from last_err
+            _EMBED_LAST_ERROR = (f"local:{settings.embedding_model} 不被 fastembed 支持，"
+                                 f"回退 {resolved}")
+            logger.warning(_EMBED_LAST_ERROR, module="embed")
     return _MODEL_CACHE[key]
 
 

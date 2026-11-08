@@ -13,15 +13,16 @@ meta 仅新增字段（parse_engine/parse_quality/scanned/long_doc/quality）。
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import fitz  # PyMuPDF
 
 from . import longdoc, mineru_engine, pipeline, quality, vlm_engine
+from ._types import CancelCheck, ParseCancelled, ProgressCb
 
-ProgressCb = Callable[[float, str], None]
+__all__ = ["ParseCancelled", "ProgressCb", "parse_document", "probe_pdf", "route",
+           "write_docir"]
 
 LONG_DOC_PAGES = 200          # 超过 → 长文档模式（docs/01 §4.1）
 NATIVE_MIN_CHARS = 300        # 平均字符 ≥ → 原生通道
@@ -86,10 +87,12 @@ def route(probe: dict) -> dict:
 
 
 def parse_document(pdf_path: str | Path, progress: ProgressCb | None = None,
-                   paper_id: str = "") -> dict:
+                   paper_id: str = "", cancel_check: CancelCheck | None = None) -> dict:
     """解析总入口：probe → 路由 → 引擎执行 → 失败兜底 → meta/quality 填充。
 
     paper_id 用于长文档"大纲先出"的逐批落盘（reader 在解析中途即可见标题树）。
+    cancel_check：协作式取消探测回调，引擎在阶段边界轮询；命中抛 ParseCancelled
+    （不触发 PyMuPDF 兜底——取消不是失败）。
     """
     pdf_path = Path(pdf_path)
     probe = probe_pdf(pdf_path)
@@ -103,14 +106,16 @@ def parse_document(pdf_path: str | Path, progress: ProgressCb | None = None,
     try:
         if decision["long"]:
             docir = longdoc.parse_long_pdf(pdf_path, probe, decision, progress,
-                                           paper_id=paper_id)
+                                           paper_id=paper_id, cancel_check=cancel_check)
         elif decision["mode"] == "scanned":
-            docir = _parse_scanned(pdf_path, probe, progress)
+            docir = _parse_scanned(pdf_path, probe, progress, cancel_check)
         else:
-            docir = _parse_native_or_gray(pdf_path, probe, decision, progress)
+            docir = _parse_native_or_gray(pdf_path, probe, decision, progress, cancel_check)
+    except ParseCancelled:
+        raise
     except Exception as e:  # noqa: BLE001 —— 解析失败兜底：PyMuPDF 纯文本（保证不空）
         report(0.5, f"{decision['engine']} 引擎失败（{type(e).__name__}）→ PyMuPDF 兜底")
-        docir = pipeline.parse_pdf(pdf_path, progress=progress)
+        docir = pipeline.parse_pdf(pdf_path, progress=progress, cancel_check=cancel_check)
         docir["meta"]["parse_engine"] = "pymupdf"
         docir["meta"]["fallback_reason"] = f"{decision['engine']}:{type(e).__name__}"
 
@@ -134,28 +139,30 @@ def parse_document(pdf_path: str | Path, progress: ProgressCb | None = None,
 
 
 def _parse_native_or_gray(pdf_path: Path, probe: dict, decision: dict,
-                          progress: ProgressCb) -> dict:
+                          progress: ProgressCb, cancel_check: CancelCheck | None) -> dict:
     if decision["engine"] == "mineru":
-        docir = mineru_engine.parse(pdf_path, progress=progress)
+        docir = mineru_engine.parse(pdf_path, progress=progress, cancel_check=cancel_check)
         docir["meta"]["parse_engine"] = "mineru"
         return docir
-    docir = pipeline.parse_pdf(pdf_path, progress=progress)
+    docir = pipeline.parse_pdf(pdf_path, progress=progress, cancel_check=cancel_check)
     docir["meta"]["parse_engine"] = "pymupdf"
     if decision["mode"] == "gray" and vlm_engine.available():
         # 灰区逐页救援：无文本层的页 → Qwen-VL（只对失败页调用，评分表口径）
-        docir = vlm_engine.rescue_blank_pages(pdf_path, docir, progress)
+        docir = vlm_engine.rescue_blank_pages(pdf_path, docir, progress,
+                                              cancel_check=cancel_check)
         docir["meta"]["parse_engine"] = "mixed" if docir["meta"].get("rescued_pages") else "pymupdf"
     return docir
 
 
-def _parse_scanned(pdf_path: Path, probe: dict, progress: ProgressCb) -> dict:
+def _parse_scanned(pdf_path: Path, probe: dict, progress: ProgressCb,
+                   cancel_check: CancelCheck | None) -> dict:
     if mineru_engine.available():
-        docir = mineru_engine.parse(pdf_path, progress=progress)
+        docir = mineru_engine.parse(pdf_path, progress=progress, cancel_check=cancel_check)
         docir["meta"]["parse_engine"] = "mineru"
         docir["meta"]["scanned_pages"] = list(range(probe["page_count"]))
         return docir
     if vlm_engine.available():
-        docir = vlm_engine.parse_scanned(pdf_path, progress=progress)
+        docir = vlm_engine.parse_scanned(pdf_path, progress=progress, cancel_check=cancel_check)
         docir["meta"]["parse_engine"] = "qwen-vl"
         docir["meta"]["scanned_pages"] = docir["meta"].get("scanned_pages") or \
             list(range(probe["page_count"]))
