@@ -38,14 +38,36 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-m3"
     embedding_backend: str = "auto"  # auto | api | local | off
     rerank_api_key: str = ""
+    rerank_base_url: str = "https://api.siliconflow.cn/v1"
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
 
     # 多模态兜底
     dashscope_api_key: str = ""
 
+    # 解析路由：MinerU 原生通道（独立 venv 的 mineru CLI；auto=检测到才启用）。
+    # venv 必须在纯 ASCII 路径：fast_langdetect 的 fasttext C 库在 Windows 上
+    # 打不开含中文的 site-packages 路径（见 docs/adr-001-bbox.md）
+    mineru_enabled: str = "auto"   # auto | on | off
+    mineru_cmd: str = r"D:\mineru-venv\Scripts\mineru.exe"
+    mineru_timeout_s: int = 1800   # 单次解析（或长文档单批）超时
+    # VLM 扫描件通道：默认跟随 LLM 端点（火山方舟 token plan 的 doubao-seed 系列本身
+    # 支持图像输入，实测整页版面识读准确）；也可显式指向 DashScope qwen-vl-max
+    vlm_base_url: str = ""         # 空 → 用 llm_base_url
+    vlm_api_key: str = ""          # 空 → 用 llm_api_key
+    vlm_model: str = ""            # 空 → 用 llm_model
+    vlm_enabled: bool = True       # 0 关闭（扫描件回退 MinerU OCR / 诚实标注）
+    # 长文档：全文 chunk/索引的页数上限（超出部分仅入 DocIR 按需阅读）
+    long_doc_index_pages: int = 120
+
     # 运行时
     daily_llm_limit: int = 2000
     api_port: int = 8000
+    # L4 语义支持 judge（verify.py）：批量一次调用判 claim 能否被证据推出；0 关闭
+    semantic_judge: bool = True
+    # Prompt A/B 开关（app/prompts/*.yaml 的 variants 档位）：default | strict，运行时可切
+    prompt_variant: str = "default"
+    # GitHub 仓库搜索（4.4 复现性分）；无 token 时 GitHub API 限流 10 次/分，如实降级
+    github_token: str = ""
 
     # --- 派生属性 ---
 
@@ -85,7 +107,7 @@ def _fastembed_available() -> bool:
     try:
         import fastembed  # noqa: F401
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 —— 依赖探测失败视为不可用
         return False
 
 

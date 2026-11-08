@@ -18,9 +18,12 @@ import numpy as np
 
 from .. import db
 from ..config import settings
+from ..log import logger
+from .cjk import cjk_bigram
 
 _MODEL_CACHE: dict[str, Any] = {}
 _EMBED_LAST_ERROR: str = ""  # 最近一次向量化失败原因（诊断用，任务消息会带出）
+_RERANK_LAST_ERROR: str = ""  # 最近一次 rerank 失败原因（诊断用）
 
 
 # ---------- 本地 fastembed ----------
@@ -58,12 +61,12 @@ def _embed_texts(texts: list[str]) -> list[list[float]] | None:
     """
     global _EMBED_LAST_ERROR
     mode = _backend_mode()
-    print(f"[embed] mode={mode} n={len(texts)} model={settings.embedding_model}", flush=True)
+    logger.info(f"embed 启动 mode={mode} n={len(texts)} model={settings.embedding_model}", module="embed")
     if mode == "local":
         try:
             model = _local_model()
             return [list(v) for v in model.embed(texts)]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 —— 本地模型故障降级记录
             _EMBED_LAST_ERROR = f"local:{type(e).__name__}: {e}"
             return None
     if mode == "api" and settings.embedding_api_key:
@@ -81,7 +84,7 @@ def _embed_texts(texts: list[str]) -> list[list[float]] | None:
                     )
                     if resp.status_code == 429:  # 限流：退避后重试
                         _EMBED_LAST_ERROR = f"api:429 rate_limited (batch {i // 8})"
-                        print(f"[embed] batch {i // 8} attempt {attempt}: {_EMBED_LAST_ERROR}", flush=True)
+                        logger.warning(f"embed 限流退避 batch {i // 8} attempt {attempt}: {_EMBED_LAST_ERROR}", module="embed")
                         time.sleep(2.0 * (attempt + 1))
                         continue
                     resp.raise_for_status()
@@ -89,9 +92,9 @@ def _embed_texts(texts: list[str]) -> list[list[float]] | None:
                     out.extend(d["embedding"] for d in data)
                     ok = True
                     break
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 —— 网络异常退避重试
                     _EMBED_LAST_ERROR = f"api:{type(e).__name__}: {e}"[:200]
-                    print(f"[embed] batch {i // 8} attempt {attempt} EXC: {_EMBED_LAST_ERROR}", flush=True)
+                    logger.warning(f"embed 异常退避 batch {i // 8} attempt {attempt}: {_EMBED_LAST_ERROR}", module="embed")
                     time.sleep(1.0 * (attempt + 1))
             if not ok:
                 return None  # 任一批重试仍败 → 整批降级，由调用方如实报告
@@ -110,21 +113,22 @@ def index_chunks(paper_id: str, chunks: list[dict]) -> int:
             cid = db.new_id("c_")
             vec_blob = _pack(vecs[seq]) if vecs else None
             c.execute(
-                "INSERT INTO chunks(id,paper_id,seq,text,page,bbox_json,section_path,"
-                "block_ids,kind,vec) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (cid, paper_id, seq, ch["text"], ch["page"], json.dumps(ch["bbox"]),
-                 ch["section_path"], json.dumps(ch["block_ids"]), ch["kind"], vec_blob),
+                "INSERT INTO chunks(id,paper_id,seq,text,text_cjk,page,bbox_json,section_path,"
+                "block_ids,kind,vec) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (cid, paper_id, seq, ch["text"], cjk_bigram(ch["text"]), ch["page"],
+                 json.dumps(ch["bbox"]), ch["section_path"], json.dumps(ch["block_ids"]),
+                 ch["kind"], vec_blob),
             )
-            c.execute("INSERT INTO chunks_fts(chunk_id,paper_id,text) VALUES(?,?,?)",
-                      (cid, paper_id, ch["text"]))
+            c.execute("INSERT INTO chunks_fts(chunk_id,paper_id,text_cjk) VALUES(?,?,?)",
+                      (cid, paper_id, cjk_bigram(ch["text"])))
     return len(chunks)
 
 
 def fts_search(paper_ids: list[str], q: str, top_k: int = 20) -> list[dict]:
-    """BM25 检索。FTS5 查询词做安全转义；多词 OR 提高召回。"""
+    """BM25 检索。查询先过 CJK bigram（中文可命中），英文词安全转义；多词 OR 提高召回。"""
     if not paper_ids:
         return []
-    terms = [t for t in "".join(ch if ch.isalnum() else " " for ch in q).split() if t][:8]
+    terms = [t for t in "".join(ch if ch.isalnum() else " " for ch in cjk_bigram(q)).split() if t][:16]
     if not terms:
         return []
     match = " OR ".join(f'"{t}"' for t in terms)
@@ -138,7 +142,7 @@ def fts_search(paper_ids: list[str], q: str, top_k: int = 20) -> list[dict]:
             f" ORDER BY score LIMIT ?",
             (match, *paper_ids, top_k),
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 —— FTS 查询失败返回空集
         return []
     return [_row_to_hit(r, score=-r["score"]) for r in rows]
 
@@ -175,6 +179,50 @@ def dense_search(paper_ids: list[str], q: str, top_k: int = 20) -> list[dict]:
     sims = mat @ qv
     order = np.argsort(-sims)[:top_k]
     return [_row_to_hit(rows[i], score=float(sims[i])) for i in order]
+
+
+# ---------- Rerank（bge-reranker，OpenAI 兼容 /rerank） ----------
+
+
+def rerank_available() -> bool:
+    return bool(settings.rerank_api_key)
+
+
+def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 3.0) -> list[dict] | None:
+    """精排：query × 候选块相关性重排。失败返回 None（调用方降级回融合排序）。
+
+    接口：POST {rerank_base_url}/rerank {"model", "query", "documents"} → results[{index, relevance_score}]
+    （SiliconFlow/Jina 兼容格式；bge-reranker-v2-m3）。
+    """
+    global _RERANK_LAST_ERROR
+    if not hits:
+        return []
+    if not settings.rerank_api_key:
+        return None
+    docs = [h["text"][:1200] for h in hits]
+    try:
+        resp = httpx.post(
+            f"{settings.rerank_base_url.rstrip('/')}/rerank",
+            headers={"Authorization": f"Bearer {settings.rerank_api_key}"},
+            json={"model": settings.rerank_model, "query": query[:1000], "documents": docs},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results") or []
+    except Exception as e:  # noqa: BLE001 —— rerank 属增强项，失败静默降级
+        _RERANK_LAST_ERROR = f"{type(e).__name__}: {e}"[:200]
+        logger.warning(f"rerank 失败 → 降级融合排序: {_RERANK_LAST_ERROR}", module="rerank")
+        return None
+    out: list[dict] = []
+    for item in results:
+        idx = item.get("index")
+        if not isinstance(idx, int) or not (0 <= idx < len(hits)):
+            continue
+        h = {**hits[idx], "rerank": round(float(item.get("relevance_score") or 0.0), 4)}
+        out.append(h)
+        if len(out) >= top_k:
+            break
+    return out or None
 
 
 # ---------- RRF 融合 ----------

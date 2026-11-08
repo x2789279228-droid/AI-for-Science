@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
-  ChartSpec, Claim, CompareTable, FinalEvent, GraphData, Hit, Outline, Paper,
-  TLEvent, TraceCard, listPapers, resumeChat, streamChat,
+  Anchor, ChartSpec, Claim, CompareCell, CompareTable, FinalEvent, GraphData, Hit,
+  Outline, Paper, TLEvent, TraceCard, listPapers, resumeChat, streamChat,
 } from "@/lib/api";
 import { ChevronRight, Spark } from "@/components/icons";
 import TracePanel from "@/components/chat/TracePanel";
+import PdfAnchored from "@/components/PdfAnchored";
+
+/** 证据浮层定位：anchor（paper/page/bbox）+ 可选引文与编号。 */
+interface EvidenceLoc {
+  eid?: string;
+  anchor: Anchor;
+  quote?: string;
+}
 
 interface Turn {
   question: string;
@@ -31,13 +40,19 @@ const GUARD_LABEL: Record<string, string> = {
   viz_no_tables: "Viz 数据校验 · 论文无表格拒绝出图",
   viz_no_numeric_columns: "Viz 数据校验 · 表格无数值列拒绝出图",
   tool_failure_degraded: "工具失败 → 抽取式降级",
+  rerank_degraded: "Rerank 精排失败 → 融合排序降级",
+  quote_unverified: "部分引文未通过原文比对",
+  number_not_in_evidence: "部分数值未在证据中命中",
+  semantic_judge_skipped: "语义 judge 跳过（LLM 不可用）",
 };
 
-/** guardrail 标签：精确匹配 + 前缀匹配（graph_error:* / agent_unready:* 等动态键）。 */
+/** guardrail 标签：精确匹配 + 前缀匹配（graph_error:* / quote_unverified:2 等动态键）。 */
 const guardLabel = (g: string): string => {
   if (GUARD_LABEL[g]) return GUARD_LABEL[g];
   if (g.startsWith("graph_error:")) return `图执行异常：${g.slice("graph_error:".length)}`;
   if (g.startsWith("agent_unready:")) return `Agent 未实装降级：${g.slice("agent_unready:".length)}`;
+  if (g.startsWith("quote_unverified:")) return `${g.slice("quote_unverified:".length)} 条引文未通过原文比对`;
+  if (g.startsWith("number_not_in_evidence:")) return `${g.slice("number_not_in_evidence:".length)} 条论断数值待核对`;
   return "";
 };
 
@@ -84,8 +99,15 @@ export default function ChatPage() {
   const [showScope, setShowScope] = useState(false);
   const [showTrace, setShowTrace] = useState(true);   // 右侧 Trace 时间线开关
   const [agent, setAgent] = useState("auto");          // UI 强制指定 Agent（auto=自动路由）
+  const [evidence, setEvidence] = useState<EvidenceLoc | null>(null);  // 引用点击 → 原文浮层
   const msgsRef = useRef<HTMLDivElement>(null);
   const convRef = useRef<string>("");
+
+  /** 打开原文溯源浮层：anchor 缺失（无锚点数据）时静默忽略。 */
+  const showEvidence = (eid?: string, anchor?: Anchor, quote?: string) => {
+    if (!anchor) return;
+    setEvidence({ eid, anchor, quote });
+  };
 
   /** 会话级 conversation_id（localStorage 持久化）：断点续跑按会话归属。 */
   const conversationId = () => {
@@ -303,8 +325,8 @@ export default function ChatPage() {
                             {turn.retrieval.hits.slice(0, 5).map((h) => (
                               <div key={h.chunk_id} className="kv" style={{
                                 borderBottom: "1px dashed var(--line)", padding: "6px 0" }}>
-                                <b style={{ color: "var(--accent)" }}>p{h.page + 1} §{secName(h.section_path)}</b>
-                                {h.rrf ? ` · RRF ${h.rrf}` : ` · ${h.score}`}
+                                <b style={{ color: "var(--accent)" }}>p{h.page} §{secName(h.section_path)}</b>
+                                {h.rerank ? ` · rerank ${h.rerank}` : h.rrf ? ` · RRF ${h.rrf}` : ` · ${h.score}`}
                                 <br />{h.text.slice(0, 110)}…
                               </div>
                             ))}
@@ -314,9 +336,13 @@ export default function ChatPage() {
                     )}
                     {turn.answer && (
                       <div className="bubble">
-                        {turn.final ? <AnswerWithAnchors text={turn.final.answer} /> : turn.answer}
+                        {turn.final
+                          ? <AnswerWithAnchors text={turn.final.answer}
+                              anchors={turn.final.anchors} onEvidence={showEvidence} />
+                          : turn.answer}
                         {turn.final?.compare_table && turn.final.compare_table.rows.length > 0 && (
-                          <CompareTableView table={turn.final.compare_table} />
+                          <CompareTableView table={turn.final.compare_table}
+                            anchors={turn.final.anchors} onEvidence={showEvidence} />
                         )}
                         {turn.final?.outline && turn.final.outline.sections.length > 0 && (
                           <OutlineView outline={turn.final.outline} />
@@ -340,7 +366,9 @@ export default function ChatPage() {
                         </button>
                       </div>
                     )}
-                    {turn.final && <Claims claims={turn.final.claims} hits={turn.retrieval?.hits ?? []} />}
+                    {turn.final && <Claims claims={turn.final.claims}
+                      anchors={turn.final.anchors} hits={turn.retrieval?.hits ?? []}
+                      onEvidence={showEvidence} />}
                   </div>
                 </div>
               ))}
@@ -397,6 +425,7 @@ export default function ChatPage() {
           <TracePanel tl={lastTurn?.tl ?? []} busy={busy} final={lastTurn?.final ?? null} />
         )}
       </div>
+      {evidence && <EvidenceModal loc={evidence} onClose={() => setEvidence(null)} />}
     </div>
   );
 }
@@ -487,11 +516,17 @@ function GraphView({ graph }: { graph: GraphData }) {
   return (
     <div style={{ marginTop: "var(--space-3)", border: "1px dashed var(--line)",
       borderRadius: "var(--radius-md)", padding: "var(--space-3)" }}>
-      <p className="kv" style={{ margin: "0 0 var(--space-2)" }}>
-        <b>引用图谱</b>（Graph Agent · 仅由 references 元数据建边 ·
-        {graph.nodes.length} 节点 · {graph.metrics?.edge_count ?? 0} 边
-        {graph.external_count ? ` · 外部引用 ${graph.external_count} 条` : ""}
-        · backend {graph.metrics?.backend}）
+      <p className="kv" style={{ margin: "0 0 var(--space-2)", display: "flex", gap: 8,
+        alignItems: "center", flexWrap: "wrap" }}>
+        <span>
+          <b>引用图谱</b>（Graph Agent · 仅由 references 元数据建边 ·
+          {graph.nodes.length} 节点 · {graph.metrics?.edge_count ?? 0} 边
+          {graph.external_count ? ` · 外部引用 ${graph.external_count} 条` : ""}
+          · backend {graph.metrics?.backend}）
+        </span>
+        <Link className="chip accent" style={{ fontSize: 11 }} href="/graph">
+          在图谱中心打开 →（G6 交互 · 社区综述 · 研究缝隙）
+        </Link>
       </p>
       {top.map((t) => (
         <div key={t.paper_id} style={{ marginBottom: 6 }}>
@@ -533,21 +568,27 @@ function ChartView({ spec }: { spec: ChartSpec }) {
       ))}
       <p className="kv" style={{ margin: "var(--space-2) 0 0" }}>
         横轴「{spec.x_label}」 · 纵轴「{spec.y_label}」
-        {prov && ` · 来源 p${(prov.page ?? 0) + 1} 表${prov.table_id ?? ""}`
+        {prov && ` · 来源 p${prov.page ?? 1} 表${prov.table_id ?? ""}`
           + (prov.skipped_rows ? ` · 非数值行已剔除 ${prov.skipped_rows}` : "")}
       </p>
     </div>
   );
 }
 
-/** Compare Agent 维度对齐表：维度行 × 论文列，空格如实标注「未找到」。 */
-function CompareTableView({ table }: { table: CompareTable }) {
+/** Compare Agent 维度对齐表：维度行 × 论文列，空格如实标注「未找到」；格子 chip 可点击溯源。 */
+function CompareTableView({ table, anchors, onEvidence }: {
+  table: CompareTable;
+  anchors?: Record<string, Anchor>;
+  onEvidence?: (eid?: string, anchor?: Anchor, quote?: string) => void;
+}) {
   const titleOf = (pid: string, i: number) =>
     table.titles?.[pid] || `P${i + 1}`;
+  const anchorForChunk = (cid?: string) =>
+    cid ? Object.values(anchors ?? {}).find((a) => a.chunk_id === cid) : undefined;
   return (
     <div style={{ marginTop: "var(--space-3)" }}>
       <p className="kv" style={{ margin: "0 0 var(--space-2)" }}>
-        <b>维度对齐表</b>（Compare Agent · align_dimension 产物，点击行查看证据摘要）
+        <b>维度对齐表</b>（Compare Agent · align_dimension 产物，点击格子查看原文）
       </p>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
@@ -569,13 +610,18 @@ function CompareTableView({ table }: { table: CompareTable }) {
                 <td style={{ padding: "6px 8px", borderBottom: "1px dashed var(--line)",
                   whiteSpace: "nowrap", maxWidth: 180, overflow: "hidden",
                   textOverflow: "ellipsis" }}>{r.dimension}</td>
-                {r.cells.map((c) => (
+                {r.cells.map((c: CompareCell) => (
                   <td key={c.paper_id} style={{ padding: "6px 8px",
                     borderBottom: "1px dashed var(--line)" }}>
                     {c.found ? (
                       <>
-                        <span className="chip accent anchor-chip">
-                          原文 p{(c.page ?? 0) + 1} · §{secName(c.section_path ?? "")}
+                        <span className={`chip accent anchor-chip ${anchorForChunk(c.chunk_id) ? "clickable" : ""}`}
+                          onClick={() => {
+                            const a = anchorForChunk(c.chunk_id);
+                            if (a) onEvidence?.(undefined, a, c.quote);
+                          }}
+                          title={anchorForChunk(c.chunk_id) ? "点击查看原文页 + 高亮" : undefined}>
+                          原文 p{c.page ?? 1} · §{secName(c.section_path ?? "")}
                         </span>
                         <span className="kv">{(c.quote ?? "").slice(0, 90)}
                           {(c.quote ?? "").length > 90 ? "…" : ""}</span>
@@ -594,18 +640,31 @@ function CompareTableView({ table }: { table: CompareTable }) {
   );
 }
 
-/** 把 [^p6-§xx] 渲染成锚点徽章（页码转 1 基人读页码）。 */
-function AnswerWithAnchors({ text }: { text: string }) {
-  const parts = text.split(/(\[\^p\d+(?:-§[^\]]*)?\])/g);
+/** [E#] → 可点击锚点徽章（anchors 提供页码/章节，点击弹原文浮层 + bbox 高亮）。 */
+function AnswerWithAnchors({ text, anchors, onEvidence }: {
+  text: string;
+  anchors?: Record<string, Anchor>;
+  onEvidence?: (eid?: string, anchor?: Anchor, quote?: string) => void;
+}) {
+  const parts = text.split(/(\[E\d+\])/g);
   return (
     <>
       {parts.map((part, i) =>
-        /^\[\^p(\d+)/.test(part) ? (
-          <span key={i} className="chip accent anchor-chip">
-            {part.replace(/^\[\^p(\d+)-§([^\]]*)\]$/, (_, p, s) =>
-              `原文 p${Number(p) + 1} · §${secName(s)}`
-            ).replace(/^\[\^p(\d+)\]$/, (_, p) => `原文 p${Number(p) + 1}`)}
-          </span>
+        /^\[E\d+\]$/.test(part) ? (
+          (() => {
+            const a = anchors?.[part];
+            if (!a) {
+              return <span key={i} className="chip accent anchor-chip" style={{ opacity: 0.55 }}
+                title="无锚点数据（历史轮次或降级模式）">{part}</span>;
+            }
+            return (
+              <span key={i} className="chip accent anchor-chip clickable"
+                onClick={() => onEvidence?.(part, a)}
+                title={`点击查看原文 p${a.page} · §${secName(a.section_path)}`}>
+                {part} · p{a.page} · §{secName(a.section_path)}
+              </span>
+            );
+          })()
         ) : (
           <span key={i}>{part}</span>
         )
@@ -614,34 +673,96 @@ function AnswerWithAnchors({ text }: { text: string }) {
   );
 }
 
-function Claims({ claims, hits }: { claims: Claim[]; hits: Hit[] }) {
+/** 原文溯源浮层：PDF 画布渲染对应页 + bbox 红框高亮；无 PDF 数据时回退引文卡片。 */
+function EvidenceModal({ loc, onClose }: { loc: EvidenceLoc; onClose: () => void }) {
+  const { anchor, quote, eid } = loc;
+  const a = anchor;
+  return (
+    <div className="ev-overlay" onClick={onClose}>
+      <div className="ev-modal" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)",
+          marginBottom: "var(--space-2)", flexWrap: "wrap" }}>
+          <b>{eid ? `${eid} · ` : ""}原文溯源</b>
+          <span className="chip accent">p{a.page} · §{secName(a.section_path)}</span>
+          {a.paper_label && <span className="chip">{a.paper_label}</span>}
+          <span style={{ flex: 1 }} />
+          <button className="btn ghost" style={{ padding: "2px 10px" }}
+            onClick={onClose}>关闭 ✕</button>
+        </div>
+        {a.paper_id && a.page > 0 ? (
+          <PdfAnchored paperId={a.paper_id} page={a.page} bbox={a.bbox?.length === 4 ? a.bbox : undefined} />
+        ) : (
+          <div className="evidence"><i>该锚点缺少论文/页码信息，无法渲染原文页。</i></div>
+        )}
+        {quote && (
+          <div className="evidence" style={{ marginTop: "var(--space-2)" }}>
+            <i>引文（校验器逐字比对）</i>
+            <br />{quote}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 逐论断溯源：三态徽章（已验证/需核对/未验证），support 可点击跳原文。 */
+function Claims({ claims, anchors, hits, onEvidence }: {
+  claims: Claim[];
+  anchors?: Record<string, Anchor>;
+  hits: Hit[];
+  onEvidence?: (eid?: string, anchor?: Anchor, quote?: string) => void;
+}) {
   const [open, setOpen] = useState<number | null>(null);
   if (!claims.length) return null;
   return (
     <div style={{ marginTop: "var(--space-3)" }}>
       <p className="kv" style={{ margin: 0 }}>
-        <b>逐论断溯源</b>（点击查看原文依据）
+        <b>逐论断溯源</b>（L1-L4 校验 · 点击出处查看原文）
       </p>
       {claims.map((c, i) => (
         <div key={i}
-          className={`claim ${c.status === "unsupported" ? "unverified" : ""}`}
+          className={`claim ${c.status === "unsupported" ? "unverified"
+            : c.status === "needs_check" ? "needs-check" : ""}`}
           onClick={() => setOpen(open === i ? null : i)}>
-          <div>
+          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline",
+            flexWrap: "wrap" }}>
             {c.status === "supported"
               ? <span className="badge ok">已验证</span>
-              : <span className="badge warn">⚠ 未验证</span>}
-            {c.text.slice(0, 160)}{c.text.length > 160 ? "…" : ""}
+              : c.status === "needs_check"
+                ? <span className="badge warn" title="数值/引文未在证据中逐字命中，请人工核对">需核对</span>
+                : <span className="badge warn">⚠ 未验证</span>}
+            {c.quote_status === "unverified" && (
+              <span className="badge warn" title="引文与原文比对未达标（L2）">引文待核</span>
+            )}
+            {c.semantic_status === "partial" && (
+              <span className="badge" title="语义 judge：证据部分支撑（L4）">部分支撑</span>
+            )}
+            <span>{c.text.slice(0, 160)}{c.text.length > 160 ? "…" : ""}</span>
           </div>
+          {c.status === "needs_check" && c.unverified_numbers?.length ? (
+            <div className="anchor" style={{ color: "var(--warn)" }}>
+              以下数值未在证据原文中命中：{c.unverified_numbers.join("、")}（请人工核对）
+            </div>
+          ) : null}
           {c.support.length > 0 && (
             <div className="anchor">
-              出处：{c.support.map((s) => `p${s.page + 1} §${secName(s.section_path)}`).join(" / ")}
+              出处：{c.support.map((s, k) => (
+                <span key={k} className="chip anchor-chip clickable"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEvidence?.(s.eid, anchors?.[s.eid ?? ""], s.quote);
+                  }}
+                  title={s.eid && anchors?.[s.eid] ? `点击查看原文 p${s.page}` : undefined}>
+                  {s.eid ? `${s.eid} · ` : ""}p{s.page} §{secName(s.section_path)}
+                </span>
+              ))}
             </div>
           )}
           {open === i && c.support.map((s, k) => {
             const hit = hits.find((h) => h.chunk_id === s.chunk_id);
             return (
               <div key={k} className="evidence">
-                <i>原文 · 第 {s.page + 1} 页 · {secName(s.section_path)}</i>
+                <i>{s.eid ? `${s.eid} · ` : ""}原文 · 第 {s.page} 页 · {secName(s.section_path)}</i>
                 <br />{s.quote || hit?.text.slice(0, 220) || ""}
               </div>
             );

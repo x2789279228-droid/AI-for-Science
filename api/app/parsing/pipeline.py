@@ -7,19 +7,20 @@ PyMuPDF 提取 → 双栏阅读顺序重排（x 坐标聚类）→ 标题树（�
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from pathlib import Path
 from typing import Any
 
 import fitz  # PyMuPDF
 
+from .tables import table_to_md as _table_to_md  # 共享表格工具（tools/vlm/mineru 引擎复用）
+
 # ---------- 工具 ----------
 
-_REF_HEAD = re.compile(r"^\s*(references|bibliography|文献)\s*$", re.I)
+_REF_HEAD = re.compile(r"^\s*(references|bibliography|文献)\s*$", re.IGNORECASE)
 _REF_ITEM = re.compile(r"^\[(\d{1,3})\]\s*(.*)$")
-_ARXIV_ID = re.compile(r"arxiv[:\s]*(\d{4}\.\d{4,5})(v\d+)?", re.I)
-_DOI = re.compile(r"10\.\d{4,9}/[\w.\-/:]+", re.I)
+_ARXIV_ID = re.compile(r"arxiv[:\s]*(\d{4}\.\d{4,5})(v\d+)?", re.IGNORECASE)
+_DOI = re.compile(r"10\.\d{4,9}/[\w.\-/:]+", re.IGNORECASE)
 
 
 def file_sha256(path: Path) -> str:
@@ -80,12 +81,13 @@ def _reading_order(blocks: list[dict]) -> list[dict]:
 # ---------- 标题层级 ----------
 
 def _build_toc(doc: fitz.Document, blocks_by_page: dict[int, list[dict]]) -> list[dict]:
-    """优先 PDF 书签；否则按字号层级推断标题块。"""
+    """优先 PDF 书签；否则按字号层级推断标题块。toc.page 与 blocks 一致为 0 基。"""
     toc = []
     try:
-        for lvl, title, page in doc.get_toc():
-            toc.append({"level": min(int(lvl), 3), "title": title.strip(), "page": max(int(page), 1)})
-    except Exception:
+        for lvl, title, page in doc.get_toc():   # get_toc 页码 1 基 → 统一转 0 基
+            toc.append({"level": min(int(lvl), 3), "title": title.strip(),
+                        "page": max(int(page), 1) - 1})
+    except Exception:  # noqa: BLE001, S110 —— 书签解析失败由字号树兜底
         pass
     if toc:
         return toc
@@ -153,10 +155,17 @@ def _parse_references(ref_text: str) -> list[dict]:
 
 # ---------- 主流程 ----------
 
-def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
-    """PDF → DocIR JSON。progress: 可选回调 (frac 0~1, msg)。"""
+def parse_pdf(pdf_path: str | Path, progress=None,
+              pages: tuple[int, int] | None = None) -> dict:
+    """PDF → DocIR JSON。progress: 可选回调 (frac 0~1, msg)。
+
+    pages: (start, end) 0 基页码范围（长文档分批解析用）；None = 全文。
+    块的 page/bbox 始终为文档绝对坐标。
+    """
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
+    p_start, p_end = (pages or (0, doc.page_count))
+    p_end = min(p_end, doc.page_count)
 
     def report(frac: float, msg: str) -> None:
         if progress:
@@ -172,10 +181,11 @@ def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
     blocks_by_page: dict[int, list[dict]] = {}
     ref_start_page: int | None = None
     ref_text_parts: list[str] = []
+    demo_raw_x0: list[float] = []   # 第 2 页原始块序（4.3 阅读顺序红绿开关素材）
 
     n = doc.page_count
     bid = 0
-    for pageno in range(n):
+    for pageno in range(p_start, p_end):
         page = doc[pageno]
         pw, ph = page.rect.width, page.rect.height
         raw = page.get_text("dict")
@@ -192,6 +202,8 @@ def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
                  "lines": lines, "text": text,
                  "size": max((s["size"] for ln in lines for s in ln["spans"]), default=10.0)}
             pblocks.append(b)
+        if pageno == 1:   # demo 素材（4.3 阅读顺序红绿开关）：第 2 页重排前的原始 x0 序
+            demo_raw_x0 = [b["bbox"][0] for b in pblocks]
         pblocks = _reading_order(pblocks)
         blocks_by_page[pageno] = pblocks
 
@@ -216,7 +228,7 @@ def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
                                    "bbox": [round(v / pw, 4) if i % 2 == 0 else round(v / ph, 4)
                                             for i, v in enumerate(t.bbox)],
                                    "markdown": md})
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 —— 单表 HTML 解析失败跳过该表
             pass
 
         # 图片 + caption 关联（图块下方最近文本块）
@@ -234,25 +246,15 @@ def parse_pdf(pdf_path: str | Path, progress=None) -> dict:
             figures.append({"id": f"f{len(figures)+1}", "page": pageno, "caption": cap,
                             "bbox": [round(x0 / pw, 4), round(y0 / ph, 4),
                                      round(x1 / pw, 4), round(y1 / ph, 4)]})
-        report(0.05 + 0.75 * (pageno + 1) / max(n, 1), f"解析第 {pageno+1}/{n} 页")
+        span = max(p_end - p_start, 1)
+        report(0.05 + 0.75 * (pageno + 1 - p_start) / span, f"解析第 {pageno+1}/{n} 页")
 
     toc = _build_toc(doc, blocks_by_page)
-
-    # section_path 回填：按 toc（页面+标题序）为每个 block 推断所属章节
-    sections = sorted(toc, key=lambda t: (t["page"], -t["level"]))
-    si = -1
-    for blk in blocks:
-        while si + 1 < len(sections) and (
-            sections[si + 1]["page"] < blk["page"]
-            or (sections[si + 1]["page"] == blk["page"]
-                and _page_y_of_title(blocks_by_page, sections[si + 1]["title"], blk["page"]) <= blk["bbox"][1])
-        ):
-            si += 1
-        if si >= 0:
-            blk["type"] = "heading" if blk["text"] == sections[si]["title"] else blk["type"]
-            blk["section_path"] = sections[si]["title"]
+    backfill_sections(blocks, toc, blocks_by_page)
 
     meta = _extract_meta(doc, blocks, blocks_by_page.get(0, []))
+    if demo_raw_x0:
+        meta["demo_raw_order"] = {"page": 2, "x0_order": demo_raw_x0}
     docir: dict[str, Any] = {
         "paper_id": meta.get("arxiv_id") or pdf_path.stem,
         "meta": {**meta, "page_count": n, "file": pdf_path.name},
@@ -273,19 +275,29 @@ def _page_y_of_title(blocks_by_page: dict[int, list[dict]], title: str, page: in
     return 0.0
 
 
-def _table_to_md(rows: list[list[str | None]]) -> str:
-    rows = [[("" if c is None else str(c).replace("\n", " ").strip()) for c in r] for r in rows]
-    rows = [r for r in rows if any(r)]
-    if not rows:
-        return ""
-    md = "| " + " | ".join(rows[0]) + " |\n"
-    md += "|" + "---|" * len(rows[0]) + "\n"
-    for r in rows[1:]:
-        md += "| " + " | ".join(r + [""] * (len(rows[0]) - len(r))) + " |\n"
-    return md
+def backfill_sections(blocks: list[dict], toc: list[dict],
+                      blocks_by_page: dict[int, list[dict]]) -> None:
+    """按 toc（页面+标题序）为每个 block 推断所属章节（各解析引擎共用）。"""
+    sections = sorted(toc, key=lambda t: (t["page"], -t["level"]))
+    si = -1
+    for blk in blocks:
+        while si + 1 < len(sections) and (
+            sections[si + 1]["page"] < blk["page"]
+            or (sections[si + 1]["page"] == blk["page"]
+                and _page_y_of_title(blocks_by_page, sections[si + 1]["title"], blk["page"]) <= blk["bbox"][1])
+        ):
+            si += 1
+        if si >= 0:
+            blk["type"] = "heading" if blk["text"] == sections[si]["title"] else blk["type"]
+            blk["section_path"] = sections[si]["title"]
 
 
-_ARXIV_BANNER = re.compile(r"arxiv:\d{4}\.\d{4,5}", re.I)
+def page_char_counts(doc: fitz.Document) -> list[int]:
+    """每页文本字符数（VLM 逐页救援的空白页探测用）。"""
+    return [len(p.get_text("text").strip()) for p in doc]
+
+
+_ARXIV_BANNER = re.compile(r"arxiv:\d{4}\.\d{4,5}", re.IGNORECASE)
 
 
 def _extract_meta(doc: fitz.Document, blocks: list[dict], first_page_internal: list[dict]) -> dict:

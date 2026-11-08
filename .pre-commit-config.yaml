@@ -1,0 +1,25 @@
+# 密钥防泄漏 + lint 门禁（评分表"工程规范"项）
+# 安装：pip install pre-commit && pre-commit install
+# 手动全量：pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+        name: gitleaks 密钥扫描
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        name: ruff (api python lint)
+        args: [--fix]
+        files: ^api/
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-added-large-files
+        args: [--maxkb=2048]

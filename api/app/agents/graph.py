@@ -28,14 +28,28 @@ from langgraph.types import RetryPolicy
 
 from ._debug import failable
 from .nodes import (
-    _check_sufficiency, executor_entry_node, fan_out, fuse_node, planner_node,
-    recover_node, responder_node, retrieve_task_node, router_node, verifier_node,
+    _check_sufficiency,
+    executor_entry_node,
+    fan_out,
+    fuse_node,
+    planner_node,
+    recover_node,
+    responder_node,
+    retrieve_task_node,
+    router_node,
+    verifier_node,
 )
 from .specialists import (
-    align_node, compare_entry_node, graph_build_node, graph_entry_node,
-    reader_entry_node, viz_entry_node, viz_extract_node, writer_entry_node,
+    align_node,
+    compare_entry_node,
+    graph_build_node,
+    graph_entry_node,
+    reader_entry_node,
+    viz_entry_node,
+    viz_extract_node,
+    writer_entry_node,
 )
-from .state import MAX_RECOVER, MAX_RE_RETRIEVE, AgentState, ExecutorState
+from .state import MAX_RE_RETRIEVE, MAX_RECOVER, AgentState, ExecutorState
 
 # 瞬时基础设施错误（SQLite 锁竞争/网络超时）自动重试；LLM 业务级失败由 recover 节点统一恢复
 _RETRY = RetryPolicy(max_attempts=3, backoff_factor=2.0,

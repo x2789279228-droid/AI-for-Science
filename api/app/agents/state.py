@@ -72,6 +72,7 @@ class AgentState(TypedDict, total=False):
     answer: str
     claims: list[dict[str, Any]]
     mode: Literal["generative", "extractive", "refusal", "none"]
+    anchors: dict[str, dict[str, Any]]                        # E# → 块级溯源锚点（responder 产出，final 事件下发）
     # 防线与轨迹
     guardrails: Annotated[list[str], operator.add]
     trace: Annotated[list[dict[str, Any]], operator.add]

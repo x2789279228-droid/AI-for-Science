@@ -14,21 +14,40 @@ from __future__ import annotations
 import json
 import queue as queue_mod
 import time
-from typing import Any
 
 from langgraph.types import Send
 
 from ..llm import client as llm
+from ..llm import prompts
 from ..rag import indexing
 from ..rag.answering import (
-    NO_EVIDENCE, REFUSAL_CHITCHAT, WRITER_MIN_EVIDENCE, WRITER_REFUSAL,
-    build_compare_messages, build_graph_messages, build_qa_messages,
-    build_writer_messages, extractive_answer, format_context, hit_summary,
-    llm_claims, validate_citations,
+    NO_EVIDENCE,
+    REFUSAL_CHITCHAT,
+    WRITER_MIN_EVIDENCE,
+    WRITER_REFUSAL,
+    build_anchors,
+    build_compare_messages,
+    build_graph_messages,
+    build_qa_messages,
+    build_writer_messages,
+    extractive_answer,
+    format_context,
+    hit_summary,
+    llm_claims,
+    near_evidence_block,
+    validate_citations,
 )
+from ..rag.verify import verify_claims
 from .state import (
-    AGENT_INTENT, AGENT_LABEL, INTENT_AGENT, MAX_REGEN, MAX_RECOVER,
-    READY_AGENTS, AgentState, Step, trace_card,
+    AGENT_INTENT,
+    AGENT_LABEL,
+    INTENT_AGENT,
+    MAX_RECOVER,
+    MAX_REGEN,
+    READY_AGENTS,
+    AgentState,
+    Step,
+    trace_card,
 )
 
 _GREETINGS = {"你好", "您好", "hi", "hello", "在吗", "你是谁", "测试", "hello world", "ping"}
@@ -124,8 +143,8 @@ def router_node(state: AgentState, config=None) -> dict:
                       f"{intent['type']} → {AGENT_LABEL[agent]} · {len(intent['aspects'])} 个检索面",
                       {"intent": intent, "agent": agent})
     _emit(config, card)
-    return {"intent": intent, "agent": agent, "trace": [card],
-            "handoffs": handoffs, "guardrails": guardrails}
+    return {"intent": intent, "agent": agent, "language": intent.get("language", "zh"),
+            "trace": [card], "handoffs": handoffs, "guardrails": guardrails}
 
 
 # ---------------- Planner ----------------
@@ -244,26 +263,46 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
 
 def fuse_node(state: AgentState, config=None) -> dict:
     results = state.get("raw_hits", [])
+    guardrails: list[str] = []
     if results:
         # 每个 (aspect, paper) 分支是一路检索，跨分支 RRF 融合去重
         groups: dict[tuple[str, str], list[dict]] = {}
         for h in results:
             groups.setdefault((h.get("aspect", ""), h.get("paper_id", "")), []).append(h)
         fused = indexing.rrf_fuse(*[(f"b{i}", lst) for i, lst in enumerate(groups.values())],
-                                  top_k=8)
+                                  top_k=20)
+        # 四层防御①最后一环：bge-reranker 全局精排（每问 1 次调用），失败降级回融合排序
+        fused_final: list[dict] | None = None
+        if indexing.rerank_available():
+            fused_final = indexing.rerank_hits(state.get("question", ""), fused, top_k=8)
+            if fused_final is None:
+                guardrails.append("rerank_degraded")
+        else:
+            fused_final = None
+        if fused_final:
+            fused = fused_final
+            rerank_note = "rerank 已精排"
+        else:
+            fused = fused[:8]
+            rerank_note = "rerank 降级/未配置 → 融合排序截断"
     else:
         fused = []
+        rerank_note = ""
     channels = sorted({c for b in state.get("branch_stats", []) for c in b.get("channels", [])})
     card = trace_card("executor_fuse", "证据融合",
-                      f"RRF · {len(results)} 路原始 → {len(fused)} 块证据 · 通道 {'+'.join(channels) or 'bm25'}",
-                      {"channels": channels, "branch_count": len(state.get("branch_stats", []))})
+                      f"RRF · {len(results)} 路原始 → {len(fused)} 块证据 · 通道 {'+'.join(channels) or 'bm25'} · {rerank_note}",
+                      {"channels": channels, "branch_count": len(state.get("branch_stats", [])),
+                       "reranked": bool(fused and fused[0].get("rerank") is not None)})
     _emit(config, card)
     _emit_event(config, "evidence", {
         "channels": channels,
         "bm25_count": sum(b.get("bm25", 0) for b in state.get("branch_stats", [])),
         "dense_count": sum(b.get("dense", 0) for b in state.get("branch_stats", [])),
         "hits": hit_summary(fused)})
-    return {"evidence": fused, "trace": [card]}
+    out: dict = {"evidence": fused, "trace": [card]}
+    if guardrails:
+        out["guardrails"] = guardrails
+    return out
 
 
 # ---------------- Verifier ----------------
@@ -321,7 +360,7 @@ def verifier_node(state: AgentState, config=None) -> dict:
 _REGEN_FEEDBACK = (
     "你上一轮的回答未通过引用格式校验（即将进行第 {n} 次生成）。问题：{problems}。\n"
     "请重新生成完整回答：内容与结论保持不变，为每个事实句补上引用标记，"
-    "格式严格为 [^p{{页码}}-§{{章节}}]，页码只能取自本次证据的页码集合：{valid_pages}。"
+    "格式严格为 [E编号]，编号只能取自本次证据包：{valid_ids}。"
 )
 
 
@@ -353,7 +392,6 @@ def recover_node(state: AgentState, config=None) -> dict:
     pend = state.get("pending_failure") or {}
     kind = pend.get("kind", "")
     recover_count = state.get("recover_count", 0) + 1
-    guardrails: list[str] = []
     plan_evt: dict | None = None   # 策略① 产生新计划时，在恢复卡片后补发 plan 事件
     upd: dict = {"pending_failure": None, "recover_count": recover_count,
                  "recover_route": "responder"}
@@ -393,8 +431,8 @@ def recover_node(state: AgentState, config=None) -> dict:
     elif kind == "format_invalid":
         # ---- 策略③：格式非法重生成（带错误反馈；预算尽则警告放行收尾） ----
         regen = state.get("regen_count", 0)
-        invalid_pages = pend.get("invalid_pages", [])
-        valid_pages = pend.get("valid_pages", [])
+        invalid_eids = pend.get("invalid_eids", [])
+        eid_map = {i: h for i, h in enumerate(state.get("evidence", []), 1)}
         if regen >= MAX_REGEN:
             answer = state.get("answer", "") + \
                 "\n\n> ⚠️ 该回答未通过引用后验校验（多次重生成仍失败），请人工核对原文。"
@@ -404,17 +442,19 @@ def recover_node(state: AgentState, config=None) -> dict:
                               f"#{recover_count} · 重生成预算用尽 → 警告放行",
                               {"strategy": "regen_exhausted"})
         else:
-            problems = [f"引用了证据中不存在的页码 p{', p'.join(map(str, invalid_pages))}"
-                        if invalid_pages else "完全缺少 [^p页码-§章节] 引用标记"]
+            valid_ids = ", ".join(f"E{eid}(p{h['page'] + 1})"
+                                  for eid, h in sorted(eid_map.items())) or "无"
+            problems = [f"引用了证据中不存在的编号 {'、'.join(invalid_eids)}"
+                        if invalid_eids else "完全缺少 [E编号] 引用标记"]
             prompt = _REGEN_FEEDBACK.format(n=regen + 1, problems="；".join(problems),
-                                            valid_pages=", ".join(map(str, valid_pages)) or "无")
+                                            valid_ids=valid_ids)
             upd.update({"retry_prompt": prompt, "regen_count": regen + 1,
                         "guardrails": [f"format_regen:{regen + 1}"]})
             card = trace_card("recover", "恢复·重生成",
                               f"#{recover_count} · 注入纠错反馈 · 第 {regen + 1}/{MAX_REGEN} 次"
-                              + (f" · 非法页 {invalid_pages}" if invalid_pages else " · 缺引用"),
-                              {"strategy": "regen", "invalid_pages": invalid_pages,
-                               "valid_pages": valid_pages})
+                              + (f" · 非法编号 {invalid_eids}" if invalid_eids else " · 缺引用"),
+                              {"strategy": "regen", "invalid_eids": invalid_eids,
+                               "valid_ids": sorted(eid_map)})
     else:
         card = trace_card("recover", "恢复", f"#{recover_count} · 未知失败类型 → 继续",
                           {"strategy": "noop"})
@@ -445,7 +485,9 @@ def responder_node(state: AgentState, config=None) -> dict:
                           {"mode": mode, "claims": len(claims), "agent": agent})
         _emit(config, card)
         out: dict = {"answer": answer, "claims": claims, "mode": mode,
-                     "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
+                     "guardrails": guardrails, "trace": [card], "retry_prompt": "",
+                     "anchors": build_anchors({i: h for i, h in
+                                               enumerate(state.get("evidence", []), 1)})}
         if is_compare:
             out["compare_table"] = state.get("compare_table") or {}
         return out
@@ -465,7 +507,7 @@ def responder_node(state: AgentState, config=None) -> dict:
         prov = spec.get("provenance") or {}
         n_points = len(spec.get("data") or [])
         answer = (f"已生成 **{spec.get('type', 'bar')} 图**（{n_points} 个数据点）："
-                  f"数据来源 {prov.get('paper_id', '')} 第 {(prov.get('page') or 0) + 1} 页"
+                  f"数据来源 {prov.get('paper_id', '')} 第 {prov.get('page', 1)} 页"
                   f" 表格 {prov.get('table_id', '')}。"
                   f"横轴「{spec.get('x_label', '')}」，纵轴「{spec.get('y_label', '')}」。"
                   "图表已随本回答下发，可在下方查看。")
@@ -480,7 +522,7 @@ def responder_node(state: AgentState, config=None) -> dict:
                 insight = (res.get("text") or "").strip()
                 if insight:
                     answer += "\n\n简要解读：" + insight
-            except Exception:  # noqa: BLE001 —— 解读失败不影响图表交付
+            except Exception:  # noqa: BLE001, S110 —— 解读失败不影响图表交付
                 pass
         return finish(answer, [], "generative" if llm.available() else "extractive",
                       f"出图 · {spec.get('type')} · {n_points} 点 · 来源已标注")
@@ -495,15 +537,15 @@ def responder_node(state: AgentState, config=None) -> dict:
         return finish(WRITER_REFUSAL.format(n=len(hits), m=WRITER_MIN_EVIDENCE),
                       [], "refusal", f"Writer · 证据池 {len(hits)}/{WRITER_MIN_EVIDENCE} → 拒写")
 
-    page_map = format_context(hits)[1]
+    eid_map = format_context(hits)[1]
 
     # Graph：图谱证据在元数据层，无 LLM/降级时输出确定性指标摘要（不冒充生成）
     if agent == "graph" and (state.get("degraded") or not llm.available()):
         gd = state.get("graph_data") or {}
         metrics = gd.get("metrics") or {}
-        lines = [f"引用图谱摘要（指标 backend：{metrics.get('backend', 'none')}）："
-                 f"库内节点 {len(gd.get('nodes', []))} 篇 · 引用边 {metrics.get('edge_count', 0)} 条 · "
-                 f"外部引用 {gd.get('external_count', 0)} 条（未匹配库内论文）。"]
+        lines = [(f"引用图谱摘要（指标 backend：{metrics.get('backend', 'none')}）："
+                  f"库内节点 {len(gd.get('nodes', []))} 篇 · 引用边 {metrics.get('edge_count', 0)} 条 · "
+                  f"外部引用 {gd.get('external_count', 0)} 条（未匹配库内论文）。")]
         for i, t in enumerate(metrics.get("nodes", [])[:3], 1):
             lines.append(f"{i}. {t.get('title', t.get('paper_id', ''))} — "
                          f"PageRank {t.get('pagerank', 0)} · 被引 {t.get('in_degree', 0)} · "
@@ -524,8 +566,16 @@ def responder_node(state: AgentState, config=None) -> dict:
                       f"抽取式降级 · {len(claims)} 条论断")
 
     # 生成式（含策略③重生成）：按 Agent 选合成通道 → 流式输出 → 引用后验 → ClaimTrace
+    language = state.get("language") or "zh"   # 语言边界 guardrail（4.5）
+    _slot_by_module = {"compare": ("compare", "system_compare"),
+                       "writer": ("writer", "system_writer"),
+                       "graph": ("graph", "system_graph")}
+    pv_module, pv_slot = _slot_by_module.get(agent if not is_compare else "compare",
+                                             ("qa", "system_qa"))
+    prompt_version = prompts.prompt_version(pv_module, pv_slot)
     if is_compare:
-        messages = build_compare_messages(question, state.get("compare_table"), hits)
+        messages = build_compare_messages(question, state.get("compare_table"), hits,
+                                          language=language)
     elif agent == "writer":
         # Writer：大纲先行（artifact 下发），正文随后按同一大纲流式生成
         aspects = list(dict.fromkeys(
@@ -533,12 +583,12 @@ def responder_node(state: AgentState, config=None) -> dict:
         outline = {"title": question[:40],
                    "sections": [a for a in aspects if a][:5] or ["背景", "要点", "结论"]}
         _emit_event(config, "artifact", {"kind": "outline", "outline": outline})
-        messages = build_writer_messages(question, outline, hits)
+        messages = build_writer_messages(question, outline, hits, language=language)
     elif agent == "graph":
         messages = build_graph_messages(state.get("graph_data", {}).get("metrics", {}),
-                                        question, hits)
+                                        question, hits, language=language)
     else:
-        messages = build_qa_messages(question, hits)
+        messages = build_qa_messages(question, hits, language=language)
     if retry_prompt and prev_answer:
         # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
         messages += [{"role": "assistant", "content": prev_answer},
@@ -546,7 +596,8 @@ def responder_node(state: AgentState, config=None) -> dict:
     parts: list[str] = []
     streamed = False
     try:
-        for piece in llm.stream_chat(messages, max_tokens=1500):
+        for piece in llm.stream_chat(messages, max_tokens=1500, module=pv_module,
+                                     audit_prompt=question, prompt_version=prompt_version):
             streamed = True
             parts.append(piece)
             if q is not None:
@@ -555,7 +606,8 @@ def responder_node(state: AgentState, config=None) -> dict:
         streamed = False
     answer = "".join(parts)
     if not streamed or not answer.strip():
-        res = llm.chat(messages, max_tokens=1500, module="qa", audit_prompt=question)
+        res = llm.chat(messages, max_tokens=1500, module=pv_module, audit_prompt=question,
+                       prompt_version=prompt_version)
         answer = res.get("text", "")
         if answer and q is not None:
             q.put(("delta", {"text": answer}))
@@ -575,42 +627,61 @@ def responder_node(state: AgentState, config=None) -> dict:
         guardrails.append("tool_failure_degraded")
         return finish(answer, claims, "extractive", "生成失败且恢复预算用尽 → 就地抽取式")
 
-    answer, cited_guards = validate_citations(answer, page_map)
+    answer, cited_guards = validate_citations(answer, eid_map)
     guardrails += cited_guards
+
+    # 证据不足拒答：不进重写环（合法无引用），按拒答策略附「最接近的 3 条证据」
+    if "未找到依据" in answer:
+        answer += near_evidence_block(hits)
+        return finish(answer, [], "refusal", "证据不足拒答 · 已附最近证据供人工判断")
+
     invalid = [g for g in cited_guards
-               if g == "no_citation_found" or g.startswith("invalid_citation:")]
+               if g == "no_citation_found" or g.startswith("invalid_citation:E")]
     if invalid:
         # 策略③：格式非法 → 交 recover 定向重生成；预算尽则警告放行
         if (state.get("regen_count", 0) < MAX_REGEN
                 and state.get("recover_count", 0) < MAX_RECOVER):
-            invalid_pages = [int(g.split(":p", 1)[1]) for g in cited_guards
-                             if g.startswith("invalid_citation:")]
+            invalid_eids = [f"E{g.split(':E', 1)[1]}" for g in cited_guards
+                            if g.startswith("invalid_citation:E")]
             card = trace_card("responder", "生成回答",
                               f"引用校验未通过（{len(invalid)} 项）→ 请求定向重生成",
                               {"mode": "pending_regen", "invalid": invalid})
             _emit(config, card)
             return {"answer": answer, "mode": "generative",
                     "pending_failure": {"kind": "format_invalid",
-                                        "invalid_pages": invalid_pages,
-                                        "valid_pages": sorted(page_map)},
+                                        "invalid_eids": invalid_eids},
                     "failures": [{"node": "responder", "kind": "format_invalid",
                                   "detail": ";".join(invalid)[:120]}],
                     "guardrails": guardrails, "trace": [card], "retry_prompt": ""}
         guardrails.append("format_accept_with_warning")
-        answer += "\n\n> ⚠️ 该回答未通过引用后验校验（无有效页码锚点），请人工核对原文。"
+        answer += "\n\n> ⚠️ 该回答未通过引用后验校验（无有效证据编号锚点），请人工核对原文。"
 
-    claims = llm_claims(answer, hits)
+    claims, eid_map_claims = llm_claims(answer, hits)
+    # 四层防御④：L2 引文子串 / L3 数值实体 / L4 语义 judge（L1 已在 validate_citations 完成）
+    claims, verify_guards = verify_claims(claims, eid_map_claims)
+    guardrails += verify_guards
+
+    def verify_note() -> str:
+        n_check = sum(1 for c in claims if c.get("status") == "needs_check")
+        n_unsup = sum(1 for c in claims if c.get("status") == "unsupported")
+        note = " · L1-L4 校验完成"
+        if n_check:
+            note += f" · {n_check} 条需核对"
+        if n_unsup:
+            note += f" · {n_unsup} 条无支撑"
+        return note
+
     if is_compare:
         return finish(answer, claims, "generative",
-                      f"对比合成 · {len(claims)} 条论断 · 引用已后验 · 维度表已下发")
+                      f"对比合成 · {len(claims)} 条论断{verify_note()} · 维度表已下发")
     if agent == "writer":
         return finish(answer, claims, "generative",
-                      f"写作完成 · {len(claims)} 条论断 · 引用已后验 · 大纲已下发")
+                      f"写作完成 · {len(claims)} 条论断{verify_note()} · 大纲已下发")
     if agent == "graph":
         return finish(answer, [], "generative",
                       "图谱综述 · 指标来自 references 元数据真实计算")
     return finish(answer, claims, "generative",
-                  f"生成式 · {len(claims)} 条论断 · 引用已后验")
+                  f"生成式 · {len(claims)} 条论断{verify_note()}")
 
 
 # ---------------- 工具：审计路径 ----------------

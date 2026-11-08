@@ -1,0 +1,10 @@
+# gitleaks 配置：默认规则全开 + 本仓库必要豁免（测试 fixture 的假 key 形参、文档示例）
+title = "meridian scholar-agent"
+
+[allowlist]
+description = "测试/文档中的占位密钥（非真实凭据）"
+paths = [
+  '''docs/.*\.md$''',
+  '''\.env\.example$''',
+]
+commits = []

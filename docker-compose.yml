@@ -1,0 +1,39 @@
+# 一键全栈（SQLite 单机栈 → 收敛为 2 服务，不硬凑重型基建；
+# 结构可随业务演进扩展出 pg/qdrant 等服务）。
+# 用法：cp ../.env.example .env（填 key）&& docker compose up --build
+#   浏览器访问 http://localhost:3000；API 健康 http://localhost:8100/api/health
+services:
+  api:
+    build: ./api
+    ports:
+      - "8100:8100"
+    environment:
+      # 容器内走 PyMuPDF/VLM 兜底通道（MinerU 为宿主机增强，见 api/Dockerfile 注释）
+      MINERU_ENABLED: "off"
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-off}
+      SEMANTIC_JUDGE: ${SEMANTIC_JUDGE:-1}
+      PROMPT_VARIANT: ${PROMPT_VARIANT:-default}
+    env_file:
+      - path: .env
+        required: false          # 离线/无 LLM 演示可不配（抽取式降级闭环仍可跑）
+    volumes:
+      - ./api/data:/app/data
+      - ./downloads:/app/downloads:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8100/api/health', timeout=5)"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:8100   # 浏览器直连宿主映射端口
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"

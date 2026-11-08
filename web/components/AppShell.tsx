@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { href: "/reader", label: "阅读器", Icon: Reader },
   { href: "/graph", label: "引用图谱", Icon: Graph, schedule: "D7" },
   { href: "/discover", label: "检索发现", Icon: Compass, schedule: "D9" },
+  { href: "/ideas", label: "研究缝隙", Icon: Graph, schedule: "D9" },
   { href: "/copilot", label: "写作 Copilot", Icon: Pen, schedule: "D10" },
   { href: "/judge", label: "评审模式", Icon: Judge, schedule: "D11" },
   { href: "/audit", label: "透明度中心", Icon: Eye },

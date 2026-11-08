@@ -442,3 +442,35 @@ h1, h2, h3, p { margin: 0; }
     z-index: 30; box-shadow: var(--shadow-md);
   }
 }
+
+/* 引用锚点可点击 + PDF bbox 高亮脉冲 */
+.anchor-chip.clickable { cursor: pointer; }
+.anchor-chip.clickable:hover { filter: brightness(1.08); text-decoration: underline; }
+@keyframes bboxPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(229, 72, 77, 0.15); }
+  50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.05); }
+}
+.claim.needs-check { border-left-color: var(--warn); background: var(--warn-soft); }
+
+/* 原文溯源浮层（EvidenceModal） */
+.ev-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(10, 12, 16, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-4);
+}
+.ev-modal {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+  padding: var(--space-4); max-width: 720px; width: 100%;
+  max-height: 92vh; overflow-y: auto;
+}
+
+/* 公式块（KaTeX 渲染 + LaTeX 复制） */
+.formula-block {
+  margin: 6px 0; padding: 6px 10px; overflow-x: auto;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+}
+.formula-block > div:first-child { flex: 1; }
+.formula-block .katex-display { margin: 4px 0; }

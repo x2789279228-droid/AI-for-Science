@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .. import db, jobs, threads_store, trace_store
 from ..config import settings
 from ..llm import client as llm
+from ..llm import prompts as prompts_mod
 
 router = APIRouter(prefix="/api")
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api")
 # ---------- papers ----------
 
 @router.post("/papers")
-async def upload_paper(file: UploadFile = File(...)):
+async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastAPI 惯用法
     if not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(400, "仅支持 PDF")
     content = await file.read()
@@ -58,12 +59,51 @@ def get_paper(paper_id: str):
     return p
 
 
+@router.get("/papers/{paper_id}/pdf")
+def get_paper_pdf(paper_id: str):
+    """原文 PDF（前端 PdfAnchored 画布渲染 + bbox 高亮框的取件源）。"""
+    rows = db.query("SELECT file_path FROM papers WHERE id=?", (paper_id,))
+    if not rows:
+        raise HTTPException(404, "not found")
+    path = Path(rows[0]["file_path"])
+    if not path.exists():
+        raise HTTPException(404, "PDF 文件不存在")
+    return FileResponse(path, media_type="application/pdf", filename=path.name)
+
+
+@router.get("/papers/{paper_id}/figure/{figure_id}")
+def get_paper_figure(paper_id: str, figure_id: str):
+    """MinerU 裁图（figures[].image_path，校验路径必须落在解析输出目录内）。"""
+    rows = db.query("SELECT docir_path FROM papers WHERE id=?", (paper_id,))
+    if not rows or not rows[0]["docir_path"]:
+        raise HTTPException(404, "not found")
+    data = json.loads(Path(rows[0]["docir_path"]).read_text(encoding="utf-8"))
+    fig = next((f for f in data.get("figures", []) if f.get("id") == figure_id), None)
+    img = fig.get("image_path") if fig else None
+    if not img:
+        raise HTTPException(404, "figure 无裁图")
+    path = Path(img)
+    from ..config import DOCIR_DIR
+    if not path.exists() or DOCIR_DIR.parent not in path.resolve().parents:
+        raise HTTPException(404, "裁图文件不存在")
+    return FileResponse(path)
+
+
 @router.get("/papers/{paper_id}/docir")
-def get_docir(paper_id: str, page: int | None = None):
+def get_docir(paper_id: str, page: int | None = None, outline: bool = False):
     rows = db.query("SELECT docir_path FROM papers WHERE id=?", (paper_id,))
     if not rows or not rows[0]["docir_path"]:
         raise HTTPException(404, "未解析或不存在")
     data = json.loads(Path(rows[0]["docir_path"]).read_text(encoding="utf-8"))
+    if outline:
+        # 按需加载（4.3）：超长文档首屏只回大纲级载荷（几 KB），正文按页拉取
+        return {"meta": data.get("meta", {}),
+                "toc": data.get("toc", []),
+                "references": data.get("references", []),
+                "figures": data.get("figures", []),
+                "pages": sorted({b.get("page", 0) for b in data.get("blocks", [])}),
+                "block_count": len(data.get("blocks", [])),
+                "tables_count": len(data.get("tables", []))}
     if page is not None:
         data["blocks"] = [b for b in data["blocks"] if b["page"] == page]
         data["tables"] = [t for t in data["tables"] if t["page"] == page]
@@ -138,7 +178,14 @@ def chat(body: ChatBody):
 @router.get("/audit/prompts")
 def audit_prompts(limit: int = 50):
     rows = db.query("SELECT * FROM qa_logs ORDER BY ts DESC LIMIT ?", (min(limit, 200),))
+    versions = db.query(
+        "SELECT COALESCE(NULLIF(prompt_version,''),'legacy') AS version, COUNT(*) AS n "
+        "FROM qa_logs GROUP BY version ORDER BY n DESC")
+    catalog = prompts_mod.catalog()
     return {"logs": [dict(r) for r in rows],
+            "prompt_versions": [dict(r) for r in versions],
+            "prompt_catalog": catalog,
+            "prompt_variant": settings.prompt_variant,
             "llm_configured": bool(llm._endpoint()),
             "llm_available": llm.available(),
             "dense_enabled": settings.dense_enabled,

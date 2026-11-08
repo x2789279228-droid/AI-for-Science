@@ -7,9 +7,9 @@
 """
 from __future__ import annotations
 
+from ..rag.answering import COMPARE_REFUSAL
 from .state import AgentState, trace_card
 from .tools import call_tool
-from ..rag.answering import COMPARE_REFUSAL
 
 FROM_ROUTER = "router"
 
@@ -258,7 +258,6 @@ def viz_extract_node(state: AgentState, config=None) -> dict:
                 "failures": failures, "trace": [card]}
 
     spec_res: dict | None = None
-    used_table: dict | None = None
     reasons: list[str] = []
     for t in all_tables:
         # 数值列探测：默认 y=1；若该列非数值，逐列尝试（上限 4 列）
@@ -269,7 +268,6 @@ def viz_extract_node(state: AgentState, config=None) -> dict:
                 _emit(config, r["trace_card"])
             if r["ok"] and isinstance(r["data"], dict) and r["data"].get("valid"):
                 spec_res = r["data"]
-                used_table = t
                 break
             reasons.append(str((r.get("data") or {}).get("reason") or r.get("error", ""))[:60])
         if spec_res:

@@ -22,6 +22,7 @@ os.environ["DEEPSEEK_API_KEY"] = ""
 os.environ["MINIMAX_API_KEY"] = ""
 os.environ["LLM_BASE_URL"] = ""
 os.environ["EMBEDDING_BACKEND"] = "off"
+os.environ["MINERU_ENABLED"] = "off"  # 密闭测试禁用 MinerU 子进程
 os.environ["EMBEDDING_API_KEY"] = ""
 os.environ.pop("SCHOLAR_FAIL_AT", None)
 

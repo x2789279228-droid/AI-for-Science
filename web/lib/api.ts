@@ -21,15 +21,19 @@ export interface Paper {
 export interface Hit {
   chunk_id: string;
   paper_id: string;
-  page: number;
+  page: number;            // 1 基人读页码（后端 SSE 统一输出）
   section_path: string;
   score: number;
   rrf?: number;
+  rerank?: number;         // bge-reranker 精排分（配置了 rerank key 时存在）
+  kind?: string;           // detail | summary | table
+  aspect?: string;
   text: string;
 }
 
 export interface Support {
-  page: number;
+  eid?: string;            // 证据编号（E1..En）
+  page: number;            // 1 基人读页码
   section_path: string;
   chunk_id: string;
   quote: string;
@@ -38,8 +42,23 @@ export interface Support {
 
 export interface Claim {
   text: string;
-  status: "supported" | "unsupported";
+  status: "supported" | "needs_check" | "unsupported";
   support: Support[];
+  quote_status?: "verified" | "unverified";   // L2 引文子串校验结果
+  quote_coverage?: number;
+  unverified_numbers?: string[];              // L3：未在证据中命中的数值/型号
+  semantic_status?: "partial";                // L4：部分支撑
+}
+
+/** final.anchors：E# → 块级溯源锚点（页码 1 基，bbox 归一化 0-1）。 */
+export interface Anchor {
+  page: number;
+  section_path: string;
+  paper_id: string;
+  paper_label: string;
+  bbox: number[];
+  chunk_id: string;
+  block_ids: string[];
 }
 
 export interface TraceCard {
@@ -62,6 +81,7 @@ export interface FinalEvent {
   // 多智能体（协议向后兼容新增键）
   agent?: string;          // 实际承接的 Agent（reader/compare/…）
   handoffs?: Handoff[];    // Agent 交接日志
+  anchors?: Record<string, Anchor>;  // E# → 块级锚点（引用点击跳 PDF + bbox 高亮）
   compare_table?: CompareTable;
   graph_data?: GraphData;
   outline?: Outline;
@@ -312,4 +332,296 @@ export async function fetchQaTrace(traceId: string): Promise<QaTrace> {
   const r = await fetch(`${API}/api/qa/${encodeURIComponent(traceId)}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+// ---------------- 4.7 翻译与阅读体验 ----------------
+
+export interface TranslationEntry { text: string; format_ok: boolean }
+export interface TermHit { term: string; translation: string }
+export interface SelectionResult {
+  translation: string; term_hit?: TermHit | null; ok: boolean; reason?: string;
+}
+export interface TermEntry { id: number; term: string; translation: string; source: string }
+/** DocIR.references 条目（[n] 双向跳转数据源）。 */
+export interface RefEntry { index: number; raw?: string; title?: string; arxiv_id?: string; doi?: string }
+
+export interface TranslateHandlers {
+  tDelta?: (d: { block_id: string; text: string; format_ok: boolean; done: number; total: number }) => void;
+  final?: (d: { done: number; total: number; cached: number; failed: number; format_bad: number; stopped?: boolean }) => void;
+  error?: (d: { message: string }) => void;
+  done?: () => void;
+}
+
+/** POST SSE 流式翻译（block 级增量 t_delta → final 统计 → done）。 */
+export async function streamTranslate(
+  paperId: string,
+  body: { lang?: string; page?: number; section?: string; block_ids?: string[] },
+  on: TranslateHandlers
+): Promise<void> {
+  const resp = await fetch(`${API}/api/papers/${encodeURIComponent(paperId)}/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          const data = JSON.parse(line.slice(6));
+          if (event === "t_delta") on.tDelta?.(data);
+          else if (event === "final") on.final?.(data);
+          else if (event === "error") on.error?.(data);
+          else if (event === "done") on.done?.();
+        }
+      }
+      event = "";
+    }
+  }
+}
+
+/** 拉取已缓存译文（可中断续译：重进页面秒出已完成块）。 */
+export async function fetchTranslation(
+  paperId: string, lang = "zh"
+): Promise<Record<string, TranslationEntry>> {
+  const r = await fetch(
+    `${API}/api/papers/${encodeURIComponent(paperId)}/translation?lang=${lang}`,
+    { cache: "no-store" });
+  if (!r.ok) return {};
+  return (await r.json()).blocks ?? {};
+}
+
+/** 划词翻译：上下文感知短译 + 术语命中。 */
+export async function translateSelection(text: string, context = ""): Promise<SelectionResult> {
+  const r = await fetch(`${API}/api/translate/selection`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, context }),
+  });
+  if (!r.ok) return { translation: "", ok: false };
+  return r.json();
+}
+
+export async function fetchTerminology(): Promise<TermEntry[]> {
+  const r = await fetch(`${API}/api/terminology`, { cache: "no-store" });
+  if (!r.ok) return [];
+  return (await r.json()).terms ?? [];
+}
+
+export async function addTerm(term: string, translation: string): Promise<TermEntry[]> {
+  const r = await fetch(`${API}/api/terminology`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ term, translation }),
+  });
+  return r.ok ? (await r.json()).terms ?? [] : [];
+}
+
+// ---------------- 4.4 Discover 闭环 ----------------
+
+export interface ArxivEntry {
+  arxiv_id: string; title: string; authors: string[]; abstract: string;
+  pdf_url: string; published: string;
+}
+
+export interface ReproRepo {
+  repo: string; stars: number; pushed_at: string; license: string;
+  url: string; repro_score?: number;
+}
+
+export interface DiscoverHandlers {
+  status?: (d: { stage: string; note: string; arxiv_id?: string; paper_id?: string; query?: string }) => void;
+  results?: (d: { query: string; entries: ArxivEntry[]; source: string }) => void;
+  final?: (d: Record<string, unknown> & { note?: string }) => void;
+  error?: (d: { message: string }) => void;
+  done?: () => void;
+}
+
+/** POST SSE：搜索（auto=true 时自动下载 top1 → 解析 → kb_search 证据）。 */
+export async function streamDiscover(
+  query: string, on: DiscoverHandlers, auto = false, maxResults = 6
+): Promise<void> {
+  const resp = await fetch(`${API}/api/discover`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, auto, max_results: maxResults }),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          const data = JSON.parse(line.slice(6));
+          if (event === "status") on.status?.(data);
+          else if (event === "discover_results") on.results?.(data);
+          else if (event === "final") on.final?.(data);
+          else if (event === "error") on.error?.(data);
+          else if (event === "done") on.done?.();
+        }
+      }
+      event = "";
+    }
+  }
+}
+
+/** 勾选下载：下载 → 入库 → 等解析。 */
+export async function discoverDownload(arxivId: string): Promise<{
+  paper_id: string; job_id: string | null; dedup?: string;
+  existing_title?: string; parse?: { status: string; message?: string };
+}> {
+  const r = await fetch(`${API}/api/discover/download`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ arxiv_id: arxivId }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/** 复现性查分（github_repro 工具）。 */
+export async function fetchRepro(title: string): Promise<{ ok: boolean; repos: ReproRepo[]; source?: string }> {
+  const r = await fetch(
+    `${API}/api/discover/repro?title=${encodeURIComponent(title)}`, { cache: "no-store" });
+  if (!r.ok) return { ok: false, repos: [] };
+  return r.json();
+}
+
+// ---------------- 4.6 图谱挖掘与学术洞察 ----------------
+
+export interface GraphNode {
+  paper_id: string; title: string; pagerank: number; in_degree: number; out_degree: number;
+  betweenness: number; year: number | null; community: number; role: string;
+  time_rank?: number | null;
+}
+export interface GraphEdgeW {
+  source: string; target: string; weight: number;
+  examples?: { sentence: string; section: string; cls: string; w: number }[];
+}
+export interface GraphCommunity { id: number; size: number; top_paper: string | null }
+export interface GraphInsights {
+  cornerstone: GraphNode[]; peripheral: GraphNode[];
+  class_stat?: Record<string, number>; mention_count?: number;
+}
+export interface FullGraph {
+  backend: string; edge_count: number; external_count: number;
+  nodes: GraphNode[]; edges: GraphEdgeW[]; communities: GraphCommunity[];
+  modularity: number | null; insights: GraphInsights;
+}
+
+export async function fetchGraph(paperIds?: string[]): Promise<FullGraph> {
+  const q = paperIds?.length ? `?paper_ids=${paperIds.join(",")}` : "";
+  const r = await fetch(`${API}/api/graph${q}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export interface SummaryHandlers {
+  status?: (d: { stage: string; note: string }) => void;
+  delta?: (d: { text: string }) => void;
+  final?: (d: { summary: string; claims: Record<string, unknown>[]; anchors: Record<string, unknown>; guardrails: string[] }) => void;
+  error?: (d: { message: string }) => void;
+  done?: () => void;
+}
+
+/** 社区综述 SSE（每句带 [E#]，经 ClaimTrace 校验）。 */
+export async function streamCommunitySummary(
+  paperIds: string[], communityId: number, on: SummaryHandlers
+): Promise<void> {
+  const resp = await fetch(`${API}/api/graph/summary`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds, community_id: communityId }),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          const data = JSON.parse(line.slice(6));
+          if (event === "status") on.status?.(data);
+          else if (event === "delta") on.delta?.(data);
+          else if (event === "final") on.final?.(data);
+          else if (event === "error") on.error?.(data);
+          else if (event === "done") on.done?.();
+        }
+      }
+      event = "";
+    }
+  }
+}
+
+export interface IdeaItem {
+  id: number; idea_text: string; source_paper: string;
+  anchor: { page: number | null; bbox: number[]; section_path: string };
+  successors: string[]; cited_count: number;
+  status: string; reason: string;
+  evidence: { paper_id: string; page: number; text: string }[];
+}
+export interface IdeasHandlers {
+  status?: (d: { stage: string; note: string }) => void;
+  final?: (d: { solved: IdeaItem[]; open: IdeaItem[]; total: number }) => void;
+  error?: (d: { message: string }) => void;
+  done?: () => void;
+}
+
+/** Future Work 去重过滤 SSE。 */
+export async function streamIdeas(paperIds: string[], on: IdeasHandlers): Promise<void> {
+  const resp = await fetch(`${API}/api/ideas`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds }),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          const data = JSON.parse(line.slice(6));
+          if (event === "status") on.status?.(data);
+          else if (event === "final") on.final?.(data);
+          else if (event === "error") on.error?.(data);
+          else if (event === "done") on.done?.();
+        }
+      }
+      event = "";
+    }
+  }
 }

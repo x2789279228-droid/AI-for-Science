@@ -18,10 +18,11 @@ os.environ["DEEPSEEK_API_KEY"] = ""
 os.environ["MINIMAX_API_KEY"] = ""
 os.environ["LLM_BASE_URL"] = ""
 os.environ["EMBEDDING_BACKEND"] = "off"
+os.environ["MINERU_ENABLED"] = "off"  # 密闭测试禁用 MinerU 子进程
 os.environ["EMBEDDING_API_KEY"] = ""
 
-from app.main import app  # noqa: E402  （必须在 env 之后导入）
-from tests.fixtures_pdf import make_paper_pdf  # noqa: E402
+from app.main import app
+from tests.fixtures_pdf import make_paper_pdf
 
 TITLE = "Attention Is All You Need"
 
@@ -104,7 +105,21 @@ def test_2_qa_with_citations(client: TestClient):
     for c in final["claims"]:
         assert c["support"], f"论断缺少支撑: {c['text'][:50]}"
     if final["mode"] == "extractive":
-        assert "[^p" in final["answer"]
+        assert "[E" in final["answer"]
+    # 四层防御②：final 携带 E# → 块级锚点（页码 1 基、bbox 完整）
+    assert isinstance(final.get("anchors", {}), dict)
+    for a in final["anchors"].values():
+        assert a["page"] >= 1 and len(a["bbox"]) == 4 and a["paper_id"]
+
+
+def test_2b_pdf_endpoint(client: TestClient):
+    """原文 PDF 服务：前端 PdfAnchored 画布的取件源（点击引用 → 跳页 + bbox 高亮）。"""
+    paper_id = globals().get("PAPER_ID")
+    r = client.get(f"/api/papers/{paper_id}/pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/pdf")
+    assert r.content[:5] == b"%PDF-"
+    assert client.get("/api/papers/p_nonexistent/pdf").status_code == 404
 
 
 def test_3_semantic_dedup(client: TestClient):

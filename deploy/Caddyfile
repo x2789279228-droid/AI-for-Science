@@ -1,0 +1,14 @@
+# 线上演示档：Caddy 自动 HTTPS（有公网域名时替换 demo.example.com）
+# 局域网演示用 http（评委机同网段直连 :3000/:8100 即可，见 README 运行手册）
+demo.example.com {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8100 {
+            flush_interval -1          # SSE：立即冲刷，禁缓冲（与 nginx proxy_buffering off 等价）
+        }
+    }
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+}

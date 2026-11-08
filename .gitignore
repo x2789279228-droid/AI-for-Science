@@ -24,5 +24,14 @@ Thumbs.db
 
 # 测试临时数据目录与构建产物
 api/tests/_agt_*/
+api/tests/_ses_*/
+api/tests/_prs_*/
+api/tests/_cases_*/
+api/tests/_p43_*/
+api/tests/_pmp_*/
+api/tests/_trl_*/
+api/tests/_ins_*/
+api/tests/_tl4_*/
 api/tests/_dbg_*/
 web/tsconfig.tsbuildinfo
+api/scripts/eval_quick_last.json

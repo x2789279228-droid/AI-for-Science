@@ -53,3 +53,45 @@ def make_paper_pdf(path: Path, title: str, body_facts: list[str], refs: list[str
 
     doc.save(str(path))
     doc.close()
+
+
+def make_scanned_pdf(path: Path, title: str, body_facts: list[str],
+                     refs: list[str] | None = None) -> None:
+    """扫描件 fixture：矢量文本页渲染成位图重灌 → 无文本层（触发扫描件路由）。"""
+    tmp = Path(str(path) + ".src.pdf")
+    make_paper_pdf(tmp, title, body_facts=body_facts, refs=refs or ["Sample Ref. 2024."])
+    src = fitz.open(tmp)
+    dst = fitz.open()
+    for page in src:
+        pix = page.get_pixmap(dpi=144)
+        npage = dst.new_page(width=page.rect.width, height=page.rect.height)
+        npage.insert_image(npage.rect, pixmap=pix)
+    dst.save(str(path))
+    dst.close()
+    src.close()
+    tmp.unlink()
+
+
+def make_long_pdf(path: Path, pages: int = 220, facts_per_page: int = 4) -> None:
+    """长文档 fixture：pages 页矢量 PDF，带书签章节（每 20 页一章）→ 触发长文档路由。"""
+    doc = fitz.open()
+    W, H = 595, 842
+    toc_entries = []
+    for i in range(pages):
+        page = doc.new_page(width=W, height=H)
+        if i % 20 == 0:
+            chap = f"Chapter {i // 20 + 1}: Section {i // 20 + 1}"
+            page.insert_text((72, 60), chap, fontsize=12, fontname="hebo")
+            toc_entries.append([1, chap, i + 1])   # get_toc 页码 1 基
+            y = 84
+        else:
+            y = 60
+        for k in range(facts_per_page):
+            page.insert_textbox(fitz.Rect(72, y, W - 72, y + 130),
+                                f"Page {i + 1} paragraph {k + 1}: the model was trained on "
+                                f"{k + 1} GPUs and reaches {20 + k}.5 BLEU on translation.",
+                                fontsize=9)
+            y += 140
+    doc.set_toc(toc_entries)
+    doc.save(str(path))
+    doc.close()

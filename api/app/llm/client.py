@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import httpx
 
@@ -28,13 +29,13 @@ def _endpoint() -> tuple[str, str, str] | None:
 
 def chat(messages: list[dict], model: str = "", temperature: float | None = None,
          max_tokens: int = 2048, json_mode: bool = False, module: str = "chat",
-         audit_prompt: str = "") -> LLMResult:
-    """同步调用。失败返回 {"text":"","error":...}；全程落审计日志。"""
+         audit_prompt: str = "", prompt_version: str = "") -> LLMResult:
+    """同步调用。失败返回 {"text":"","error":...}；全程落审计日志（含 prompt 版本号）。"""
     ep = _endpoint()
     t0 = time.time()
     if not ep:
         db.log_qa(module=module, question=audit_prompt[:200], prompt=audit_prompt,
-                  guardrail="llm_unavailable_fallback")
+                  guardrail="llm_unavailable_fallback", prompt_version=prompt_version)
         return LLMResult(text="", error="no_llm_endpoint")
     base_url, api_key, default_model = ep
     model = model or default_model
@@ -61,29 +62,81 @@ def chat(messages: list[dict], model: str = "", temperature: float | None = None
         db.log_qa(module=module, model=model, prompt=audit_prompt,
                   prompt_tokens=usage.get("prompt_tokens", 0),
                   completion_tokens=usage.get("completion_tokens", 0),
-                  latency_ms=int((time.time() - t0) * 1000))
+                  latency_ms=int((time.time() - t0) * 1000),
+                  prompt_version=prompt_version)
         return LLMResult(text=text, model=model,
                          prompt_tokens=usage.get("prompt_tokens", 0),
                          completion_tokens=usage.get("completion_tokens", 0))
     except Exception as e:  # noqa: BLE001 —— 任何 LLM 故障都必须降级而非 500
         db.log_qa(module=module, model=model, prompt=audit_prompt,
                   guardrail=f"llm_error:{type(e).__name__}",
-                  latency_ms=int((time.time() - t0) * 1000))
+                  latency_ms=int((time.time() - t0) * 1000),
+                  prompt_version=prompt_version)
         return LLMResult(text="", error=str(e))
 
 
+def chat_json_validated(messages: list[dict], model_cls: Any, *, retries: int = 1,
+                        module: str = "chat", audit_prompt: str = "",
+                        prompt_version: str = "", **kw) -> dict | None:
+    """结构化输出统一入口：json_mode → parse_json → Pydantic 校验 → 失败带错误摘要重试。
+
+    返回校验并矫正后的 dict（model_dump：宽松入参如 ["E1"] → [1]），全部失败返回 None，
+    调用方走既有降级通道。修复重试把校验错误摘要注入 follow-up，定向纠错而非盲重试。
+    """
+    from pydantic import ValidationError
+
+    base = list(messages)
+    last_err = ""
+    last_text = ""
+    for attempt in range(max(1, retries + 1)):
+        res = chat(base, json_mode=True, module=module, audit_prompt=audit_prompt,
+                   prompt_version=prompt_version, **kw)
+        # 兼容 dict / LLMResult 两种返回（测试 stub 常以纯 dict 替身注入）
+        text = res.get("text", "") if isinstance(res, dict) else ""
+        data = parse_json(text) if text else None
+        if data is None:
+            last_err = "输出不是可解析的 JSON" if text else f"LLM 调用失败: {res.get('error', '')}"
+            last_text = text
+        else:
+            try:
+                # model_dump() 返回矫正后的数据（如 evidence_ids ["E1"]→[1]），而非原始输入
+                return model_cls.model_validate(data).model_dump()
+            except ValidationError as e:
+                errs = "; ".join(
+                    ".".join(str(p) for p in err["loc"]) + f": {err['msg']}"
+                    for err in e.errors()[:3])
+                last_err = f"JSON 未通过 schema 校验：{errs}"
+                last_text = text
+        if attempt < retries:
+            base = base + [
+                {"role": "assistant", "content": (last_text or "")[:2000]},
+                {"role": "user",
+                 "content": f"你的 JSON 输出不合法：{last_err}。"
+                            "请只输出修正后的合法 JSON，不要解释、不要输出 Markdown 代码块。"},
+            ]
+    return None
+
+
 def stream_chat(messages: list[dict], model: str = "", temperature: float | None = None,
-                max_tokens: int = 2048) -> Generator[str, None, None]:
-    """SSE 流式：逐 token 产出 delta 文本；失败时产出空流（上层降级）。"""
+                max_tokens: int = 2048, module: str = "", audit_prompt: str = "",
+                prompt_version: str = "") -> Generator[str, None, None]:
+    """SSE 流式：逐 token 产出 delta 文本；失败时产出空流（上层降级）。
+
+    传入 module 时在流结束（finally）落一条 qa_logs 审计（guardrail=stream），
+    让主问答路径的 prompt 版本号也可审计——此前流式路径不落审计，是审计盲区。
+    """
     ep = _endpoint()
     if not ep:
         return
     base_url, api_key, default_model = ep
-    payload = {"model": model or default_model, "messages": messages, "stream": True,
+    model = model or default_model
+    payload = {"model": model, "messages": messages, "stream": True,
                "temperature": settings.llm_temperature if temperature is None else temperature,
                "max_tokens": max_tokens}
     if settings.llm_thinking_disabled:
         payload["thinking"] = {"type": "disabled"}
+    t0 = time.time()
+    parts: list[str] = []
     try:
         with httpx.stream("POST", f"{base_url}/chat/completions",
                           headers={"Authorization": f"Bearer {api_key}"},
@@ -99,14 +152,24 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                     delta = json.loads(body)["choices"][0].get("delta", {})
                     piece = delta.get("content")
                     if piece:
+                        parts.append(piece)
                         yield piece
-                except Exception:
+                except Exception:  # noqa: BLE001, S112 —— 单块解析失败跳过，流不中断
                     continue
-    except Exception:
-        return
+    except Exception:  # noqa: BLE001, S110 —— 流式失败返回空，调用方走非流式降级
+        pass
+    finally:
+        if module:
+            try:
+                db.log_qa(module=module, model=model, question=audit_prompt[:200],
+                          prompt="[stream]", answer="".join(parts)[:8000],
+                          latency_ms=int((time.time() - t0) * 1000),
+                          guardrail="stream", prompt_version=prompt_version)
+            except Exception:  # noqa: BLE001, S110 —— 审计失败不影响已产出的流
+                pass
 
 
-_JSON_BLOCK = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.S)
+_JSON_BLOCK = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
 
 # 连通性探测缓存：key 存在 ≠ key 有效，失效 key 必须真实降级
 _ping_cache: dict[str, Any] = {"ts": 0.0, "ok": False}
@@ -134,13 +197,13 @@ def parse_json(text: str) -> dict | None:
     candidate = m.group(1) if m else text
     try:
         return json.loads(candidate)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 —— 非 JSON 文本进入截取提取
         pass
     start = candidate.find("{")
     end = candidate.rfind("}")
     if start >= 0 and end > start:
         try:
             return json.loads(candidate[start:end + 1])
-        except Exception:
+        except Exception:  # noqa: BLE001 —— 截取仍非 JSON → 调用方走降级
             return None
     return None

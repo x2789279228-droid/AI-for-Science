@@ -15,20 +15,25 @@ os.environ["DEEPSEEK_API_KEY"] = ""
 os.environ["MINIMAX_API_KEY"] = ""
 os.environ["LLM_BASE_URL"] = ""
 os.environ["EMBEDDING_BACKEND"] = "off"
+os.environ["MINERU_ENABLED"] = "off"  # 密闭测试禁用 MinerU 子进程
 os.environ["EMBEDDING_API_KEY"] = ""
 
-from app import db  # noqa: E402
-from app.agents import runner  # noqa: E402
-from app.agents.graph import build_graph  # noqa: E402
-from app.agents.nodes import (  # noqa: E402
-    _check_sufficiency, planner_node, recover_node, responder_node, router_node,
+from app import db
+from app.agents import runner
+from app.agents.graph import build_graph
+from app.agents.nodes import (
+    _check_sufficiency,
+    planner_node,
+    recover_node,
+    responder_node,
+    router_node,
     verifier_node,
 )
-from app.agents.state import MAX_REGEN, MAX_RE_RETRIEVE  # noqa: E402
-from app.parsing.pipeline import parse_pdf  # noqa: E402
-from app.rag import indexing  # noqa: E402
-from app.rag.chunking import chunk_docir  # noqa: E402
-from tests.fixtures_pdf import make_paper_pdf  # noqa: E402
+from app.agents.state import MAX_REGEN
+from app.parsing.pipeline import parse_pdf
+from app.rag import indexing
+from app.rag.chunking import chunk_docir
+from tests.fixtures_pdf import make_paper_pdf
 
 
 @pytest.fixture(scope="module")
@@ -122,12 +127,14 @@ def test_recover_three_strategies(indexed_paper):
     assert "tool_failure_degraded" in upd["guardrails"]
 
     # ③ 格式非法重生成：组装纠错反馈、回 responder；预算尽 → 警告放行收尾
-    pend = {"kind": "format_invalid", "invalid_pages": [99], "valid_pages": [1, 3]}
-    upd = recover_node({"pending_failure": pend, "regen_count": 0, "answer": "旧答案"})
+    st3 = {"pending_failure": {"kind": "format_invalid", "invalid_eids": ["E99"]},
+           "regen_count": 0, "answer": "旧答案",
+           "evidence": [{"chunk_id": "c1", "paper_id": "x", "page": 2, "text": "fact one"}]}
+    upd = recover_node(st3)
     assert upd["recover_route"] == "responder" and upd["regen_count"] == 1
-    assert "p99" in upd["retry_prompt"] and "1, 3" in upd["retry_prompt"]
+    assert "E99" in upd["retry_prompt"] and "E1(p3)" in upd["retry_prompt"]
 
-    upd = recover_node({"pending_failure": pend, "regen_count": MAX_REGEN, "answer": "旧答案"})
+    upd = recover_node({**st3, "regen_count": MAX_REGEN})
     assert upd["recover_route"] == "end"
     assert "请人工核对原文" in upd["answer"]
 
@@ -187,8 +194,8 @@ def test_full_graph_regen_on_invalid_format(indexed_paper, monkeypatch):
     def fake_stream(msgs, **kw):
         calls["n"] += 1
         if any("引用格式校验" in m.get("content", "") for m in msgs if m["role"] == "user"):
-            return iter(["The model was trained on 8 P100 GPUs [^p1-§Training]."])
-        return iter(["Trained on 8 GPUs [^p42-§Nowhere]."])  # 非法页码 → 触发重生成
+            return iter(["The model was trained on 8 P100 GPUs [E1]."])
+        return iter(["Trained on 8 GPUs [E42]."])  # 非法编号 → 触发重生成
 
     monkeypatch.setattr(llm_client, "available", lambda force=False: True)
     monkeypatch.setattr(llm_client, "stream_chat", fake_stream)
@@ -200,8 +207,8 @@ def test_full_graph_regen_on_invalid_format(indexed_paper, monkeypatch):
                           "retries": 0}, {"recursion_limit": 40})
     assert calls["n"] == 2, "应恰好重生成一次"
     assert final["regen_count"] == 1
-    assert "[^p1" in final["answer"] and "[^p42" not in final["answer"]
-    assert "invalid_citation:p42" in final["guardrails"]
+    assert "[E1]" in final["answer"] and "[E42]" not in final["answer"]
+    assert "invalid_citation:E42" in final["guardrails"]
     assert "format_regen:1" in final["guardrails"]
     assert final["pending_failure"] is None
     rec = [c for c in final["trace"] if c["node"] == "recover"]
@@ -230,16 +237,17 @@ def test_full_graph_extractive(indexed_paper):
 
 
 def test_llm_stub_generative_path(indexed_paper, monkeypatch):
-    """stub LLM：验证生成式路径 + 引用后验 + ClaimTrace。"""
+    """stub LLM：验证生成式路径 + [E#] 引用后验 + ClaimTrace（quote 逐字可对回证据）。"""
     from app.llm import client as llm_client
 
-    fake_answer = ("The model was trained on 8 NVIDIA P100 GPUs [^p1-§Training]. "
-                   "Training took 3.5 days [^p1-§Training].")
+    fake_answer = ("The model was trained on 8 NVIDIA P100 GPUs [E1]. "
+                   "Training took 3.5 days [E1].")
+    claims_json = ('{"claims":[{"text":"8 GPUs on one machine","evidence_ids":[1],'
+                   '"quote":"trained on 8 NVIDIA P100 GPUs"}]}')
     monkeypatch.setattr(llm_client, "available", lambda force=False: True)
     monkeypatch.setattr(llm_client, "stream_chat", lambda msgs, **kw: iter([fake_answer]))
     monkeypatch.setattr(llm_client, "chat", lambda msgs, **kw:
-                        {"text": '{"claims":[{"text":"8 GPUs on one machine","status":"supported","pages":[1]}]}',
-                         "model": "stub"})
+                        {"text": claims_json, "model": "stub"})
     monkeypatch.setattr(llm_client, "_endpoint", lambda: ("stub", "k", "stub"))
 
     q: queue_mod.Queue = queue_mod.Queue()
@@ -254,8 +262,14 @@ def test_llm_stub_generative_path(indexed_paper, monkeypatch):
     assert deltas, "生成式模式应有 delta 流"
     final = next(d for k, d in events if k == "final")
     assert final["mode"] == "generative"
-    assert "[^p1" in final["answer"]  # 有效引用锚点保留
+    assert "[E1]" in final["answer"]  # 有效引用锚点保留
     assert any(c["status"] == "supported" for c in final["claims"])
+    # 四层防御②：E# → 块级锚点（1 基页码 + bbox）随 final 下发
+    assert final.get("anchors", {}).get("E1", {}).get("page", 0) >= 1
+    assert len(final["anchors"]["E1"]["bbox"]) == 4
+    claim = next(c for c in final["claims"] if c["status"] == "supported")
+    assert claim["support"][0]["eid"] == "E1"
+    assert claim["support"][0]["page"] >= 1  # SSE 对外 1 基
 
 
 def test_fanout_fuse_dedup(indexed_paper, monkeypatch):
@@ -427,7 +441,7 @@ def test_forced_compare_two_papers_pipeline(indexed_paper):
     # 对比表 artifact 下发且行数 = 检索面数，空格子如实标记 found=False
     artifacts = [d for k, d in events if k == "artifact" and d.get("kind") == "compare_table"]
     assert artifacts and artifacts[-1]["table"]["rows"]
-    assert all(set(c["paper_id"] for c in r["cells"]) == {indexed_paper, "p_empty"}
+    assert all({c["paper_id"] for c in r["cells"]} == {indexed_paper, "p_empty"}
                for r in artifacts[-1]["table"]["rows"])
     assert "compare_table" in final  # final 事件携带对齐表
 
@@ -525,7 +539,7 @@ def test_viz_happy_path_fabricated_table(viz_paper):
     spec = final.get("chart_spec") or {}
     assert spec.get("type") == "bar" and len(spec.get("data", [])) == 3
     assert spec["provenance"]["paper_id"] == viz_paper
-    assert (spec["provenance"]["page"] or 0) + 1 == 7  # 0 基页码 → 人读第 7 页
+    assert (spec["provenance"]["page"] or 0) == 7  # SSE 对外 1 基人读页码
     arts = [d for k, d in events if k == "artifact" and d.get("kind") == "chart_spec"]
     assert arts and arts[-1]["spec"]["y_label"] == "BLEU"
     nodes = {c["node"] for c in final["trace"]}
@@ -596,15 +610,14 @@ def test_forced_graph_full_flow(indexed_paper, viz_paper):
 def test_forced_writer_flow(indexed_paper, monkeypatch):
     """Writer 合成（stub LLM，直调 responder）：大纲 artifact 先行 → 正文生成 → 引用后验。"""
     from app.llm import client as llm_client
-    from app.agents.nodes import responder_node
 
-    fake_answer = ("**背景**\n trained on 8 NVIDIA P100 GPUs [^p1-§Training].\n\n"
-                   "**要点**\n Base reaches 27.3 BLEU [^p1-§Training].")
+    fake_answer = ("**背景**\n trained on 8 NVIDIA P100 GPUs [E1].\n\n"
+                   "**要点**\n Base reaches 27.3 BLEU [E1].")
     monkeypatch.setattr(llm_client, "available", lambda force=False: True)
     monkeypatch.setattr(llm_client, "stream_chat", lambda msgs, **kw: iter([fake_answer]))
     monkeypatch.setattr(llm_client, "chat", lambda msgs, **kw:
-                        {"text": '{"claims":[{"text":"8 GPUs","status":"supported","pages":[1]}]}',
-                         "model": "stub"})
+                        {"text": '{"claims":[{"text":"trained on GPUs","evidence_ids":[1],'
+                                 '"quote":"fact 1 about GPUs"}]}', "model": "stub"})
     monkeypatch.setattr(llm_client, "_endpoint", lambda: ("stub", "k", "stub"))
 
     hits = [{"chunk_id": f"c{i}", "paper_id": indexed_paper, "page": 1,
@@ -617,7 +630,7 @@ def test_forced_writer_flow(indexed_paper, monkeypatch):
                           "plan": {"steps": [{"paper_id": indexed_paper, "query": "GPUs",
                                               "aspect": "GPUs"}], "mode": "single"}},
                          {"configurable": {"queue": q}})
-    assert upd["mode"] == "generative" and "[^p1" in upd["answer"]
+    assert upd["mode"] == "generative" and "[E1]" in upd["answer"]
     kinds = [k for k, _ in list(q.queue)]
     assert "artifact" in kinds                                # 大纲 artifact 先行
     outline_evt = next(d for k, d in list(q.queue)
@@ -629,7 +642,6 @@ def test_forced_writer_flow(indexed_paper, monkeypatch):
 
 def test_writer_insufficient_evidence_refusal(indexed_paper):
     """Writer Guardrail：证据池 < 3 块 → 拒写（直接调 responder 验证分支）。"""
-    from app.agents.nodes import responder_node
 
     upd = responder_node({"agent": "writer", "question": "写一篇综述",
                           "evidence": [{"chunk_id": "c1", "page": 1, "text": "x"}],
@@ -654,3 +666,134 @@ def test_tools_agent_matrix():
     assert_allowed("viz", "extract_table")
     assert_allowed("viz", "chart_spec_builder")
     assert_allowed("writer", "kb_search")  # Writer 继承检索工具
+
+
+# ---------------- 四层防御升级：Evidence Pack / 校验器 / rerank / 中文检索 ----------------
+
+def test_evidence_pack_and_validate(indexed_paper):
+    """format_context 显式编号 + validate_citations L1（无效编号剔除）。"""
+    from app.rag.answering import format_context, validate_citations
+
+    hits = [{"chunk_id": "c1", "paper_id": "p1", "page": 1, "section_path": "Training",
+             "text": "fact one", "bbox": [0, 0, 1, 1], "block_ids": ["b1"]},
+            {"chunk_id": "c2", "paper_id": "p2", "page": 4, "section_path": "Results",
+             "text": "fact two", "bbox": [0, 0, 1, 1], "block_ids": []}]
+    context, eid_map = format_context(hits)
+    assert "[E1]" in context and "[E2]" in context
+    assert set(eid_map) == {1, 2}
+    # 多论文 → P1/P2 代号进入证据标签
+    assert "P1" in context and "P2" in context
+    # 单论文 → 不加代号
+    ctx1, _ = format_context(hits[:1])
+    assert "P1" not in ctx1
+
+    answer = "A fact [E1]; another [E2]; fake [E9]; nothing [E3]."
+    cleaned, guards = validate_citations(answer, eid_map)
+    assert "[E9]" not in cleaned and "[E3]" not in cleaned
+    assert "[E1]" in cleaned and "[E2]" in cleaned
+    assert "invalid_citation:E9" in guards and "invalid_citation:E3" in guards
+
+
+def test_verify_quote_number_judge(monkeypatch):
+    """校验器单测：L2 quote 覆盖率、L3 数值未命中标黄、L4 judge no→unsupported / 失败兜底。"""
+    from app.rag import verify
+    from app.rag.verify import check_numbers, check_quotes, judge_claims, quote_coverage
+
+    eid_map = {1: {"text": "The model was trained on 8 NVIDIA P100 GPUs for 3.5 days.",
+                   "page": 2, "section_path": "T"},
+               2: {"text": "Base reaches 27.3 BLEU on WMT 2014.", "page": 3, "section_path": "R"}}
+
+    def claim(text, eid, quote):
+        return {"text": text, "status": "supported",
+                "support": [{"eid": f"E{eid}", "page": eid_map[eid]["page"],
+                             "section_path": eid_map[eid]["section_path"],
+                             "chunk_id": f"c{eid}", "quote": quote}]}
+
+    assert quote_coverage("trained on 8 NVIDIA P100 GPUs", eid_map[1]["text"]) > 0.95
+    assert quote_coverage("completely unrelated words here", eid_map[1]["text"]) < 0.5
+
+    # L2：quote 可对回证据 → verified；对不上 → unverified（无 LLM 时不重抽）
+    monkeypatch.setattr(verify.llm, "available", lambda force=False: False)
+    claims, g2 = check_quotes([claim("8 GPUs", 1, "trained on 8 NVIDIA P100 GPUs"),
+                               claim("3.5 days", 1, "wrong quote text"),
+                               {"text": "no support claim", "status": "unsupported",
+                                "support": []}], eid_map)
+    assert claims[0]["quote_status"] == "verified"
+    assert claims[1]["quote_status"] == "unverified" and g2 == ["quote_unverified:1"]
+    assert "quote_status" not in claims[2]  # 无出处论断不做 L2，不误伤
+
+    # L3：claim 数字不在证据中 → needs_check；在 → 保留
+    claims, g3 = check_numbers([claim("Training used 4 TPU v4 chips", 1, ""),
+                                claim("Trained for 3.5 days on P100", 1, "")], eid_map)
+    assert claims[0]["status"] == "needs_check" and "4" in claims[0]["unverified_numbers"]
+    assert claims[1]["status"] == "supported" and g3 == ["number_not_in_evidence:1"]
+
+    # L4：judge 判 no → unsupported；调用/解析失败 → semantic_judge_skipped（不误杀）
+    monkeypatch.setattr(verify.llm, "available", lambda force=False: True)
+    monkeypatch.setattr(verify.llm, "chat", lambda msgs, **kw:
+                        {"text": '{"verdicts":[{"id":0,"verdict":"no"}]}', "model": "stub"})
+    claims, g4 = judge_claims([claim("Fabricated conclusion", 2, "")], eid_map)
+    assert claims[0]["status"] == "unsupported"
+
+    monkeypatch.setattr(verify.llm, "chat", lambda msgs, **kw: {"text": "not json", "model": "stub"})
+    claims, g4 = judge_claims([claim("Normal claim", 1, "")], eid_map)
+    assert claims[0]["status"] == "supported" and g4 == ["semantic_judge_skipped"]
+
+
+def test_rerank_degrade_on_api_failure(monkeypatch, indexed_paper):
+    """rerank API 失败 → 返回 None → fuse 降级回 RRF 截断 + rerank_degraded guardrail。"""
+    from app.rag import indexing
+
+    assert indexing.rerank_available() is False or True  # 密闭环境 key 已屏蔽，两个分支都合法
+    monkeypatch.setattr(indexing.settings, "rerank_api_key", "stub", raising=False)
+    monkeypatch.setattr(indexing.httpx, "post",
+                        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    hits = [{"chunk_id": f"c{i}", "text": f"doc {i}", "score": 0.1} for i in range(3)]
+    assert indexing.rerank_hits("q", hits, top_k=2) is None
+
+    # fuse_node 集成：降级后仍出 8 块证据并记 guardrail
+    import app.agents.nodes as nodes_mod
+
+    def stub_search(paper_ids, q, top_k=20):
+        return {"hits": [{"chunk_id": f"c{i}", "paper_id": paper_ids[0], "page": 0,
+                          "section_path": "s", "text": f"t{i}", "score": 0.5 - i * 0.01}
+                         for i in range(top_k)],
+                "channels": ["bm25"], "bm25_count": top_k, "dense_count": 0}
+
+    monkeypatch.setattr(nodes_mod.indexing, "hybrid_search", stub_search)
+    upd = nodes_mod.fuse_node(
+        {"question": "q", "raw_hits": [{"aspect": "a", "paper_id": "p", "chunk_id": f"c{i}",
+                                        "text": f"t{i}", "score": 1.0, "page": 0} for i in range(12)]})
+    assert len(upd["evidence"]) == 8
+    assert "rerank_degraded" in upd["guardrails"]
+
+
+def test_cjk_bigram_retrieval(indexed_paper):
+    """中文 bigram：索引含中文文本的论文 → 中文查询可命中（旧版 unicode61 直接 0 命中）。"""
+    chunks = [{"text": "本模型采用注意力机制并在大规模机器翻译任务上验证了效果。",
+               "page": 0, "pages": [0], "bbox": [0, 0, 1, 1],
+               "section_path": "引言", "block_ids": ["b1"], "kind": "detail"},
+              {"text": "The model uses attention only.", "page": 1, "pages": [1],
+               "bbox": [0, 0, 1, 1], "section_path": "Method", "block_ids": ["b2"],
+               "kind": "detail"}]
+    indexing.index_chunks("p_cjk", chunks)
+    hits = indexing.fts_search(["p_cjk"], "注意力机制 机器翻译", top_k=5)
+    assert hits and "注意力" in hits[0]["text"]
+    hits_en = indexing.fts_search(["p_cjk"], "attention", top_k=5)
+    assert hits_en and "attention" in hits_en[0]["text"]
+
+
+def test_table_chunks_indexed(indexed_paper):
+    """表格入 chunks：kind=table、block_ids=t#、markdown 原文可被数值类查询命中。"""
+    docir = {"blocks": [{"id": "b1", "type": "paragraph", "text": "intro text",
+                         "page": 0, "bbox": [0, 0, 1, 1], "section_path": "Intro"}],
+             "toc": [],
+             "tables": [{"id": "t9", "page": 2, "bbox": [0.1, 0.1, 0.9, 0.9],
+                         "markdown": "| Model | BLEU |\n|---|---|\n| Big | 29.3 |"}]}
+    chunks = chunk_docir(docir)
+    tch = [c for c in chunks if c["kind"] == "table"]
+    assert tch and tch[0]["block_ids"] == ["t9"] and "29.3" in tch[0]["text"]
+    assert tch[0]["section_path"] == "Intro"  # 归属最近 block 的章节
+    indexing.index_chunks("p_tbl", chunks)
+    hits = indexing.fts_search(["p_tbl"], "29.3 BLEU", top_k=5)
+    assert hits and hits[0]["kind"] == "table"

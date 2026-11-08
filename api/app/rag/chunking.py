@@ -31,7 +31,7 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
         buf: list[dict] = []
         buf_len = 0
 
-        def flush() -> None:
+        def flush(section: str = sp) -> None:
             nonlocal buf, buf_len
             if not buf:
                 return
@@ -43,8 +43,8 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
                     "page": pages[0],
                     "pages": pages,
                     "bbox": buf[0]["bbox"],
-                    "section_path": sp,
-                    "block_ids": [b["id"] for b in buf],
+                    "section_path": section,
+                    "block_ids": [b["id"] for b in buf if b.get("id")],
                     "kind": "detail",
                 })
             buf, buf_len = [], 0
@@ -57,15 +57,30 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
             for piece in _split_long(text):
                 if buf_len + len(piece) > TARGET and buf_len > MIN_LEN:
                     flush()
-                    # 重叠：把上一块尾部 100 字符带入（近似：重复利用最后一块文本）
+                    # 重叠：把上一块尾部 100 字符带入（伪块无 id，不污染 block_ids 溯源）
                     if chunks:
                         tail = chunks[-1]["text"][-OVERLAP:]
-                        buf.append({"id": "ovl", "text": tail, "page": chunks[-1]["page"],
+                        buf.append({"id": "", "text": tail, "page": chunks[-1]["page"],
                                     "bbox": chunks[-1]["bbox"]})
                         buf_len = len(tail)
                 buf.append(blk if piece is text else {**blk, "text": piece})
                 buf_len += len(piece)
         flush()
+
+    # 表格块：每表一个 chunk（markdown 原文），数值/超参类问题靠它被 BM25 精确命中
+    for t in docir.get("tables", []):
+        md = (t.get("markdown") or "").strip()
+        if len(md) < MIN_LEN:
+            continue
+        chunks.append({
+            "text": f"[表格 {t.get('id', '')}]\n{md[:4000]}",
+            "page": t.get("page", 0),
+            "pages": [t.get("page", 0)],
+            "bbox": t.get("bbox") or [],
+            "section_path": _table_section(docir, t),
+            "block_ids": [t.get("id", "")] if t.get("id") else [],
+            "kind": "table",
+        })
 
     # 章节摘要块：每个 level-1 章节生成一条概览（页范围）
     for t in docir.get("toc", []):
@@ -82,6 +97,18 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
 
 
 _SENT = re.compile(r"(?<=[.!?。！？；;])\s+")
+
+
+def _table_section(docir: dict[str, Any], table: dict[str, Any]) -> str:
+    """表格归属章节：取阅读顺序中最后一个页码不晚于表格所在页的 block 的 section_path。"""
+    page = table.get("page", 0)
+    sec = ""
+    for blk in docir.get("blocks", []):
+        if blk.get("page", 0) > page:
+            break
+        if blk.get("section_path"):
+            sec = blk["section_path"]
+    return sec or "前言"
 
 
 def _split_long(text: str, max_len: int = TARGET) -> list[str]:

@@ -38,12 +38,12 @@ class _TeeQueue:
         self._sink.put(item)
 
 
-def _save_trace(tee: "_TeeQueue", thread_id: str, conversation_id: str | None,
+def _save_trace(tee: _TeeQueue, thread_id: str, conversation_id: str | None,
                 turn: int | None, question: str, status: str) -> None:
     try:
         trace_store.append_trace(thread_id, conversation_id or "", turn or 0,
                                  question, status, tee.captured)
-    except Exception:  # noqa: BLE001 —— trace 落盘失败不阻塞主链路
+    except Exception:  # noqa: BLE001, S110 —— trace 落盘失败不阻塞主链路
         pass
 
 
@@ -167,6 +167,8 @@ def _push_success(q, final: dict, question: str, t0: float,
                      "handoffs": final.get("handoffs", []),
                      **({"compare_table": final["compare_table"]}
                         if final.get("compare_table") else {}),
+                     **({"anchors": final["anchors"]}
+                        if final.get("anchors") else {}),
                      **({"graph_data": final["graph_data"]}
                         if final.get("graph_data") else {}),
                      **({"outline": final["outline"]}

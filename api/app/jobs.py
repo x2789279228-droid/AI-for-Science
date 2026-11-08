@@ -6,14 +6,16 @@ MVP 用进程内线程池实现，接口与 APScheduler/Redis 队列可替换。
 from __future__ import annotations
 
 import json
+import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from typing import Any
+
+import psutil
 
 from . import db
 from .config import DOCIR_DIR, UPLOAD_DIR, settings
-from .parsing.pipeline import file_sha256, parse_pdf
+from .parsing.router import parse_document, write_docir
 from .rag import indexing
 from .rag.chunking import chunk_docir
 
@@ -45,12 +47,42 @@ def _run_parse(job_id: str, paper_id: str) -> None:
         def progress(frac: float, msg: str) -> None:
             db.update_job(job_id, progress=round(min(frac, 0.99), 3), message=msg)
 
-        docir = parse_pdf(paper["file_path"], progress=progress)
-        (DOCIR_DIR / f"{paper_id}.json").write_text(
-            json.dumps(docir, ensure_ascii=False), encoding="utf-8")
+        # 内存占用曲线（4.3）：采样线程每 2s 记录 RSS；峰值写进 DocIR meta（解析报告展示）
+        proc = psutil.Process()
+        mem_curve: list[list[float]] = []
+        stop_sampler = threading.Event()
+
+        def _sample_mem() -> None:
+            t0 = time.time()
+            while True:
+                try:   # 先采一次（快解析也要有曲线起点），之后每 2s 一次
+                    mem_curve.append([round(time.time() - t0, 1),
+                                      round(proc.memory_info().rss / 1048576, 1)])
+                except Exception:  # noqa: BLE001, S110 —— 采样失败跳过
+                    pass
+                if stop_sampler.wait(2.0):
+                    break
+
+        sampler = threading.Thread(target=_sample_mem, daemon=True)
+        sampler.start()
+        docir = parse_document(paper["file_path"], progress=progress, paper_id=paper_id)
+        stop_sampler.set()
+        sampler.join(timeout=1.0)
+        peak_mb = max((m[1] for m in mem_curve), default=0.0)
+        docir["meta"]["parse_memory"] = {"peak_mb": peak_mb, "samples": len(mem_curve)}
+        write_docir(paper_id, docir)
 
         db.update_job(job_id, progress=0.88, message="切块与索引")
-        chunks = chunk_docir(docir)
+        index_docir = docir
+        long_note = ""
+        if docir["meta"].get("long_doc"):
+            # 降级矩阵：长文档只对前 N 页做全文 chunk/索引，全书标题树已在 DocIR
+            cap = settings.long_doc_index_pages
+            index_docir = {**docir,
+                           "blocks": [b for b in docir["blocks"] if b["page"] < cap],
+                           "tables": [t for t in docir["tables"] if t["page"] < cap]}
+            long_note = f"（长文档：前 {cap} 页全文索引）"
+        chunks = chunk_docir(index_docir)
         n = indexing.index_chunks(paper_id, chunks)
         vec_rows = db.query("SELECT COUNT(*) c FROM chunks WHERE paper_id=? AND vec IS NOT NULL",
                             (paper_id,))
@@ -70,12 +102,18 @@ def _run_parse(job_id: str, paper_id: str) -> None:
                            r.get("title", ""), r.get("arxiv_id", ""), r.get("doi", "")))
 
         with db.tx() as c:
-            c.execute("UPDATE papers SET title=?, arxiv_id=?, page_count=?, docir_path=? WHERE id=?",
-                      (docir["meta"].get("title", ""), docir["meta"].get("arxiv_id", ""),
+            # arxiv_id 存基础 id（剥离 vN）；版本号单独入 version 列（去重文案/版本演进用）
+            base_arxiv, ver_int = _split_arxiv(docir["meta"].get("arxiv_id", ""))
+            ver = f"v{ver_int}" if ver_int else \
+                _version_from_name(paper["meta_json"] and json.loads(paper["meta_json"] or "{}")
+                                   .get("orig_filename", ""))
+            c.execute("UPDATE papers SET title=?, arxiv_id=?, version=?, page_count=?, docir_path=? WHERE id=?",
+                      (docir["meta"].get("title", ""), base_arxiv, ver,
                        docir["meta"].get("page_count", 0), str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
 
         db.update_job(job_id, status="done", progress=1.0,
-                      message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}")
+                      message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}"
+                              f" · {docir['meta'].get('parse_engine', '')}{long_note}")
         post_parse_dedup(paper_id)  # 内容级去重（官方用例 1：先 v7 后 v1）
     except Exception as e:  # noqa: BLE001
         db.update_job(job_id, status="error", message=f"{type(e).__name__}: {e}")
@@ -87,20 +125,56 @@ def _title_norm(t: str) -> str:
     return "".join(ch.lower() for ch in t if ch.isalnum())
 
 
+_ARXIV_FULL = re.compile(r"^(\d{4}\.\d{4,5})(?:v(\d+))?$")
+
+
+def _split_arxiv(arxiv_id: str) -> tuple[str, int]:
+    """arXiv id → (base, version_int)，无版本号 version=0。"""
+    m = _ARXIV_FULL.match((arxiv_id or "").strip())
+    if not m:
+        return (arxiv_id or ""), 0
+    return m.group(1), int(m.group(2) or 0)
+
+
+def _version_from_name(name: str) -> str:
+    m = re.search(r"\bv(\d+)\b", name or "")
+    return f"v{m.group(1)}" if m else ""
+
+
 def check_duplicate(title: str, arxiv_id: str, file_hash: str,
-                    exclude_paper_id: str = "") -> dict | None:
-    """标题归一化 + arXiv id 辅助比对。MVP 字符级；后续可升级 embedding 余弦。"""
+                    exclude_paper_id: str = "", new_version: str = "") -> dict | None:
+    """标题归一化 + arXiv id 比对（剥离 vN 后比对，v1/v7 算同源）。
+
+    官方用例 3.1 文案要求：相似度 + 版本号 + 保留建议（版本号新者指引）。
+    """
     if not title:
         return None
     nt = _title_norm(title)
     if len(nt) < 8:
         return None
+    base_new, ver_new = _split_arxiv(arxiv_id)
+    if not ver_new:
+        m = re.search(r"v(\d+)$", new_version or "")
+        ver_new = int(m.group(1)) if m else 0
     for row in db.query("SELECT id,title,arxiv_id,version FROM papers WHERE id != ?", (exclude_paper_id,)):
         if _title_norm(row["title"]) == nt and len(nt) >= 8:
-            same_arxiv = bool(arxiv_id) and arxiv_id == row["arxiv_id"]
+            base_old, ver_old = _split_arxiv(row["arxiv_id"] or "")
+            ver_old = ver_old or int(re.sub(r"\D", "", row["version"] or "") or 0)
+            same_arxiv = bool(base_new) and base_new == base_old
+            if ver_new and ver_old and ver_new != ver_old:
+                if ver_old > ver_new:
+                    suggest = f"库中已有版本较新（v{ver_old} > v{ver_new}），建议保留已有版本，新上传仅作历史参照"
+                else:
+                    suggest = f"新上传版本较新（v{ver_new} > v{ver_old}），建议保留新版本并可归档旧版本"
+            else:
+                suggest = "版本号未知或相同，请人工核对内容差异"
             return {"duplicate_of": row["id"], "title": row["title"],
-                    "existing_version": row["version"] or "", "same_arxiv_id": same_arxiv,
-                    "reason": "标题内容级匹配" + ("，且 arXiv id 相同" if same_arxiv else "")}
+                    "existing_version": (f"v{ver_old}" if ver_old else (row["version"] or "")),
+                    "new_version": f"v{ver_new}" if ver_new else "",
+                    "same_arxiv_id": same_arxiv,
+                    "reason": "相似度 100%（标题内容级匹配）"
+                              + ("，且 arXiv id 同源" if same_arxiv else "")
+                              + f" · {suggest}"}
     return None
 
 
@@ -135,7 +209,8 @@ def post_parse_dedup(paper_id: str) -> dict | None:
     if not rows:
         return None
     p = rows[0]
-    dup = check_duplicate(p["title"], p["arxiv_id"], p["file_hash"], exclude_paper_id=paper_id)
+    dup = check_duplicate(p["title"], p["arxiv_id"], p["file_hash"],
+                          exclude_paper_id=paper_id, new_version=p["version"] or "")
     if dup:
         with db.tx() as c:
             c.execute("UPDATE papers SET supersedes=? WHERE id=?", (dup["duplicate_of"], paper_id))

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+os.environ["MINERU_ENABLED"] = "off"  # 密闭测试禁用 MinerU 子进程（走 PyMuPDF 基线）
+
 from app.parsing.pipeline import parse_pdf
 from app.rag import indexing
 from app.rag.chunking import chunk_docir
