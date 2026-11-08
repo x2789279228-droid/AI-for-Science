@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .. import db, jobs, threads_store, trace_store
-from ..config import settings
+from ..config import UPLOAD_DIR, settings
 from ..llm import client as llm
 from ..llm import prompts as prompts_mod
 
@@ -68,11 +68,17 @@ def get_paper(paper_id: str):
 
 @router.get("/papers/{paper_id}/pdf")
 def get_paper_pdf(paper_id: str):
-    """原文 PDF（前端 PdfAnchored 画布渲染 + bbox 高亮框的取件源）。"""
+    """原文 PDF（前端 PdfAnchored 画布渲染 + bbox 高亮框的取件源）。
+
+    DB 存的是上传时的宿主绝对路径——容器内该路径不存在，按数据目录幂等回退
+    （uploads/{paper_id}.pdf 是 upload_pdf 的确定落点），保证镜像化部署可用。
+    """
     rows = db.query("SELECT file_path FROM papers WHERE id=?", (paper_id,))
     if not rows:
         raise HTTPException(404, "not found")
-    path = Path(rows[0]["file_path"])
+    path = Path(rows[0]["file_path"] or "")
+    if not path.exists():
+        path = UPLOAD_DIR / f"{paper_id}.pdf"
     if not path.exists():
         raise HTTPException(404, "PDF 文件不存在")
     return FileResponse(path, media_type="application/pdf", filename=path.name)
