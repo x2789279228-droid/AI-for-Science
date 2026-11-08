@@ -1,0 +1,537 @@
+{
+  "total_count": 5,
+  "jobs": [
+    {
+      "id": 128607368087,
+      "run_id": 42440128134,
+      "workflow_name": "acceptance",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/runs/42440128134",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVl3FFc8AAAAd8Zizlw",
+      "head_sha": "fe1231dc4ef47ed6251b1e95381077fa764bb9bb",
+      "url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/jobs/128607368087",
+      "html_url": "https://github.com/x2789279228-droid/AI-for-Science/actions/runs/42440128134/job/128607368087",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-08T02:49:19Z",
+      "started_at": "2026-11-08T02:49:21Z",
+      "completed_at": "2026-11-08T02:50:22Z",
+      "name": "web · tsc + lint + build",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-08T02:49:22Z",
+          "completed_at": "2026-11-08T02:49:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-08T02:49:23Z",
+          "completed_at": "2026-11-08T02:49:24Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-08T02:49:24Z",
+          "completed_at": "2026-11-08T02:49:28Z"
+        },
+        {
+          "name": "install",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-08T02:49:28Z",
+          "completed_at": "2026-11-08T02:49:33Z"
+        },
+        {
+          "name": "tsc",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-08T02:49:33Z",
+          "completed_at": "2026-11-08T02:49:37Z"
+        },
+        {
+          "name": "lint",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-08T02:49:37Z",
+          "completed_at": "2026-11-08T02:49:40Z"
+        },
+        {
+          "name": "build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-08T02:49:40Z",
+          "completed_at": "2026-11-08T02:50:19Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-08T02:50:19Z",
+          "completed_at": "2026-11-08T02:50:19Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-11-08T02:50:19Z",
+          "completed_at": "2026-11-08T02:50:20Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-08T02:50:20Z",
+          "completed_at": "2026-11-08T02:50:20Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/check-runs/128607368087",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000278,
+      "runner_name": "GitHub Actions 1000000278",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 128607368159,
+      "run_id": 42440128134,
+      "workflow_name": "acceptance",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/runs/42440128134",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVl3FFc8AAAAd8Ziz3w",
+      "head_sha": "fe1231dc4ef47ed6251b1e95381077fa764bb9bb",
+      "url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/jobs/128607368159",
+      "html_url": "https://github.com/x2789279228-droid/AI-for-Science/actions/runs/42440128134/job/128607368159",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-08T02:49:19Z",
+      "started_at": "2026-11-08T02:49:21Z",
+      "completed_at": "2026-11-08T02:51:38Z",
+      "name": "docker · api + web 镜像",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-08T02:49:22Z",
+          "completed_at": "2026-11-08T02:49:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-08T02:49:23Z",
+          "completed_at": "2026-11-08T02:49:24Z"
+        },
+        {
+          "name": "build api",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-08T02:49:24Z",
+          "completed_at": "2026-11-08T02:50:04Z"
+        },
+        {
+          "name": "build web",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-08T02:50:04Z",
+          "completed_at": "2026-11-08T02:51:36Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-08T02:51:36Z",
+          "completed_at": "2026-11-08T02:51:36Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-08T02:51:36Z",
+          "completed_at": "2026-11-08T02:51:36Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/check-runs/128607368159",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000277,
+      "runner_name": "GitHub Actions 1000000277",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 128607368182,
+      "run_id": 42440128134,
+      "workflow_name": "acceptance",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/runs/42440128134",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVl3FFc8AAAAd8Ziz9g",
+      "head_sha": "fe1231dc4ef47ed6251b1e95381077fa764bb9bb",
+      "url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/jobs/128607368182",
+      "html_url": "https://github.com/x2789279228-droid/AI-for-Science/actions/runs/42440128134/job/128607368182",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-08T02:49:19Z",
+      "started_at": "2026-11-08T02:49:21Z",
+      "completed_at": "2026-11-08T02:50:07Z",
+      "name": "api · ruff + pytest",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-08T02:49:22Z",
+          "completed_at": "2026-11-08T02:49:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-08T02:49:23Z",
+          "completed_at": "2026-11-08T02:49:24Z"
+        },
+        {
+          "name": "Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-08T02:49:24Z",
+          "completed_at": "2026-11-08T02:49:26Z"
+        },
+        {
+          "name": "Run uv python install 3.12",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-08T02:49:26Z",
+          "completed_at": "2026-11-08T02:49:26Z"
+        },
+        {
+          "name": "sync (frozen)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-08T02:49:26Z",
+          "completed_at": "2026-11-08T02:49:28Z"
+        },
+        {
+          "name": "ruff",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-08T02:49:28Z",
+          "completed_at": "2026-11-08T02:49:28Z"
+        },
+        {
+          "name": "pytest",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-08T02:49:28Z",
+          "completed_at": "2026-11-08T02:50:03Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-08T02:50:03Z",
+          "completed_at": "2026-11-08T02:50:04Z"
+        },
+        {
+          "name": "Post Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-08T02:50:04Z",
+          "completed_at": "2026-11-08T02:50:04Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-11-08T02:50:04Z",
+          "completed_at": "2026-11-08T02:50:05Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-11-08T02:50:05Z",
+          "completed_at": "2026-11-08T02:50:05Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/check-runs/128607368182",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000279,
+      "runner_name": "GitHub Actions 1000000279",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 128607368226,
+      "run_id": 42440128134,
+      "workflow_name": "acceptance",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/runs/42440128134",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVl3FFc8AAAAd8Zi0Ig",
+      "head_sha": "fe1231dc4ef47ed6251b1e95381077fa764bb9bb",
+      "url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/jobs/128607368226",
+      "html_url": "https://github.com/x2789279228-droid/AI-for-Science/actions/runs/42440128134/job/128607368226",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-08T02:49:19Z",
+      "started_at": "2026-11-08T02:49:21Z",
+      "completed_at": "2026-11-08T02:49:37Z",
+      "name": "smoke · 起 API 跑 9 项",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-08T02:49:22Z",
+          "completed_at": "2026-11-08T02:49:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-08T02:49:23Z",
+          "completed_at": "2026-11-08T02:49:24Z"
+        },
+        {
+          "name": "Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-08T02:49:24Z",
+          "completed_at": "2026-11-08T02:49:26Z"
+        },
+        {
+          "name": "Run uv python install 3.12",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-08T02:49:26Z",
+          "completed_at": "2026-11-08T02:49:26Z"
+        },
+        {
+          "name": "Run uv sync --frozen",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-08T02:49:26Z",
+          "completed_at": "2026-11-08T02:49:28Z"
+        },
+        {
+          "name": "start api",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-08T02:49:28Z",
+          "completed_at": "2026-11-08T02:49:31Z"
+        },
+        {
+          "name": "smoke",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-08T02:49:31Z",
+          "completed_at": "2026-11-08T02:49:33Z"
+        },
+        {
+          "name": "Run kill \"$(cat /tmp/api.pid)\" 2>/dev/null || true",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-08T02:49:33Z",
+          "completed_at": "2026-11-08T02:49:33Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-08T02:49:33Z",
+          "completed_at": "2026-11-08T02:49:34Z"
+        },
+        {
+          "name": "Post Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-11-08T02:49:34Z",
+          "completed_at": "2026-11-08T02:49:35Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-11-08T02:49:35Z",
+          "completed_at": "2026-11-08T02:49:35Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-11-08T02:49:35Z",
+          "completed_at": "2026-11-08T02:49:35Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/check-runs/128607368226",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000280,
+      "runner_name": "GitHub Actions 1000000280",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 128607368285,
+      "run_id": 42440128134,
+      "workflow_name": "acceptance",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/runs/42440128134",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVl3FFc8AAAAd8Zi0XQ",
+      "head_sha": "fe1231dc4ef47ed6251b1e95381077fa764bb9bb",
+      "url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/actions/jobs/128607368285",
+      "html_url": "https://github.com/x2789279228-droid/AI-for-Science/actions/runs/42440128134/job/128607368285",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-08T02:49:19Z",
+      "started_at": "2026-11-08T02:49:22Z",
+      "completed_at": "2026-11-08T02:50:16Z",
+      "name": "官方 3 用例（容器等价：引擎关）",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-08T02:49:23Z",
+          "completed_at": "2026-11-08T02:49:24Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-08T02:49:24Z",
+          "completed_at": "2026-11-08T02:49:25Z"
+        },
+        {
+          "name": "Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-08T02:49:25Z",
+          "completed_at": "2026-11-08T02:49:27Z"
+        },
+        {
+          "name": "Run uv python install 3.12",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-08T02:49:27Z",
+          "completed_at": "2026-11-08T02:49:28Z"
+        },
+        {
+          "name": "Run uv sync --frozen",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-08T02:49:28Z",
+          "completed_at": "2026-11-08T02:49:30Z"
+        },
+        {
+          "name": "run official cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-08T02:49:30Z",
+          "completed_at": "2026-11-08T02:50:11Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-08T02:50:11Z",
+          "completed_at": "2026-11-08T02:50:12Z"
+        },
+        {
+          "name": "Post Run astral-sh/setup-uv@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-08T02:50:12Z",
+          "completed_at": "2026-11-08T02:50:13Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-11-08T02:50:13Z",
+          "completed_at": "2026-11-08T02:50:13Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-08T02:50:13Z",
+          "completed_at": "2026-11-08T02:50:13Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/x2789279228-droid/AI-for-Science/check-runs/128607368285",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000281,
+      "runner_name": "GitHub Actions 1000000281",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

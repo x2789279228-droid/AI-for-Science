@@ -1,0 +1,4 @@
+从零(compose up --build)到 health 200 耗时: 74 秒
+NAME                  STATUS
+scholar-agent-api-1   Up 13 seconds (healthy)
+compose web 端口冲突与本地图（第 74s 起 api healthy）
