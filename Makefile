@@ -35,6 +35,6 @@ smoke:              ## 真 HTTP 冒烟（先 make api 或 compose 起栈）
 	cd api && uv run python scripts/smoke_web.py
 
 clean:              ## 清理本地运行数据（保留 data-real 快照）
-	rm -rf api/data api/tests/_p*_*/
+	rm -rf data api/tests/_ses_*/ scripts/runs
 	docker compose down -v 2>/dev/null || true
 

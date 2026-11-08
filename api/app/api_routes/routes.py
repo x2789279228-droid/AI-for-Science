@@ -37,7 +37,10 @@ def list_papers():
     alerts: dict[str, dict] = {}
     for j in db.query("SELECT paper_id, payload FROM jobs WHERE kind='dedup_alert' "
                       "ORDER BY created_at DESC"):
-        alerts.setdefault(j["paper_id"], json.loads(j["payload"] or "{}"))
+        try:   # 坏 payload 不拖垮整个列表（P2-1）
+            alerts.setdefault(j["paper_id"], json.loads(j["payload"] or "{}"))
+        except ValueError:
+            continue
     out = []
     for r in rows:
         d = dict(r)
@@ -84,13 +87,34 @@ def get_paper_pdf(paper_id: str):
     return FileResponse(path, media_type="application/pdf", filename=path.name)
 
 
+def _resolve_paper_data(paper_id: str) -> dict | None:
+    """P1-1：按 DB docir_path 定位 DocIR，容器内宿主绝对路径不存在时回退数据目录。
+
+    回退点是 write_docir 的确定落点 DOCIR_DIR/{paper_id}.json（与 /pdf 的 uploads 回退
+    同一防御思想）。两处皆不存在返回 None（调用方 404）。
+    """
+    from ..config import DOCIR_DIR
+
+    rows = db.query("SELECT docir_path FROM papers WHERE id=?", (paper_id,))
+    if not rows or not rows[0]["docir_path"]:
+        return None
+    path = Path(rows[0]["docir_path"] or "")
+    if not path.exists():
+        path = DOCIR_DIR / f"{paper_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):   # 文件损坏视同未解析
+        return None
+
+
 @router.get("/papers/{paper_id}/figure/{figure_id}")
 def get_paper_figure(paper_id: str, figure_id: str):
     """MinerU 裁图（figures[].image_path，校验路径必须落在解析输出目录内）。"""
-    rows = db.query("SELECT docir_path FROM papers WHERE id=?", (paper_id,))
-    if not rows or not rows[0]["docir_path"]:
-        raise HTTPException(404, "not found")
-    data = json.loads(Path(rows[0]["docir_path"]).read_text(encoding="utf-8"))
+    data = _resolve_paper_data(paper_id)
+    if data is None:
+        raise HTTPException(404, "未解析或不存在")
     fig = next((f for f in data.get("figures", []) if f.get("id") == figure_id), None)
     img = fig.get("image_path") if fig else None
     if not img:
@@ -104,10 +128,9 @@ def get_paper_figure(paper_id: str, figure_id: str):
 
 @router.get("/papers/{paper_id}/docir")
 def get_docir(paper_id: str, page: int | None = None, outline: bool = False):
-    rows = db.query("SELECT docir_path FROM papers WHERE id=?", (paper_id,))
-    if not rows or not rows[0]["docir_path"]:
-        raise HTTPException(404, "未解析或不存在")
-    data = json.loads(Path(rows[0]["docir_path"]).read_text(encoding="utf-8"))
+    data = _resolve_paper_data(paper_id)
+    if data is None:
+        raise HTTPException(404, "未解析或不存在（数据目录回退未命中）")
     if outline:
         # 按需加载（4.3）：超长文档首屏只回大纲级载荷（几 KB），正文按页拉取
         return {"meta": data.get("meta", {}),
@@ -158,7 +181,9 @@ def chat(body: ChatBody):
     paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers")]
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
-    if len(paper_ids) > 8:   # Day3 演示护栏：默认选文上限 ≤8 篇（超出截断并如实告知）
+    paper_cap_note = ""
+    if len(paper_ids) > 8:   # 演示护栏：默认选文上限 ≤8 篇（超出截断并如实告知前端）
+        paper_cap_note = f"选文超过上限 8 篇，已截断为前 8 篇参与检索（共 {len(paper_ids)} 篇请求）"
         paper_ids = paper_ids[:8]
 
     conv = body.conversation_id.strip() or uuid_mod.uuid4().hex
@@ -166,6 +191,8 @@ def chat(body: ChatBody):
     thread_id = threads_store.make_thread_id(conv, turn)
 
     q: queue_mod.Queue = queue_mod.Queue()
+    if paper_cap_note:                            # 先入队保证顺序：runner 事件之前到达前端
+        q.put(("guardrail", {"message": paper_cap_note, "kind": "paper_cap"}))
     threading.Thread(target=runner.run_stream,
                      args=(body.question.strip(), paper_ids, q),
                      kwargs={"thread_id": thread_id, "conversation_id": conv, "turn": turn,

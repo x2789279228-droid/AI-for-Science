@@ -132,11 +132,13 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
     model = model or default_model
     payload = {"model": model, "messages": messages, "stream": True,
                "temperature": settings.llm_temperature if temperature is None else temperature,
-               "max_tokens": max_tokens}
+               "max_tokens": max_tokens,
+               "stream_options": {"include_usage": True}}   # 末块带 usage；不支持的端点忽略
     if settings.llm_thinking_disabled:
         payload["thinking"] = {"type": "disabled"}
     t0 = time.time()
     parts: list[str] = []
+    usage: dict = {}
     try:
         with httpx.stream("POST", f"{base_url}/chat/completions",
                           headers={"Authorization": f"Bearer {api_key}"},
@@ -149,7 +151,10 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                 if body == "[DONE]":
                     break
                 try:
-                    delta = json.loads(body)["choices"][0].get("delta", {})
+                    parsed = json.loads(body)
+                    if isinstance(parsed.get("usage"), dict):   # usage 块（include_usage 末块）
+                        usage = parsed["usage"]
+                    delta = parsed["choices"][0].get("delta", {})
                     piece = delta.get("content")
                     if piece:
                         parts.append(piece)
@@ -163,6 +168,8 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
             try:
                 db.log_qa(module=module, model=model, question=audit_prompt[:200],
                           prompt="[stream]", answer="".join(parts)[:8000],
+                          prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                          completion_tokens=int(usage.get("completion_tokens") or 0),
                           latency_ms=int((time.time() - t0) * 1000),
                           guardrail="stream", prompt_version=prompt_version)
             except Exception:  # noqa: BLE001, S110 —— 审计失败不影响已产出的流

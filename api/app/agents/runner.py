@@ -82,8 +82,9 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
                            "guardrails": [f"graph_error:{type(e).__name__}"], "trace": [],
                            "thread_id": thread_id, "conversation_id": conversation_id,
                            "resumable": True}))
-        tee.put(("done", {}))
+        tee.record_only(("done", {}))
         _save_trace(tee, thread_id, conversation_id, turn, question, "failed")
+        tee.put(("done", {}))
         return
 
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))
@@ -95,25 +96,36 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
 def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
     """从最近 checkpoint 续跑指定线程（graph.invoke(None)），事件协议与 run_stream 一致。"""
     row = threads_store.get_thread(thread_id)
-    if row is None:
-        q.put(("final", {"answer": "[恢复失败：线程不存在]", "claims": [], "mode": "none",
-                         "guardrails": ["resume_not_found"], "trace": [],
-                         "thread_id": thread_id, "resumable": False}))
+
+    def early_exit(final_evt: dict, status: str) -> None:
+        """早退收尾（P1-3）：final 转发 → done 记账 → trace 落盘 → done 转发，与主路径同序。"""
+        tee0 = _TeeQueue(q)
+        tee0.put(("final", final_evt))
+        tee0.record_only(("done", {}))
+        _save_trace(tee0, thread_id, (row or {}).get("conversation_id") or "",
+                    (row or {}).get("turn") or 0,
+                    (row or {}).get("question") or "", status)
         q.put(("done", {}))
+
+    if row is None:
+        early_exit({"answer": "[恢复失败：线程不存在]", "claims": [], "mode": "none",
+                    "guardrails": ["resume_not_found"], "trace": [],
+                    "thread_id": thread_id, "resumable": False,
+                    "conversation_id": ""}, "failed")
         return
     if row["status"] == "done":
-        q.put(("final", {"answer": row.get("answer") or "[该轮已完成，无需恢复]",
-                         "claims": [], "mode": "none",
-                         "guardrails": ["resume_already_done"], "trace": [],
-                         "thread_id": thread_id, "resumable": False}))
-        q.put(("done", {}))
+        early_exit({"answer": row.get("answer") or "[该轮已完成，无需恢复]",
+                    "claims": [], "mode": "none",
+                    "guardrails": ["resume_already_done"], "trace": [],
+                    "thread_id": thread_id, "resumable": False,
+                    "conversation_id": row["conversation_id"]}, "done")
         return
     if not threads_store.mark_resume(thread_id):
-        q.put(("final", {"answer": f"[恢复失败：超出恢复预算 {threads_store.MAX_RESUME_ATTEMPTS} 次]",
-                         "claims": [], "mode": "none",
-                         "guardrails": ["resume_exhausted"], "trace": [],
-                         "thread_id": thread_id, "resumable": False}))
-        q.put(("done", {}))
+        early_exit({"answer": f"[恢复失败：超出恢复预算 {threads_store.MAX_RESUME_ATTEMPTS} 次]",
+                    "claims": [], "mode": "none",
+                    "guardrails": ["resume_exhausted"], "trace": [],
+                    "thread_id": thread_id, "resumable": False,
+                    "conversation_id": row["conversation_id"]}, "failed")
         return
 
     tee = _TeeQueue(q)
@@ -131,9 +143,10 @@ def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
                            "thread_id": thread_id,
                            "conversation_id": row["conversation_id"],
                            "resumable": attempts < threads_store.MAX_RESUME_ATTEMPTS}))
-        tee.put(("done", {}))
+        tee.record_only(("done", {}))
         _save_trace(tee, thread_id, row["conversation_id"], row["turn"],
                     row["question"], "failed")
+        tee.put(("done", {}))
         return
 
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))

@@ -93,6 +93,7 @@ function appendTL(t: Turn[], i: number, kind: TLEvent["kind"], data: TLEvent["da
 export default function ChatPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [capHint, setCapHint] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,6 +145,7 @@ export default function ChatPage() {
     setTurns((t) => [...t, turn]);
     try {
       await streamChat(q, Array.from(selected), {
+        guardrail: (d) => setCapHint(String(d.message ?? "")),
         trace: (card) => setTurns((t) => {
           const c = [...t];
           const i = c.length - 1;
@@ -261,6 +263,7 @@ export default function ChatPage() {
         <span className="chip accent">ClaimTrace 逐论断验证</span>
         <span style={{ flex: 1 }} />
         <span className="chip" title="本次回答的检索范围">{scopeTitle}</span>
+        {capHint && <span className="chip warn" title="选文/截断提示">{capHint}</span>}
         <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowScope((s) => !s)}>
           检索范围 <ChevronRight size={11} style={{ transform: showScope ? "rotate(90deg)" : "none" }} />
         </button>
@@ -279,7 +282,17 @@ export default function ChatPage() {
                 <input type="checkbox" checked={selected.has(p.id)}
                   onChange={(e) => setSelected((s) => {
                     const n = new Set(s);
-                    if (e.target.checked) n.add(p.id); else n.delete(p.id);
+                    if (e.target.checked) {
+                      if (n.size >= 8) {           // 前端钳制：选文上限 ≤8（与后端护栏一致）
+                        setCapHint("选文上限 8 篇，已停止勾选（超出部分不参与检索）");
+                        e.target.checked = false;
+                        return n;
+                      }
+                      n.add(p.id);
+                    } else {
+                      n.delete(p.id);
+                    }
+                    setCapHint("");
                     return n;
                   })} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

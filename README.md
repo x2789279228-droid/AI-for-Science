@@ -19,10 +19,10 @@ scholar-agent/
 ```bash
 cd api
 uv sync                      # 安装依赖
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8100
 ```
 
-- 健康检查：`GET http://localhost:8000/api/health`（LLM 连通性真实 ping 检测）
+- 健康检查：`GET http://localhost:8100/api/health`（LLM 连通性真实 ping 检测）
 - 完整 API：见 [docs/api.md](docs/api.md)（上传 / 任务进度 / DocIR / SSE 溯源问答 / 审计）
 
 ### 前端（Next.js）

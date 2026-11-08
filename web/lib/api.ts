@@ -182,6 +182,7 @@ export async function getPaper(id: string): Promise<Paper> {
 
 export interface SSEHandlers {
   trace?: (d: TraceCard) => void;
+  guardrail?: (d: { message?: string; kind?: string }) => void;
   retrieval?: (d: { channels: string[]; hits: Hit[] }) => void;
   delta?: (t: string) => void;
   final?: (d: FinalEvent) => void;
@@ -215,6 +216,7 @@ async function consumeSSE(resp: Response, on: SSEHandlers): Promise<void> {
         else if (line.startsWith("data: ") && event) {
           const data = JSON.parse(line.slice(6));
           if (event === "trace") on.trace?.(data);
+          else if (event === "guardrail") on.guardrail?.(data);
           else if (event === "retrieval") on.retrieval?.(data);
           else if (event === "delta") on.delta?.(data.text);
           else if (event === "final") on.final?.(data);

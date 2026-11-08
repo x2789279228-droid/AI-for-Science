@@ -66,3 +66,20 @@ graph TD;
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
 ```
+
+
+## 节点清单（`build_graph().get_graph()` 实测，2026-11-08）
+
+14 个功能节点（另有 `__start__`/`__end__` 连接子）：
+
+| 节点 | 职责 |
+|---|---|
+| router | 意图识别 + Agent 分发（LLM 分类/规则兜底/UI 强制） |
+| planner | 检索面规划（LLM 改写英文子查询/规则；扇出护栏 ≤12） |
+| reader_entry / compare_entry / graph_entry / writer_entry / viz_entry | 五专属入口 Guardrail |
+| executor | retrieve_task 并行检索（Send 扇出，≤12 路） |
+| align | Compare 维度对齐表 |
+| viz_extract / graph_build | Viz 表格提取→chart_spec / Graph 引用构图+指标 |
+| verifier | Claim-Citation 校验（缺失面 → recover） |
+| recover | 三策略恢复（①重检索 ②降级 ③定向重生成；预算 ≤3） |
+| responder | 流式生成 + [E#] 后验 + ClaimTrace |

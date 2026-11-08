@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 import uuid
@@ -76,27 +75,39 @@ def retrieval_metrics(paper_id: str) -> dict:
     """检索指标（不依赖 LLM）：Recall@5 / 中文 top-8 命中。"""
     from app.rag.indexing import hybrid_search
 
-    r5_hits = []
+    r5_hits, r5_detail = [], []
     for q, gold in _EN_FACTS:
         res = hybrid_search([paper_id], q, top_k=5)
         hits = res.get("hits", [])
         ok = any(gold.lower() in (h.get("text") or "").lower() for h in hits)
         r5_hits.append(ok)
+        r5_detail.append({
+            "question": q, "gold_keyword": gold, "hit": ok,
+            "top5": [{"chunk_id": h.get("chunk_id"), "page": (h.get("page") or 0) + 1,
+                      "score": h.get("rrf") or h.get("score"),
+                      "text": (h.get("text") or "")[:160]} for h in hits],
+        })
         print(f"  [R@5] {'✓' if ok else '✗'} {q[:46]}")
-    zh_hits, zh_top_texts = [], []
+    zh_hits, zh_detail = [], []
     for q, gold in _ZH_FACTS:
         res = hybrid_search([paper_id], q, top_k=8)
         hits = res.get("hits", [])
         ok = any(gold.lower() in (h.get("text") or "").lower() for h in hits)
         zh_hits.append(ok)
-        zh_top_texts.append(bool(hits))
+        zh_detail.append({
+            "question": q, "gold_keyword": gold, "hit": ok,
+            "top8": [{"chunk_id": h.get("chunk_id"), "page": (h.get("page") or 0) + 1,
+                      "text": (h.get("text") or "")[:160]} for h in hits],
+        })
         print(f"  [ZH] {'✓' if ok else '✗'} {q[:40]}")
+    retrieval_detail = {"en": r5_detail, "zh": zh_detail}
     return {
         "recall_at5": round(sum(r5_hits) / len(r5_hits), 2),
         "recall_at5_detail": dict(zip((q for q, _ in _EN_FACTS),
                                       map(int, r5_hits))),
         "zh_top8_hit": round(sum(zh_hits) / len(zh_hits), 2),
-        "zh_nonempty": sum(zh_top_texts),
+        "zh_nonempty": sum(1 for d in zh_detail if d["top8"]),
+        "retrieval_detail": retrieval_detail,   # 每题 top hits 全量导出（严格 R@5 可复算）
     }
 
 
@@ -212,6 +223,7 @@ def main() -> int:
     args = ap.parse_args()
 
     from fastapi.testclient import TestClient
+
     from app import db
     from app.main import app
     db.init_db()

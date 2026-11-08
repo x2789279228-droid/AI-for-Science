@@ -81,7 +81,9 @@ def test_p0_2_version_from_filename():
     assert jobs._version_from_name(" UnderstandingDeepLearning_02_09_26_C.pdf") in ("", "v1")
 
 
-def test_p0_2_dedup_alert_before_job_done():
+def test_p0_2_dedup_alert_before_job_done(monkeypatch):
+    """时序直接证明：给 dedup 注入 1.2s 延迟 → done 时刻必须晚于 dedup 完成时刻，
+    且 done 首次可见的瞬间 dedup_alert 已在库（0.05s 紧贴轮询）。"""
     from fastapi.testclient import TestClient
 
     from app.main import app
@@ -90,12 +92,39 @@ def test_p0_2_dedup_alert_before_job_done():
     v7p, v1p = _two_version_pdfs()
     p1 = _upload(client, v7p)
     _wait_job(client, p1.get("job_id"))
+
+    stamps = {"dedup_end": 0.0, "done": 0.0}
+    orig_dedup = jobs.post_parse_dedup
+    orig_update = jobs.db.update_job
+
+    def slow_dedup(paper_id):
+        time.sleep(1.2)
+        r = orig_dedup(paper_id)
+        stamps["dedup_end"] = time.time()
+        return r
+
+    def spy_update_job(job_id, **fields):
+        if fields.get("status") == "done" and stamps["done"] == 0.0:
+            stamps["done"] = time.time()
+        return orig_update(job_id, **fields)
+
+    monkeypatch.setattr(jobs, "post_parse_dedup", slow_dedup)
+    monkeypatch.setattr(jobs.db, "update_job", spy_update_job)
+
     p2 = _upload(client, v1p)
-    j = _wait_job(client, p2.get("job_id"))
+    j = {"status": "queued"}
+    t0 = time.time()
+    rows = None
+    while time.time() - t0 < 300:
+        j = client.get(f"/api/jobs/{p2['job_id']}").json()
+        if j.get("status") == "done":
+            rows = db.query("SELECT payload FROM jobs WHERE kind='dedup_alert' AND paper_id=? "
+                            "ORDER BY created_at DESC LIMIT 1", (p2["paper_id"],))
+            break
+        time.sleep(0.05)
     assert j["status"] == "done"
-    rows = db.query("SELECT payload FROM jobs WHERE kind='dedup_alert' AND paper_id=? "
-                    "ORDER BY created_at DESC LIMIT 1", (p2["paper_id"],))
-    assert rows, "parse done 的瞬间 dedup_alert 必须已存在（先去重后置 done）"
+    assert stamps["dedup_end"] > 0 and stamps["done"] >= stamps["dedup_end"],         "done 必须晚于 dedup 完成（先去重后置 done）"
+    assert rows, "done 首次可见的瞬间 dedup_alert 必须已在库"
     payload = json.dumps(json.loads(rows[0]["payload"]), ensure_ascii=False)
     assert "建议保留" in payload and "v7" in payload
 
@@ -275,30 +304,87 @@ def test_p1_1_trace_replay_immediately_after_done(monkeypatch):
         assert r.json().get("events"), "回放应带完整事件流"
 
 
-# ---------- Day3 演示护栏：选文上限 ≤8 / 计划扇出 ≤12 ----------
+# ---------- Day3 演示护栏（Step2 强测试）：实际检索 ≤8 / LLM 扇出 ≤12 / 会话不污染 ----------
 
-def test_day3_paper_selection_cap():
+def test_day3_paper_selection_cap(monkeypatch):
+    """入口截断必须落到「实际检索」：捕获 runner.run_stream 收到的 paper_ids ≤8，
+    且前端在流首收到 guardrail/paper_cap 通知。fake papers 用后即清（不污染会话库）。"""
     from fastapi.testclient import TestClient
 
-    from app.api_routes import routes as routes_mod
+    from app.agents import runner as runner_mod
     from app.main import app
     db.init_db()
     ids = [f"p_cap_{i}" for i in range(12)]
-    with db.tx() as c:
-        for pid in ids:
-            c.execute("INSERT OR REPLACE INTO papers(id,title,file_path,file_hash,created_at,meta_json)"
-                      " VALUES(?,?,?,?,?,?)", (pid, f"Cap {pid}", "", f"h_{pid}", time.time(), "{}"))
-    client = TestClient(app)
-    r = client.post("/api/chat", json={"question": "anything", "paper_ids": ids,
-                                       "conversation_id": "cap_test", "agent": "reader"})
-    # 不抛 500；入口把 12 篇截断为 ≤8（LLM 关 → extractive 闭环照常）
-    assert r.status_code == 200
-    assert routes_mod is not None
+    try:
+        with db.tx() as c:
+            for pid in ids:
+                c.execute("INSERT OR REPLACE INTO papers(id,title,file_path,file_hash,"
+                          "created_at,meta_json) VALUES(?,?,?,?,?,?)",
+                          (pid, f"Cap {pid}", "", f"h_{pid}", time.time(), "{}"))
+
+        captured: dict = {}
+
+        def fake_run_stream(question, paper_ids_arg, q, **kw):
+            captured["paper_ids"] = list(paper_ids_arg)
+            q.put(("final", {"answer": "ok", "claims": [], "mode": "extractive",
+                             "guardrails": [], "trace": [],
+                             "thread_id": kw.get("thread_id", ""), "anchors": {}}))
+            q.put(("done", {}))
+
+        monkeypatch.setattr(runner_mod, "run_stream", fake_run_stream)
+        client = TestClient(app)
+        events = []
+        conv = f"cap_{uuid.uuid4().hex[:6]}"
+        with client.stream("POST", "/api/chat",
+                           json={"question": "anything", "paper_ids": ids,
+                                 "conversation_id": conv, "agent": "reader"}) as r:
+            assert r.status_code == 200
+            event = ""
+            for line in r.iter_lines():
+                if line.startswith("event: "):
+                    event = line[7:].strip()
+                elif line.startswith("data: ") and event:
+                    d = json.loads(line[6:])
+                    events.append((event, d))
+                    if event == "done":
+                        break
+    finally:
+        with db.tx() as c:
+            c.execute("DELETE FROM papers WHERE id LIKE 'p_cap_%'")
+
+    assert len(captured["paper_ids"]) <= 8, "实际参与检索的论文必须 ≤8（入口截断落地）"
+    guard = [d for k, d in events if k == "guardrail"]
+    assert guard and "paper_cap" == guard[0].get("kind"), "流首应有 paper_cap 截断通知"
 
 
-def test_day3_fanout_cap():
-    assert jobs.__dict__.get("MAX_FANOUT") is None  # jobs 不放此常量（防误引）
-    from app.agents.nodes import MAX_FANOUT, _rule_steps
-    steps = _rule_steps("q", [f"p{i}" for i in range(6)], ["a1", "a2", "a3", "a4"])
-    assert len(steps) <= MAX_FANOUT <= 12
-    assert len(_rule_steps("q", [f"p{i}" for i in range(5)], ["a", "b", "c"])) == 12  # 15→12 截断
+def test_day3_fanout_cap_llm_path(monkeypatch):
+    """LLM planner 重建路径同样受 MAX_FANOUT 收口（此前完全旁路，P1-2）。"""
+    from app.agents import nodes as nodes_mod
+    from app.llm import client as llm_client
+
+    monkeypatch.setattr(llm_client, "available", lambda force=False: True)
+    monkeypatch.setattr(llm_client, "chat", lambda msgs, **kw:
+                        {"text": json.dumps({"queries": ["q1", "q2", "q3", "q4"]}),
+                         "model": "stub"})
+
+    state = {"question": "q", "paper_ids": [f"p{i}" for i in range(4)], "retries": 0,
+             "intent": {"aspects": ["a1", "a2", "a3", "a4"]}, "plan": {}}
+    upd = nodes_mod.planner_node(state, config=None)
+    steps = upd["plan"]["steps"]
+    assert len(steps) <= nodes_mod.MAX_FANOUT <= 12, "LLM 路径扇出必须 ≤12"
+    assert "fanout_truncated" in upd["guardrails"]
+    # 每个检索面至少保留一路（轮转截断不丢用户问题面）
+    aspects_kept = {s["aspect"] for s in steps}
+    assert aspects_kept == {"a1", "a2", "a3", "a4"}
+    monkeypatch.setattr(llm_client, "chat", lambda msgs, **kw: {"text": "not json"})
+    upd2 = nodes_mod.planner_node(state, config=None)
+    assert len(upd2["plan"]["steps"]) <= nodes_mod.MAX_FANOUT   # 规则路径兜底同样收口
+
+
+def test_day3_rule_fanout_per_aspect():
+    from app.agents.nodes import _cap_steps, _rule_steps
+    steps = _rule_steps("q", [f"p{i}" for i in range(5)], ["a", "b", "c"])
+    assert len(steps) == 12                                  # 15 → 12 截断
+    assert {s["aspect"] for s in steps} == {"a", "b", "c"}    # 每面保底
+    capped, trunc = _cap_steps([{"paper_id": "p", "query": "x", "aspect": "a"}])
+    assert trunc is False and len(capped) == 1               # 不超限时原样返回

@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at REAL NOT NULL,
   updated_at REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_jobs_kind_paper ON jobs(kind, paper_id, created_at);
 
 CREATE TABLE IF NOT EXISTS qa_logs (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

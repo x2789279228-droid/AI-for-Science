@@ -149,7 +149,29 @@ def router_node(state: AgentState, config=None) -> dict:
 
 # ---------------- Planner ----------------
 
-MAX_FANOUT = 12   # Day3 演示护栏：计划扇出上限（aspects×papers 截断，防超长文档雪崩）
+MAX_FANOUT = 12   # 演示护栏：计划扇出上限（P1-2：rule/LLM/recover 三路径统一收口）
+
+
+def _cap_steps(steps: list[Step]) -> tuple[list[Step], bool]:
+    """扇出护栏：≤MAX_FANOUT 原样返回；超限按「检索面轮转」截断。
+
+    轮转保证每个检索面至少保留一路（首圈覆盖全部面），避免按面整段截断丢掉用户问题面。
+    返回 (截断后 steps, 是否发生截断)。
+    """
+    if len(steps) <= MAX_FANOUT:
+        return steps, False
+    queues: dict[str, list[Step]] = {}
+    for s in steps:
+        queues.setdefault(s.get("aspect", ""), []).append(s)
+    order = list(queues.keys())
+    kept: list[Step] = []
+    i = 0
+    while len(kept) < MAX_FANOUT and any(queues[a] for a in order):
+        a = order[i % len(order)]
+        if queues[a]:
+            kept.append(queues[a].pop(0))
+        i += 1
+    return kept, True
 
 
 def _rule_steps(question: str, paper_ids: list[str], aspects: list[str]) -> list[Step]:
@@ -158,7 +180,8 @@ def _rule_steps(question: str, paper_ids: list[str], aspects: list[str]) -> list
     for aspect in eff_aspects:
         for pid in paper_ids:
             steps.append({"paper_id": pid, "query": aspect, "aspect": aspect})
-    return steps[:MAX_FANOUT]
+    capped, _trunc = _cap_steps(steps)
+    return capped
 
 
 def planner_node(state: AgentState, config=None) -> dict:
@@ -190,6 +213,9 @@ def planner_node(state: AgentState, config=None) -> dict:
         if isinstance(queries, list) and len(queries) == len(aspects):
             steps = [{"paper_id": pid, "query": str(q).strip() or aspect, "aspect": aspect}
                      for aspect, q in zip(aspects, queries) for pid in paper_ids]
+            steps, trunc = _cap_steps(steps)
+            if trunc:
+                guardrails.append("fanout_truncated")
         else:
             guardrails.append("planner_llm_fallback")
 
@@ -199,8 +225,9 @@ def planner_node(state: AgentState, config=None) -> dict:
         s["step_id"] = f"s{round_no}-{i}"
     plan = {"steps": steps, "mode": mode}
     title = "任务规划" + ("（重规划）" if retries > 0 else "")
-    card = trace_card("planner", title, f"{len(steps)} 步 · {len(paper_ids)} 篇 × {len(aspects)} 面",
-                      {"steps": steps})
+    card = trace_card("planner", title, f"{len(steps)} 步 · {len(paper_ids)} 篇 × {len(aspects)} 面"
+                      + (" · 扇出已截断" if "fanout_truncated" in guardrails else ""),
+                      {"steps": steps, "truncated": "fanout_truncated" in guardrails})
     _emit(config, card)
     _emit_event(config, "plan", {"round": round_no, "mode": mode,
                                  "steps": [_plan_step(s) for s in steps]})
@@ -408,6 +435,11 @@ def recover_node(state: AgentState, config=None) -> dict:
             s.get("aspect", "") for s in state.get("plan", {}).get("steps", []))) or missing
         steps = [{"paper_id": pid, "query": rewrites.get(a, a), "aspect": a}
                  for a in old_aspects for pid in state.get("paper_ids", [])]
+        steps, trunc = _cap_steps(steps)
+        if trunc:
+            guardrails_r1 = ["fanout_truncated"]
+        else:
+            guardrails_r1 = []
         retries = state.get("retries", 0) + 1
         round_no = retries + 1  # 新一轮步骤 id：s{round}-*
         for i, s in enumerate(steps, 1):
@@ -416,10 +448,12 @@ def recover_node(state: AgentState, config=None) -> dict:
                              "mode": state.get("plan", {}).get("mode", "single")},
                     "retries": retries, "re_retrieve_count": re_retrieve,
                     "recover_route": "executor",
-                    "guardrails": [f"insufficient_evidence:{re_retrieve}"]})
+                    "guardrails": [f"insufficient_evidence:{re_retrieve}"] + guardrails_r1})
         card = trace_card("recover", "恢复·重检索",
-                          f"#{recover_count} · 改写 {len(missing)} 个检索面 · top_k → {10 + retries * 6}",
-                          {"strategy": "re_retrieve", "missing": missing, "rewrites": rewrites})
+                          f"#{recover_count} · 改写 {len(missing)} 个检索面 · top_k → {10 + retries * 6}"
+                          + (" · 扇出已截断" if guardrails_r1 else ""),
+                          {"strategy": "re_retrieve", "missing": missing, "rewrites": rewrites,
+                           "truncated": bool(guardrails_r1)})
         plan_evt = {"round": round_no, "mode": state.get("plan", {}).get("mode", "single"),
                     "steps": [_plan_step(s) for s in steps]}
 
