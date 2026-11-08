@@ -79,9 +79,7 @@ def _run_parse(job_id: str, paper_id: str) -> None:
         if docir["meta"].get("long_doc"):
             # 降级矩阵：长文档只对前 N 页做全文 chunk/索引，全书标题树已在 DocIR
             cap = settings.long_doc_index_pages
-            index_docir = {**docir,
-                           "blocks": [b for b in docir["blocks"] if b["page"] < cap],
-                           "tables": [t for t in docir["tables"] if t["page"] < cap]}
+            index_docir = _index_view(docir, cap)
             long_note = f"（长文档：前 {cap} 页全文索引）"
         chunks = chunk_docir(index_docir)
         n = indexing.index_chunks(paper_id, chunks)
@@ -134,6 +132,18 @@ def _title_norm(t: str) -> str:
 
 
 _ARXIV_FULL = re.compile(r"^(\d{4}\.\d{4,5})(?:v(\d+))?$")
+
+
+def _index_view(docir: dict, cap: int) -> dict:
+    """长文档索引视图：blocks/tables/**toc** 全部截断到前 cap 页（P0-3）。
+
+    旧实现只过滤 blocks/tables——chunking 的章节概览块（summary）直接用 docir["toc"] 页码，
+    后段章节会产生 page≥cap 的 summary chunk，官方用例 3.2b 的 max(chunk.page)<120 断言失败。
+    """
+    return {**docir,
+            "blocks": [b for b in docir["blocks"] if b["page"] < cap],
+            "tables": [t for t in docir["tables"] if t["page"] < cap],
+            "toc": [t for t in docir.get("toc", []) if t.get("page", 0) < cap]}
 
 
 def _split_arxiv(arxiv_id: str) -> tuple[str, int]:

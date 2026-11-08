@@ -111,9 +111,9 @@ def test_p0_3_summary_chunk_within_index_cap():
             {"level": 1, "title": "Far Chapter", "page": 200},   # cap 之外
         ],
         "blocks": [
-            {"id": "b1", "type": "paragraph", "text": "Intro body text for the summary anchor.",
+            {"id": "b1", "type": "paragraph", "text": "Intro body text. " * 20,
              "page": 0, "section_path": "Intro", "bbox": [0.1, 0.1, 0.9, 0.2]},
-            {"id": "b2", "type": "paragraph", "text": "Far chapter body text beyond the cap.",
+            {"id": "b2", "type": "paragraph", "text": "Far chapter body. " * 20,
              "page": 200, "section_path": "Far Chapter", "bbox": [0.1, 0.1, 0.9, 0.2]},
         ],
         "tables": [],
