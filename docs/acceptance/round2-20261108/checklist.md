@@ -9,7 +9,7 @@
 - [x] 5. web tsc / next lint / next build 通过（0 警告）
 - [x] 6. docker build api + web 通过（api 镜像修复 uv.lock COPY 后首绿）
 - [x] 7. smoke 9/9 —— 密闭栈实测 9/9（anchors 字段恒定修复后）；真实栈另测 9/9（D5 轮）
-- [x] 8. git 干净、已推送、有 tag —— v0.5.0-d5（基线）+ v0.5.0-rc1（本轮）
+- [x] 8. git 干净、已推送、有 tag —— v0.5.0-d5（基线）+ **v0.5.0-rc1（已推送）**
 
 ## 人工（截图归档）
 
@@ -56,3 +56,15 @@
 - 3.2a 扫描件 OCR（真 v1_img）：**PASS** —— engine=mineru，coverage=93.3%
 - 3.2b 超长书（真 UDL 541 页）：MinerU 整本超 6492s 防线 → PyMuPDF 诚实兜底（10s 出 181 条书签，
   toc=181/coverage 99.3%/前 120 页索引/内存 <2GB）——见 docs/07 §四 验收实测
+
+## Day3 护栏（冻结项）
+
+- [x] 默认选文上限 ≤8 篇（/api/chat 入口截断）+ 计划扇出上限 ≤12 路（_rule_steps 截断）
+  —— test_day3_paper_selection_cap / test_day3_fanout_cap 绿（fe1231d）
+- [x] 长文档策略：演示走 data-real 快照预解析；现场不做 541 页长解析（UDL 真解析走兜底，
+  实测记录见 docs/07 §四）
+- [x] zh 金标修正：中文问句×英文语料改为英文证据词（跨语言检索语义正确）→ 6/6 门禁 PASS
+
+## Release notes（tag v0.5.0-rc1 注释即发布说明）
+
+本轮修复清单 + 证据链接见上表与本目录；正式 Release 页面待 GitHub 网页端发布（无 gh CLI）。
