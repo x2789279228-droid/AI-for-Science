@@ -37,3 +37,4 @@ api/tests/_dbg_*/
 web/tsconfig.tsbuildinfo
 api/scripts/eval_quick_last.json
 runs/
+api/_papers_check.json

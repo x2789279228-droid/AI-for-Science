@@ -17,8 +17,8 @@ services:
       - path: .env
         required: false          # 离线/无 LLM 演示可不配（抽取式降级闭环仍可跑）
     volumes:
-      - ./api/data:/app/data
-      - ./downloads:/app/downloads:ro
+      # 宿主数据目录 = scholar-agent/data（config.ROOT/data，与本地开发同源）
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8100/api/health', timeout=5)"]

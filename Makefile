@@ -16,7 +16,7 @@ web:                ## 本地起前端（:3000）
 	cd web && pnpm dev
 
 demo:               ## 演示环境：恢复 data-real 快照（预置 v7/UDL 已解析语料）+ docker 起全栈
-	@if [ -d data-real ] && [ ! -f api/data/.demo_loaded ]; then cp -r data-real/. api/data/ && touch api/data/.demo_loaded; echo '已恢复 data-real 演示快照'; fi
+	@if [ -d data-real ] && [ ! -f data/.demo_loaded ]; then mkdir -p data && cp -r data-real/. data/ && touch data/.demo_loaded; echo '已恢复 data-real 演示快照'; fi
 	docker compose up --build -d
 	@echo "→ http://localhost:3000  （API http://localhost:8100/api/health）"
 
