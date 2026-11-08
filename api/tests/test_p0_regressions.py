@@ -138,17 +138,32 @@ def test_p0_4_dockerfile_has_uvlock():
 def test_p0_6_writer_final_contains_outline(monkeypatch):
     from fastapi.testclient import TestClient
     from app.main import app
-    # 上传并解析一篇小 PDF（writer 需证据池 ≥3 块 → make_paper_pdf 多段正文）
+    # writer 需证据池 ≥3 块 → 直接构造 3 章节 DocIR 入库索引（不走 PDF 解析，精准可控）
     db.init_db()
-    tmp = _DATA / "p0"
-    tmp.mkdir(parents=True, exist_ok=True)
-    pdf = tmp / "writer_feed.pdf"
-    make_paper_pdf(pdf, "Writer Outline Feed",
-                   body_facts=["Fact A about GPUs.", "Fact B about BLEU.", "Fact C about data."],
-                   refs=["Ref One 2017."])
+    from app.rag import indexing as idx
+    from app.parsing.router import write_docir
+    from app.rag.chunking import chunk_docir
+    pid = "p_p0_6"
+    docir = {"meta": {"title": "Writer Outline Feed", "page_count": 3},
+             "toc": [{"level": 1, "title": s, "page": i} for i, s in
+                     enumerate(["Intro", "Method", "Results", "Discussion"])],
+             "blocks": [{"id": f"b{i}", "type": "paragraph",
+                         "text": f"Fact {name} detail. " * 15,
+                         "page": i, "section_path": s,
+                         "bbox": [0.1, 0.1, 0.9, 0.2]}
+                        for i, (name, s) in
+                        enumerate([("A about GPUs", "Intro"), ("B about BLEU", "Method"),
+                       ("C about data", "Results"), ("D about training", "Discussion")])],
+             "tables": []}
+    write_docir(pid, docir)
+    with db.tx() as c:
+        c.execute("INSERT OR REPLACE INTO papers(id,title,file_path,file_hash,created_at,"
+                  "meta_json,docir_path) VALUES(?,?,?,?,?,?,?)",
+                  (pid, "Writer Outline Feed", "", f"h_{pid}", time.time(), "{}",
+                   str(Path(DOCIR_DIR) / f"{pid}.json")))
+    idx.index_chunks(pid, chunk_docir(docir))
     client = TestClient(app)
-    p = _upload(client, pdf)
-    _wait_job(client, p.get("job_id"))
+    p = {"paper_id": pid}
 
     fake_answer = ("**背景**\n Fact A [E1].\n\n**要点**\n Fact B [E1].\n\n**结论**\n Fact C [E1].")
     monkeypatch.setattr(llm, "available", lambda force=False: True)
@@ -160,7 +175,7 @@ def test_p0_6_writer_final_contains_outline(monkeypatch):
 
     events: list[tuple[str, dict]] = []
     with client.stream("POST", "/api/chat",
-                       json={"question": "帮我写一篇关于该文的短文", "paper_ids": [p["paper_id"]],
+                       json={"question": "write a short essay about GPUs BLEU data", "paper_ids": [p["paper_id"]],
                              "conversation_id": f"p0_6_{uuid.uuid4().hex[:6]}", "agent": "writer"}) as r:
         assert r.status_code == 200
         event = ""

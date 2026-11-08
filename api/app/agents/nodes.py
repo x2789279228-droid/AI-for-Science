@@ -675,8 +675,11 @@ def responder_node(state: AgentState, config=None) -> dict:
         return finish(answer, claims, "generative",
                       f"对比合成 · {len(claims)} 条论断{verify_note()} · 维度表已下发")
     if agent == "writer":
-        return finish(answer, claims, "generative",
-                      f"写作完成 · {len(claims)} 条论断{verify_note()} · 大纲已下发")
+        # P0-6：final 必须携带 outline（runner._push_success 有透传、前端 OutlineView 就绪，
+        # 旧代码只发 artifact 事件——刷新后前端拿不到大纲 = 断链）
+        return {**finish(answer, claims, "generative",
+                         f"写作完成 · {len(claims)} 条论断{verify_note()} · 大纲已下发"),
+                "outline": outline}
     if agent == "graph":
         return finish(answer, [], "generative",
                       "图谱综述 · 指标来自 references 元数据真实计算")
