@@ -72,7 +72,6 @@ jobs:
         run: uv sync --frozen
       - name: run official cases
         working-directory: api
-        continue-on-error: true   # 首日放行；P0-2/P0-3 修复后移除本行，成为必过门槛
         run: uv run python scripts/run_official_cases.py | tee official_cases.log
       - if: always()
         uses: actions/upload-artifact@v4
