@@ -1,0 +1,5 @@
+截图 02 渲染校验（2026-11-08）
+- 方式：页面内 getImageData 抽样（步长 4000）统计亮度>120 占比
+- 结果：canvas 1240×1604，brightRatio=0.97（白底黑字 PDF 页，非纯黑/非花屏）
+- 修复：PdfAnchored 离屏 canvas 一次性上屏 + render token + 旧任务 cancel
+  （旧实现双异步 render 竞争同一 2d 上下文 → 黑屏，见核验报告 P1-5）

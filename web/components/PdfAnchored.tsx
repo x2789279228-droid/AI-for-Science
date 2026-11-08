@@ -6,6 +6,10 @@
  *
  * worker 部署在 public/pdf.worker.min.mjs（由 node_modules/pdfjs-dist/build 复制，
  * 升级 pdfjs-dist 版本后需重新复制，保持离线演示可用）。
+ *
+ * 渲染竞态防护（P1-5：旧实现两次异步 render 写同一可见 canvas → 黑屏/花屏）：
+ * ① render token（tokenRef）作废过期异步流；② 旧 renderTask.cancel()；
+ * ③ 先渲染到**离屏 canvas**，完成后一次性 drawImage 上屏（原子，无中途清屏）。
  */
 import { useEffect, useRef, useState } from "react";
 import { API } from "@/lib/api";
@@ -19,10 +23,13 @@ interface Props {
 
 export default function PdfAnchored({ paperId, page, bbox, width = 620 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tokenRef = useRef(0);
+  const taskRef = useRef<{ cancel(): void } | null>(null);   // 属性访问不触发 TS CFA 收窄
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    const myToken = ++tokenRef.current;
     let cancelled = false;
     let cleanup: (() => void) | null = null;
     setError("");
@@ -35,27 +42,38 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620 }: Props)
         if (!resp.ok) throw new Error(`PDF HTTP ${resp.status}`);
         const data = await resp.arrayBuffer();
         const doc = await pdfjs.getDocument({ data }).promise;
-        if (cancelled) { void doc.destroy(); return; }
-        const p = doc.getPage(Math.max(1, page));
-        if (!p) throw new Error(`页码越界（共 ${doc.numPages} 页）`);
-        const pdfPage = await p;
+        if (cancelled || myToken !== tokenRef.current) { void doc.destroy(); return; }
+        const pdfPage = await doc.getPage(Math.max(1, page));
         const base = pdfPage.getViewport({ scale: 1 });
         const scale = width / base.width;
         const viewport = pdfPage.getViewport({ scale: scale * 2 });   // 2x 渲染抗锯齿
+
+        // 离屏渲染：完成后一次性上屏（旧任务先 cancel，杜绝双 render 竞争同一 2d 上下文）
+        taskRef.current?.cancel();
+        const off = document.createElement("canvas");
+        off.width = viewport.width;
+        off.height = viewport.height;
+        const task = pdfPage.render({ canvasContext: off.getContext("2d")!, viewport });
+        taskRef.current = task;
+        await task.promise;
+        if (cancelled || myToken !== tokenRef.current) { void doc.destroy(); return; }
+
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await pdfPage.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
-        if (cancelled) { void doc.destroy(); return; }
+        if (!canvas) { void doc.destroy(); return; }
+        canvas.width = off.width;
+        canvas.height = off.height;
+        canvas.getContext("2d")!.drawImage(off, 0, 0);
         setReady(true);
         cleanup = () => void doc.destroy();
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled && myToken === tokenRef.current) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
       }
     })();
     return () => {
       cancelled = true;
+      taskRef.current?.cancel();   // 作废在飞的 render（RenderingCancelledException → 静默）
       cleanup?.();
     };
   }, [paperId, page, width]);
