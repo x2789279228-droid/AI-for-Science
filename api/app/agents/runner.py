@@ -37,6 +37,10 @@ class _TeeQueue:
         self.captured.append(item)
         self._sink.put(item)
 
+    def record_only(self, item) -> None:
+        """只记账不转发（P1-1：done 先记账、trace 落盘后再由调用方转发，消回放竞态）。"""
+        self.captured.append(item)
+
 
 def _save_trace(tee: _TeeQueue, thread_id: str, conversation_id: str | None,
                 turn: int | None, question: str, status: str) -> None:
@@ -83,8 +87,9 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
         return
 
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))
-    _push_success(tee, final, question, t0, thread_id, conversation_id)
+    _push_success(tee, final, question, t0, thread_id, conversation_id, defer_done=True)
     _save_trace(tee, thread_id, conversation_id, turn, question, "done")
+    tee.put(("done", {"temperature": settings.llm_temperature}))
 
 
 def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
@@ -132,16 +137,21 @@ def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
         return
 
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))
-    _push_success(tee, final, row["question"], t0, thread_id, row["conversation_id"])
+    _push_success(tee, final, row["question"], t0, thread_id, row["conversation_id"],
+                  defer_done=True)
     _save_trace(tee, thread_id, row["conversation_id"], row["turn"],
                 row["question"], "done")
+    tee.put(("done", {"temperature": settings.llm_temperature}))
 
 
 def _push_success(q, final: dict, question: str, t0: float,
-                  thread_id: str, conversation_id: str | None) -> None:
+                  thread_id: str, conversation_id: str | None,
+                  defer_done: bool = False) -> None:
     """成功收尾事件：retrieval → log_qa → final → done（run/resume 共用）。
 
     q 实参为 _TeeQueue：收尾事件经它转发真实队列的同时同步入账，保证回放完整。
+    defer_done=True 时 done 只记账不转发——调用方须在 _save_trace 之后转发 done，
+    保证「收到 done → 立即回放」必得完整 trace（P1-1 回放竞态）。
     """
     branch_stats = final.get("branch_stats", [])
     q.put(("retrieval", {
@@ -176,4 +186,8 @@ def _push_success(q, final: dict, question: str, t0: float,
                      **({"chart_spec": final["chart_spec"]}
                         if final.get("chart_spec") else {}),
                      "thread_id": thread_id, "conversation_id": conversation_id}))
-    q.put(("done", {"temperature": settings.llm_temperature}))
+    done_evt = ("done", {"temperature": settings.llm_temperature})
+    if defer_done:
+        q.record_only(done_evt)
+    else:
+        q.put(done_evt)

@@ -13,14 +13,12 @@ import time
 import uuid
 from pathlib import Path
 
-import pytest
+from app import db, jobs
+from app.config import DOCIR_DIR
+from app.llm import client as llm
 
 # 密闭由 tests/conftest.py 会话级保证；本模块沿用其隔离目录
-from tests.fixtures_pdf import make_paper_pdf  # noqa: E402
-
-from app import db, jobs  # noqa: E402
-from app.config import DOCIR_DIR  # noqa: E402
-from app.llm import client as llm  # noqa: E402
+from tests.fixtures_pdf import make_paper_pdf
 
 _DATA = Path(os.environ["SCHOLAR_DATA_DIR"])
 
@@ -59,6 +57,7 @@ def _two_version_pdfs() -> tuple[Path, Path]:
 
 def test_p0_1_dedup_alert_in_list():
     from fastapi.testclient import TestClient
+
     from app.main import app
     client = TestClient(app)
     db.init_db()
@@ -84,6 +83,7 @@ def test_p0_2_version_from_filename():
 
 def test_p0_2_dedup_alert_before_job_done():
     from fastapi.testclient import TestClient
+
     from app.main import app
     client = TestClient(app)
     db.init_db()
@@ -137,11 +137,12 @@ def test_p0_4_dockerfile_has_uvlock():
 
 def test_p0_6_writer_final_contains_outline(monkeypatch):
     from fastapi.testclient import TestClient
+
     from app.main import app
     # writer 需证据池 ≥3 块 → 直接构造 3 章节 DocIR 入库索引（不走 PDF 解析，精准可控）
     db.init_db()
-    from app.rag import indexing as idx
     from app.parsing.router import write_docir
+    from app.rag import indexing as idx
     from app.rag.chunking import chunk_docir
     pid = "p_p0_6"
     docir = {"meta": {"title": "Writer Outline Feed", "page_count": 3},
@@ -230,6 +231,7 @@ def test_p0_7_ping_retry_then_available(monkeypatch):
 
 def test_p1_1_trace_replay_immediately_after_done(monkeypatch):
     from fastapi.testclient import TestClient
+
     from app.main import app
     db.init_db()
     tmp = _DATA / "p0"
