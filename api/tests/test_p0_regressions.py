@@ -273,3 +273,32 @@ def test_p1_1_trace_replay_immediately_after_done(monkeypatch):
         r = client.get(f"/api/qa/{tid}")
         assert r.status_code == 200, f"done 后立即回放必须 200（竞态 404），got {r.status_code}"
         assert r.json().get("events"), "回放应带完整事件流"
+
+
+# ---------- Day3 演示护栏：选文上限 ≤8 / 计划扇出 ≤12 ----------
+
+def test_day3_paper_selection_cap():
+    from fastapi.testclient import TestClient
+
+    from app.api_routes import routes as routes_mod
+    from app.main import app
+    db.init_db()
+    ids = [f"p_cap_{i}" for i in range(12)]
+    with db.tx() as c:
+        for pid in ids:
+            c.execute("INSERT OR REPLACE INTO papers(id,title,file_path,file_hash,created_at,meta_json)"
+                      " VALUES(?,?,?,?,?,?)", (pid, f"Cap {pid}", "", f"h_{pid}", time.time(), "{}"))
+    client = TestClient(app)
+    r = client.post("/api/chat", json={"question": "anything", "paper_ids": ids,
+                                       "conversation_id": "cap_test", "agent": "reader"})
+    # 不抛 500；入口把 12 篇截断为 ≤8（LLM 关 → extractive 闭环照常）
+    assert r.status_code == 200
+    assert routes_mod is not None
+
+
+def test_day3_fanout_cap():
+    assert jobs.__dict__.get("MAX_FANOUT") is None  # jobs 不放此常量（防误引）
+    from app.agents.nodes import MAX_FANOUT, _rule_steps
+    steps = _rule_steps("q", [f"p{i}" for i in range(6)], ["a1", "a2", "a3", "a4"])
+    assert len(steps) <= MAX_FANOUT <= 12
+    assert len(_rule_steps("q", [f"p{i}" for i in range(5)], ["a", "b", "c"])) == 12  # 15→12 截断

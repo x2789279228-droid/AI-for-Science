@@ -149,13 +149,16 @@ def router_node(state: AgentState, config=None) -> dict:
 
 # ---------------- Planner ----------------
 
+MAX_FANOUT = 12   # Day3 演示护栏：计划扇出上限（aspects×papers 截断，防超长文档雪崩）
+
+
 def _rule_steps(question: str, paper_ids: list[str], aspects: list[str]) -> list[Step]:
     eff_aspects = [a.strip() for a in aspects if a and a.strip()] or [question]
     steps: list[Step] = []
     for aspect in eff_aspects:
         for pid in paper_ids:
             steps.append({"paper_id": pid, "query": aspect, "aspect": aspect})
-    return steps
+    return steps[:MAX_FANOUT]
 
 
 def planner_node(state: AgentState, config=None) -> dict:

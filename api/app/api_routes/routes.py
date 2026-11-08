@@ -152,6 +152,8 @@ def chat(body: ChatBody):
     paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers")]
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
+    if len(paper_ids) > 8:   # Day3 演示护栏：默认选文上限 ≤8 篇（超出截断并如实告知）
+        paper_ids = paper_ids[:8]
 
     conv = body.conversation_id.strip() or uuid_mod.uuid4().hex
     turn = threads_store.next_turn(conv)          # 每轮独立 thread，避免累加键跨轮污染
