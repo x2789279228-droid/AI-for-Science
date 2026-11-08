@@ -83,3 +83,27 @@
       compose 数据卷指向错误（./api/data → ./data）
 - [x] GitHub Release v0.5.0-rc1 已发布（HTTP 201）；main 分支保护已启用（5 required checks
       + strict + PR 要求，HTTP 200 回读验证）
+
+## rc2 收口（2026-11-08 下午，本地提交待推送）
+
+### P1 修复（核验报告 R1-R5）
+- [x] R1 容器阅读页 500：`_resolve_paper_data` 回退应用于 /docir /figure（+坏 payload 防御、jobs 索引）
+- [x] R2 扇出护栏旁路：`_cap_steps` 按面轮转统一 rule/LLM/recover 三路径，trace 标注 truncated
+- [x] R3 trace 序：run 异常/resume 早退三分支统一 record_only→_save_trace→put(done)
+- [x] R4 list_papers 防御 + jobs(kind,paper_id,created_at) 索引
+- [x] R5 选文截断：流首 guardrail/paper_cap 事件 + 前端勾选钳制 ≤8 + 提示 chip
+
+### 测试补强（弱→强）
+- [x] p0_2：dedup 注入 1.2s 延迟 → 断言 done 晚于 dedup 完成 + done 首现瞬间 alert 在库
+- [x] p1_1：done 事件到达瞬间立即回放 + 断言回放 trace 含 done 事件
+- [x] day3 选文：捕获 runner 实际收到的 paper_ids ≤8 + 断言流首 guardrail 事件
+- [x] day3 fanout：monkeypatch LLM planner 路径断言 ≤12 且每面保底一路
+
+### 证据重做
+- [x] 02 重拍：PdfAnchored 离屏 canvas 修复后 **brightRatio 0.97**（1240×1604，非黑实锤）
+- [x] trace usage：stream_options.include_usage → 流式 qa_logs 落账 1818/174 tokens（实测）
+- [x] 真翻译 2 页：清缓存后 13.0s/14.0s（≤60s），translate 行 token 全落账
+- [x] eval 每题 hits 全量导出（en top5 + zh top8 明细 → eval_gold.json retrieval_detail）
+- [ ] 真素材 3/3 完整 log（后台运行中，完成后覆盖 official_cases_real_materials.log）
+- [ ] docker --no-cache 双镜像 + 大小（后台构建中）
+- [ ] rc2 tag + CI(HEAD) 5/5（**待放行推送**后执行）
