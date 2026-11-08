@@ -1,0 +1,810 @@
+event: trace
+data: {"node": "router", "title": "意图识别 + Agent 分发", "summary": "summarize → Reader Agent · 单篇精读 · 4 个检索面", "payload": {"intent": {"type": "summarize", "aspects": ["各论文提出的核心方法与技术路径", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作", "不同论文方法之间的关联与演进脉络"], "language": "zh", "source": "llm"}, "agent": "reader"}}
+
+event: trace
+data: {"node": "reader_entry", "title": "Reader Agent 接手", "summary": "单篇精读 · 4 篇在册", "payload": {"agent": "reader", "scope_lock": false}}
+
+event: trace
+data: {"node": "planner", "title": "任务规划", "summary": "12 步 · 4 篇 × 4 面 · 扇出已截断", "payload": {"steps": [{"paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-1"}, {"paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-2"}, {"paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-3"}, {"paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-4"}, {"paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-5"}, {"paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-6"}, {"paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-7"}, {"paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-8"}, {"paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-9"}, {"paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-10"}, {"paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-11"}, {"paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-12"}], "truncated": true}}
+
+event: plan
+data: {"round": 1, "mode": "summary", "steps": [{"step_id": "s1-1", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper"}, {"step_id": "s1-2", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper"}, {"step_id": "s1-3", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper"}, {"step_id": "s1-4", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers"}, {"step_id": "s1-5", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper"}, {"step_id": "s1-6", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper"}, {"step_id": "s1-7", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper"}, {"step_id": "s1-8", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers"}, {"step_id": "s1-9", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper"}, {"step_id": "s1-10", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper"}, {"step_id": "s1-11", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper"}, {"step_id": "s1-12", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers"}]}
+
+event: tool_call
+data: {"step_id": "s1-1", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-2", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-3", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-4", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-5", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-6", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-7", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-8", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-9", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-10", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-11", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper", "top_k": 10}}
+
+event: tool_call
+data: {"step_id": "s1-12", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers", "top_k": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-4", "ok": true, "summary": "correlations and evolution context between methods of different papers → 10 块", "refs": ["c_e7da4bbf31dd", "c_dc1ef4aad967", "c_31a12f2f1f8b", "c_5b09b1387b62", "c_c67976e582f8", "c_3ae39c9eead3", "c_7dccadb30c62", "c_3e7213849b41", "c_a89116a3c66c", "c_5218c84ada92"], "elapsed_ms": 712, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-1", "ok": true, "summary": "core methods and technical paths proposed by each paper → 10 块", "refs": ["c_5b09b1387b62", "c_68aa0f7913ed", "c_7bab38988317", "c_a89116a3c66c", "c_645d76163ae9", "c_c67976e582f8", "c_e7da4bbf31dd", "c_31a12f2f1f8b", "c_eb3ac15b64de", "c_dc1ef4aad967"], "elapsed_ms": 756, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-5", "ok": true, "summary": "core methods and technical paths proposed by each paper → 10 块", "refs": ["c_160c22f5d504", "c_c0c08a674bb2", "c_f745187f1404", "c_6711ecb9a3e0", "c_5168490af823", "c_6271b11ab0ca", "c_30cea1649da6", "c_d5d360b91b69", "c_3c7a876fe12b", "c_36ee12369ee1"], "elapsed_ms": 768, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-7", "ok": true, "summary": "follow-up research directions and future work of each paper → 10 块", "refs": ["c_c0c08a674bb2", "c_ccd987b31962", "c_30cea1649da6", "c_f80f2ff2a085", "c_5168490af823", "c_553234112c1d", "c_151b9856609c", "c_f745187f1404", "c_3c7a876fe12b", "c_6271b11ab0ca"], "elapsed_ms": 807, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-9", "ok": true, "summary": "core methods and technical paths proposed by each paper → 10 块", "refs": ["c_4c42ef35b16e", "c_210df222c632", "c_bc55569cdbdd", "c_90b781e6e1d4", "c_c9c1d19e29cd", "c_77666a861f4e", "c_d69ee2d5b559", "c_6b294a42c474", "c_d7cf3fd7afc7", "c_16b60964492e"], "elapsed_ms": 831, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-12", "ok": true, "summary": "correlations and evolution context between methods of different papers → 10 块", "refs": ["c_e16e9b9e74fd", "c_01b49a83bd74", "c_210df222c632", "c_2c1ec47b62c4", "c_6b294a42c474", "c_bc55569cdbdd", "c_90b781e6e1d4", "c_77666a861f4e", "c_c485823f1188", "c_003d7fae55d8"], "elapsed_ms": 833, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-11", "ok": true, "summary": "follow-up research directions and future work of each paper → 10 块", "refs": ["c_8bda1ee2f2bb", "c_210df222c632", "c_eaf1ba0d25ce", "c_da8db6a62ac4", "c_109c978542d3", "c_90b781e6e1d4", "c_0f7c8bd5920f", "c_003d7fae55d8", "c_394ecf59daa5", "c_6b294a42c474"], "elapsed_ms": 835, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-2", "ok": true, "summary": "key experimental results and performance metrics of each paper → 10 块", "refs": ["c_f4a34ff7e6e3", "c_0e9a2b3eed51", "c_eb3ac15b64de", "c_b654ea7d8f15", "c_3e7213849b41", "c_645d76163ae9", "c_7dccadb30c62", "c_5b09b1387b62", "c_a89116a3c66c", "c_5bfbee5a3e94"], "elapsed_ms": 868, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-6", "ok": true, "summary": "key experimental results and performance metrics of each paper → 10 块", "refs": ["c_9b5ddf48e4a6", "c_04cbbd1a2e05", "c_c0c08a674bb2", "c_dcba152154e6", "c_5168490af823", "c_65cba8553a39", "c_48467ef94910", "c_160c22f5d504", "c_6271b11ab0ca", "c_30cea1649da6"], "elapsed_ms": 904, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-10", "ok": true, "summary": "key experimental results and performance metrics of each paper → 10 块", "refs": ["c_7205e03b7de0", "c_4c42ef35b16e", "c_210df222c632", "c_90b781e6e1d4", "c_fd7db79bbf69", "c_77666a861f4e", "c_e2c5168c3450", "c_4a85ce26b28a", "c_6b294a42c474", "c_867e258ee923"], "elapsed_ms": 937, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-3", "ok": true, "summary": "follow-up research directions and future work of each paper → 10 块", "refs": ["c_a89116a3c66c", "c_cd03adf2f4d1", "c_eb3ac15b64de", "c_645d76163ae9", "c_7dccadb30c62", "c_68aa0f7913ed", "c_5218c84ada92", "c_c67976e582f8", "c_981f6e4adf4b", "c_e7da4bbf31dd"], "elapsed_ms": 957, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: tool_result
+data: {"step_id": "s1-8", "ok": true, "summary": "correlations and evolution context between methods of different papers → 10 块", "refs": ["c_3c7a876fe12b", "c_160c22f5d504", "c_53cfad0d0f61", "c_af44a2ab2b40", "c_5168490af823", "c_92beee2925da", "c_151b9856609c", "c_c0c08a674bb2", "c_a3477be7f57a", "c_28d83b2a6f75"], "elapsed_ms": 1053, "payload": {"hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}
+
+event: trace
+data: {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 120 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}
+
+event: evidence
+data: {"channels": ["bm25", "dense"], "bm25_count": 120, "dense_count": 120, "hits": [{"chunk_id": "c_210df222c632", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.3704, "rrf": 0.064004, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengchao Chen, Siavash Khallaghi, Csaba Szepesvári,\nMike Singer, Mykhailo Shvets, Abdalla Ibrahim, Stefan Hell, Ron Raphaeli, Diogo Tavares,\nAristotelis Siozopoulos,", "page": 11}, {"chunk_id": "c_c0c08a674bb2", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 5.0376, "rrf": 0.063101, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or\nscholarly works.\nAttention Is All You Need\nAshish Vaswani∗\nNoam Shazeer∗\nGoogle Brain\navaswani@google.com\nGoogle Brain\nnoam@google.com\nLlion Jo", "page": 1}, {"chunk_id": "c_5168490af823", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3505, "rrf": 0.061538, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and", "page": 1}, {"chunk_id": "c_90b781e6e1d4", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.3592, "rrf": 0.061327, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "l Sheikh, Ja-\ncob Horton, Felix Rammell, Sasha Luccioni, Akshil Patel, Alessandro Gentilini, Kevin M\nercier,\nKrzysztof Lichocki, Chuck Krapf, Brian Ha, Chris Kang, Leonardo Viotti, Kai Li, Himan Ab-\ndollahpouri, Ari Pakman, Giuseppe Antonio Di Luna, Dan Oneat,ă, Conrad Whiteley, Joseph\nSantarcangelo", "page": 11}, {"chunk_id": "c_a89116a3c66c", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3389, "rrf": 0.061004, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Ashish Vaswani∗\nGoogle Brain\navaswani@google.com\nNoam Shazeer∗\nGoogle Brain\nnoam@google.com\nNiki Parmar∗\nGoogle Research\nnikip@google.com\nJakob Uszkoreit∗\nGoogle Research\nusz@google.com\nLlion Jones∗\nGoogle Research\nllion@google.com\nAidan N. Gomez∗ †\nUniversity of Toronto\naidan@cs.toronto.edu\nŁukasz ", "page": 1}, {"chunk_id": "c_6b294a42c474", "paper_id": "p_093639f6b110", "section_path": "_front", "score": 0.3001, "rrf": 0.058869, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Understanding Deep Learning\nSimon J.D. Prince\nFebruary 8, 2026\nThe most recent version of this document can be found at http://udlbook.com.\nCopyright in this work has been licensed exclusively to The MIT Press,\nhttps://mitpress.mit.edu, which released the final version to the public in December 2023", "page": 1}, {"chunk_id": "c_160c22f5d504", "paper_id": "p_5e84333e8e1d", "section_path": "Embeddings and Softmax", "score": 6.5764, "rrf": 0.047228, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "ation that can\nbe parallelized, as measured by the minimum number of sequential operations required.\nThe third is the path length between long-range dependencies in the network. Learning long-range\ndependencies is a key challenge in many sequence transduction tasks. One key factor affecting the\nabil", "page": 6}, {"chunk_id": "c_5b09b1387b62", "paper_id": "p_a19a95dbf468", "section_path": "4 Why Self-Attention", "score": 6.5764, "rrf": 0.046724, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "ation that can\nbe parallelized, as measured by the minimum number of sequential operations required.\nThe third is the path length between long-range dependencies in the network. Learning long-range\ndependencies is a key challenge in many sequence transduction tasks. One key factor affecting the\nabil", "page": 5}]}
+
+event: trace
+data: {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}
+
+event: verifier
+data: {"verdict": "insufficient", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "evidence_count": 8, "action": "recover"}
+
+event: trace
+data: {"node": "recover", "title": "恢复·重检索", "summary": "#1 · 改写 3 个检索面 · top_k → 16 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "研究方法 继承 改进 对比", "各论文的关键实验结果与性能指标": "实验数据集 准确率 召回率 性能对比", "各论文的后续研究方向与未来工作": "未来研究方向 局限性 改进展望"}, "truncated": true}}
+
+event: plan
+data: {"round": 2, "mode": "summary", "steps": [{"step_id": "s2-1", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s2-2", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_a19a95dbf468", "query": "实验数据集 准确率 召回率 性能对比"}, {"step_id": "s2-3", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_a19a95dbf468", "query": "未来研究方向 局限性 改进展望"}, {"step_id": "s2-4", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_a19a95dbf468", "query": "研究方法 继承 改进 对比"}, {"step_id": "s2-5", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s2-6", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_5e84333e8e1d", "query": "实验数据集 准确率 召回率 性能对比"}, {"step_id": "s2-7", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_5e84333e8e1d", "query": "未来研究方向 局限性 改进展望"}, {"step_id": "s2-8", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_5e84333e8e1d", "query": "研究方法 继承 改进 对比"}, {"step_id": "s2-9", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s2-10", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_093639f6b110", "query": "实验数据集 准确率 召回率 性能对比"}, {"step_id": "s2-11", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_093639f6b110", "query": "未来研究方向 局限性 改进展望"}, {"step_id": "s2-12", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_093639f6b110", "query": "研究方法 继承 改进 对比"}]}
+
+event: tool_call
+data: {"step_id": "s2-1", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-2", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "实验数据集 准确率 召回率 性能对比", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-3", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 局限性 改进展望", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-4", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "研究方法 继承 改进 对比", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-5", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-6", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "实验数据集 准确率 召回率 性能对比", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-7", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 局限性 改进展望", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-8", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "研究方法 继承 改进 对比", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-9", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-10", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "实验数据集 准确率 召回率 性能对比", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-11", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "未来研究方向 局限性 改进展望", "top_k": 16}}
+
+event: tool_call
+data: {"step_id": "s2-12", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "研究方法 继承 改进 对比", "top_k": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-6", "ok": true, "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_53cfad0d0f61", "c_3c7a876fe12b", "c_28d83b2a6f75", "c_ccd987b31962", "c_4517e9e04f21", "c_5240b80b896f", "c_eca17abea828", "c_e737fa4616b6", "c_6711ecb9a3e0", "c_7c5ea36a2955", "c_a3477be7f57a", "c_c53fbf18733b", "c_e347558eeeda"], "elapsed_ms": 1929, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-11", "ok": true, "summary": "未来研究方向 局限性 改进展望 → 16 块", "refs": ["c_6b294a42c474", "c_210df222c632", "c_90b781e6e1d4", "c_77666a861f4e", "c_003d7fae55d8", "c_16b60964492e", "c_46528156f4f5", "c_92ca327f58b8", "c_ed1224fc3c92", "c_da8db6a62ac4", "c_530dc533a5bf", "c_ea6c1a8a1dbc", "c_f4be9f8165b8", "c_a2f7db38db99", "c_6f27fdbe624a", "c_42937f979db5"], "elapsed_ms": 1912, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-1", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 16 块", "refs": ["c_c67976e582f8", "c_a89116a3c66c", "c_eb3ac15b64de", "c_7dccadb30c62", "c_8901f92972a9", "c_e7da4bbf31dd", "c_97a2f93806da", "c_016ac7d7d611", "c_7bab38988317", "c_3e7213849b41", "c_f8fa755d7bc6", "c_aea2740b246e", "c_68aa0f7913ed", "c_dc1ef4aad967", "c_2f9682e0a4f2", "c_31a12f2f1f8b"], "elapsed_ms": 1977, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-9", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 16 块", "refs": ["c_210df222c632", "c_90b781e6e1d4", "c_77666a861f4e", "c_003d7fae55d8", "c_46528156f4f5", "c_6b294a42c474", "c_da8db6a62ac4", "c_16b60964492e", "c_92ca327f58b8", "c_6f27fdbe624a", "c_a5fa6a006997", "c_ea6c1a8a1dbc", "c_e16e9b9e74fd", "c_a03e1a9309b6", "c_93fd469a8d0a", "c_458c280e2735"], "elapsed_ms": 1971, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-2", "ok": true, "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "refs": ["c_c67976e582f8", "c_eb3ac15b64de", "c_7dccadb30c62", "c_a89116a3c66c", "c_e7da4bbf31dd", "c_3e7213849b41", "c_31a12f2f1f8b", "c_aea2740b246e", "c_016ac7d7d611", "c_f8fa755d7bc6", "c_dc1ef4aad967", "c_e63453b66219", "c_39222291a45f", "c_e6d9ac212701", "c_61f4e35eb513", "c_97a2f93806da"], "elapsed_ms": 1998, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-7", "ok": true, "summary": "未来研究方向 局限性 改进展望 → 16 块", "refs": ["c_5168490af823", "c_553234112c1d", "c_ccd987b31962", "c_c0c08a674bb2", "c_151b9856609c", "c_53cfad0d0f61", "c_288a9017a824", "c_3c7a876fe12b", "c_deb9432c5e66", "c_eca17abea828", "c_4517e9e04f21", "c_f745187f1404", "c_7c5ea36a2955", "c_f80f2ff2a085", "c_e8ca751a397f", "c_b2834e7a1f3d"], "elapsed_ms": 1991, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-8", "ok": true, "summary": "研究方法 继承 改进 对比 → 16 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_53cfad0d0f61", "c_ccd987b31962", "c_f314baf4a051", "c_3c7a876fe12b", "c_4517e9e04f21", "c_30cea1649da6", "c_c53fbf18733b", "c_160c22f5d504", "c_c89a6c9291d8", "c_28d83b2a6f75", "c_f80f2ff2a085", "c_e8ca751a397f", "c_04cbbd1a2e05"], "elapsed_ms": 1992, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-3", "ok": true, "summary": "未来研究方向 局限性 改进展望 → 16 块", "refs": ["c_c67976e582f8", "c_eb3ac15b64de", "c_7dccadb30c62", "c_cd03adf2f4d1", "c_a89116a3c66c", "c_016ac7d7d611", "c_dc1ef4aad967", "c_e8b28dc10a54", "c_f8fa755d7bc6", "c_e7da4bbf31dd", "c_31a12f2f1f8b", "c_5218c84ada92", "c_68aa0f7913ed", "c_aea2740b246e", "c_6b7279beb1ce", "c_3e7213849b41"], "elapsed_ms": 2024, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-4", "ok": true, "summary": "研究方法 继承 改进 对比 → 16 块", "refs": ["c_c67976e582f8", "c_7dccadb30c62", "c_eb3ac15b64de", "c_a89116a3c66c", "c_97a2f93806da", "c_580e8b12b43c", "c_e7da4bbf31dd", "c_3e7213849b41", "c_7bab38988317", "c_31a12f2f1f8b", "c_f8fa755d7bc6", "c_9b132214b715", "c_016ac7d7d611", "c_aea2740b246e", "c_8901f92972a9", "c_5b09b1387b62"], "elapsed_ms": 2026, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-5", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 16 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_3c7a876fe12b", "c_53cfad0d0f61", "c_30cea1649da6", "c_ccd987b31962", "c_4517e9e04f21", "c_eca17abea828", "c_9b5ddf48e4a6", "c_c89a6c9291d8", "c_6711ecb9a3e0", "c_2a87f3a6c450", "c_f745187f1404", "c_b2834e7a1f3d", "c_28d83b2a6f75"], "elapsed_ms": 2024, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-12", "ok": true, "summary": "研究方法 继承 改进 对比 → 16 块", "refs": ["c_6b294a42c474", "c_90b781e6e1d4", "c_003d7fae55d8", "c_77666a861f4e", "c_93226bc5362c", "c_46528156f4f5", "c_210df222c632", "c_530dc533a5bf", "c_a5fa6a006997", "c_16b60964492e", "c_92ca327f58b8", "c_42937f979db5", "c_5af9878eae9a", "c_362490db1e5e", "c_9ed886dc588d", "c_da8db6a62ac4"], "elapsed_ms": 2045, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: tool_result
+data: {"step_id": "s2-10", "ok": true, "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "refs": ["c_6b294a42c474", "c_b26dcb88d209", "c_210df222c632", "c_530dc533a5bf", "c_d7ca6cde29e5", "c_77666a861f4e", "c_90b781e6e1d4", "c_a03e1a9309b6", "c_93226bc5362c", "c_c3ab51b67db9", "c_31cdc5f1043d", "c_ea6c1a8a1dbc", "c_5b6880ee16ff", "c_b77994fdec72", "c_e16e9b9e74fd", "c_46528156f4f5"], "elapsed_ms": 2075, "payload": {"hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}
+
+event: trace
+data: {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 192 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}
+
+event: evidence
+data: {"channels": ["bm25", "dense"], "bm25_count": 0, "dense_count": 192, "hits": [{"chunk_id": "c_c67976e582f8", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3728, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks in an encoder-decoder configuration. The best\nperforming models also connect the encoder and ", "page": 1}, {"chunk_id": "c_5168490af823", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3936, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and", "page": 1}, {"chunk_id": "c_6b294a42c474", "paper_id": "p_093639f6b110", "section_path": "_front", "score": 0.3293, "rrf": 0.064332, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Understanding Deep Learning\nSimon J.D. Prince\nFebruary 8, 2026\nThe most recent version of this document can be found at http://udlbook.com.\nCopyright in this work has been licensed exclusively to The MIT Press,\nhttps://mitpress.mit.edu, which released the final version to the public in December 2023", "page": 1}, {"chunk_id": "c_c0c08a674bb2", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3879, "rrf": 0.064012, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or\nscholarly works.\nAttention Is All You Need\nAshish Vaswani∗\nNoam Shazeer∗\nGoogle Brain\navaswani@google.com\nGoogle Brain\nnoam@google.com\nLlion Jo", "page": 1}, {"chunk_id": "c_eb3ac15b64de", "paper_id": "p_a19a95dbf468", "section_path": "7 Conclusion", "score": 0.3652, "rrf": 0.064004, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "In this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly fast", "page": 10}, {"chunk_id": "c_7dccadb30c62", "paper_id": "p_a19a95dbf468", "section_path": "1 Introduction", "score": 0.3379, "rrf": 0.0635, "kind": "summary", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "[章节概览] 1 Introduction（pp.0-0）：Recurrent neural networks, long short-term memory [12] and gated recurrent [7] neural networks\nin particular, have been firmly established as state of the art approaches in sequence modeling and\ntransduction problems such as language modeling and machine translation [31", "page": 1}, {"chunk_id": "c_210df222c632", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4115, "rrf": 0.063321, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengchao Chen, Siavash Khallaghi, Csaba Szepesvári,\nMike Singer, Mykhailo Shvets, Abdalla Ibrahim, Stefan Hell, Ron Raphaeli, Diogo Tavares,\nAristotelis Siozopoulos,", "page": 11}, {"chunk_id": "c_90b781e6e1d4", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4098, "rrf": 0.063056, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "l Sheikh, Ja-\ncob Horton, Felix Rammell, Sasha Luccioni, Akshil Patel, Alessandro Gentilini, Kevin M\nercier,\nKrzysztof Lichocki, Chuck Krapf, Brian Ha, Chris Kang, Leonardo Viotti, Kai Li, Himan Ab-\ndollahpouri, Ari Pakman, Giuseppe Antonio Di Luna, Dan Oneat,ă, Conrad Whiteley, Joseph\nSantarcangelo", "page": 11}]}
+
+event: trace
+data: {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}
+
+event: verifier
+data: {"verdict": "insufficient", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "evidence_count": 8, "action": "recover"}
+
+event: trace
+data: {"node": "recover", "title": "恢复·重检索", "summary": "#2 · 改写 3 个检索面 · top_k → 22 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "方法关联 技术演进 研究脉络", "各论文的关键实验结果与性能指标": "实验结果 性能对比 指标数据", "各论文的后续研究方向与未来工作": "未来研究方向 后续工作 研究展望"}, "truncated": true}}
+
+event: plan
+data: {"round": 3, "mode": "summary", "steps": [{"step_id": "s3-1", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s3-2", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_a19a95dbf468", "query": "实验结果 性能对比 指标数据"}, {"step_id": "s3-3", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_a19a95dbf468", "query": "未来研究方向 后续工作 研究展望"}, {"step_id": "s3-4", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_a19a95dbf468", "query": "方法关联 技术演进 研究脉络"}, {"step_id": "s3-5", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s3-6", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_5e84333e8e1d", "query": "实验结果 性能对比 指标数据"}, {"step_id": "s3-7", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_5e84333e8e1d", "query": "未来研究方向 后续工作 研究展望"}, {"step_id": "s3-8", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_5e84333e8e1d", "query": "方法关联 技术演进 研究脉络"}, {"step_id": "s3-9", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s3-10", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_093639f6b110", "query": "实验结果 性能对比 指标数据"}, {"step_id": "s3-11", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_093639f6b110", "query": "未来研究方向 后续工作 研究展望"}, {"step_id": "s3-12", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_093639f6b110", "query": "方法关联 技术演进 研究脉络"}]}
+
+event: tool_call
+data: {"step_id": "s3-1", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-2", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "实验结果 性能对比 指标数据", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-3", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 后续工作 研究展望", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-4", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "方法关联 技术演进 研究脉络", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-5", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-6", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "实验结果 性能对比 指标数据", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-8", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "方法关联 技术演进 研究脉络", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-7", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 后续工作 研究展望", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-9", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-10", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "实验结果 性能对比 指标数据", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-11", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "未来研究方向 后续工作 研究展望", "top_k": 22}}
+
+event: tool_call
+data: {"step_id": "s3-12", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "方法关联 技术演进 研究脉络", "top_k": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-6", "ok": true, "summary": "实验结果 性能对比 指标数据 → 22 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_9b5ddf48e4a6", "c_151b9856609c", "c_04cbbd1a2e05", "c_57a2c016466b", "c_5240b80b896f", "c_c53fbf18733b", "c_ccd987b31962", "c_e737fa4616b6", "c_30cea1649da6", "c_2a87f3a6c450", "c_a46f6391ade4", "c_a3477be7f57a", "c_7c5ea36a2955", "c_53cfad0d0f61", "c_48467ef94910", "c_28d83b2a6f75", "c_c82e8514ade9", "c_65cba8553a39", "c_160c22f5d504", "c_f80f2ff2a085"], "elapsed_ms": 779, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-3", "ok": true, "summary": "未来研究方向 后续工作 研究展望 → 22 块", "refs": ["c_c67976e582f8", "c_eb3ac15b64de", "c_a89116a3c66c", "c_cd03adf2f4d1", "c_7dccadb30c62", "c_e7da4bbf31dd", "c_aea2740b246e", "c_f8fa755d7bc6", "c_dc1ef4aad967", "c_8901f92972a9", "c_016ac7d7d611", "c_3e7213849b41", "c_9b132214b715", "c_6b7279beb1ce", "c_31a12f2f1f8b", "c_580e8b12b43c", "c_5218c84ada92", "c_68aa0f7913ed", "c_6c706b2dea68", "c_97a2f93806da", "c_e6d9ac212701", "c_5b09b1387b62"], "elapsed_ms": 792, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-7", "ok": true, "summary": "未来研究方向 后续工作 研究展望 → 22 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_ccd987b31962", "c_151b9856609c", "c_53cfad0d0f61", "c_3c7a876fe12b", "c_eca17abea828", "c_553234112c1d", "c_4517e9e04f21", "c_ed9c4408c238", "c_e8ca751a397f", "c_754fcd8cf40f", "c_f80f2ff2a085", "c_e347558eeeda", "c_28d83b2a6f75", "c_b2834e7a1f3d", "c_7c5ea36a2955", "c_c89a6c9291d8", "c_c53fbf18733b", "c_30cea1649da6", "c_f745187f1404", "c_4deaa28b3626"], "elapsed_ms": 751, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-9", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 22 块", "refs": ["c_210df222c632", "c_90b781e6e1d4", "c_77666a861f4e", "c_003d7fae55d8", "c_46528156f4f5", "c_6b294a42c474", "c_da8db6a62ac4", "c_16b60964492e", "c_92ca327f58b8", "c_a5fa6a006997", "c_ea6c1a8a1dbc", "c_6f27fdbe624a", "c_e16e9b9e74fd", "c_93fd469a8d0a", "c_a03e1a9309b6", "c_458c280e2735", "c_93226bc5362c", "c_99030e21009b", "c_f4be9f8165b8", "c_5af9878eae9a", "c_ba873f4a7bca", "c_c3ab51b67db9"], "elapsed_ms": 740, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-5", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 22 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_3c7a876fe12b", "c_53cfad0d0f61", "c_30cea1649da6", "c_ccd987b31962", "c_4517e9e04f21", "c_eca17abea828", "c_9b5ddf48e4a6", "c_c89a6c9291d8", "c_6711ecb9a3e0", "c_2a87f3a6c450", "c_f745187f1404", "c_b2834e7a1f3d", "c_28d83b2a6f75", "c_deb9432c5e66", "c_fd83df3cbb64", "c_36ee12369ee1", "c_160c22f5d504", "c_c53fbf18733b", "c_ed9c4408c238"], "elapsed_ms": 857, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-8", "ok": true, "summary": "方法关联 技术演进 研究脉络 → 22 块", "refs": ["c_5168490af823", "c_3c7a876fe12b", "c_c0c08a674bb2", "c_151b9856609c", "c_4517e9e04f21", "c_53cfad0d0f61", "c_eca17abea828", "c_e8ca751a397f", "c_28d83b2a6f75", "c_ed9c4408c238", "c_754fcd8cf40f", "c_4deaa28b3626", "c_36ee12369ee1", "c_ccd987b31962", "c_b2834e7a1f3d", "c_160c22f5d504", "c_af44a2ab2b40", "c_deb9432c5e66", "c_2a87f3a6c450", "c_a3477be7f57a", "c_f745187f1404", "c_30cea1649da6"], "elapsed_ms": 829, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-10", "ok": true, "summary": "实验结果 性能对比 指标数据 → 22 块", "refs": ["c_210df222c632", "c_6b294a42c474", "c_90b781e6e1d4", "c_77666a861f4e", "c_b26dcb88d209", "c_73ab2ae67cc2", "c_530dc533a5bf", "c_1efd17b4623a", "c_003d7fae55d8", "c_f4be9f8165b8", "c_46528156f4f5", "c_d7ca6cde29e5", "c_7205e03b7de0", "c_16b60964492e", "c_5af9878eae9a", "c_5b6880ee16ff", "c_93226bc5362c", "c_e16e9b9e74fd", "c_ea6c1a8a1dbc", "c_a5fa6a006997", "c_fd7db79bbf69", "c_ba873f4a7bca"], "elapsed_ms": 829, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-1", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 22 块", "refs": ["c_c67976e582f8", "c_a89116a3c66c", "c_eb3ac15b64de", "c_7dccadb30c62", "c_8901f92972a9", "c_e7da4bbf31dd", "c_97a2f93806da", "c_016ac7d7d611", "c_7bab38988317", "c_3e7213849b41", "c_f8fa755d7bc6", "c_aea2740b246e", "c_dc1ef4aad967", "c_68aa0f7913ed", "c_2f9682e0a4f2", "c_31a12f2f1f8b", "c_68966e88d484", "c_e63453b66219", "c_a88bfb14e273", "c_580e8b12b43c", "c_9b132214b715", "c_5b09b1387b62"], "elapsed_ms": 970, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-2", "ok": true, "summary": "实验结果 性能对比 指标数据 → 22 块", "refs": ["c_c67976e582f8", "c_eb3ac15b64de", "c_a89116a3c66c", "c_7dccadb30c62", "c_e63453b66219", "c_3e7213849b41", "c_0e9a2b3eed51", "c_e7da4bbf31dd", "c_016ac7d7d611", "c_580e8b12b43c", "c_8901f92972a9", "c_1541c9f5bedf", "c_97a2f93806da", "c_68966e88d484", "c_aea2740b246e", "c_61f4e35eb513", "c_5b09b1387b62", "c_5b27f90c987a", "c_e6d9ac212701", "c_7bab38988317", "c_5bfbee5a3e94", "c_39890372c449"], "elapsed_ms": 962, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-4", "ok": true, "summary": "方法关联 技术演进 研究脉络 → 22 块", "refs": ["c_c67976e582f8", "c_7dccadb30c62", "c_a89116a3c66c", "c_3e7213849b41", "c_e7da4bbf31dd", "c_eb3ac15b64de", "c_dc1ef4aad967", "c_aea2740b246e", "c_31a12f2f1f8b", "c_f8fa755d7bc6", "c_016ac7d7d611", "c_6b7279beb1ce", "c_9b132214b715", "c_97a2f93806da", "c_a88bfb14e273", "c_5b09b1387b62", "c_68aa0f7913ed", "c_5218c84ada92", "c_7bab38988317", "c_580e8b12b43c", "c_8901f92972a9", "c_e8b28dc10a54"], "elapsed_ms": 965, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-12", "ok": true, "summary": "方法关联 技术演进 研究脉络 → 22 块", "refs": ["c_6b294a42c474", "c_210df222c632", "c_90b781e6e1d4", "c_003d7fae55d8", "c_77666a861f4e", "c_46528156f4f5", "c_da8db6a62ac4", "c_16b60964492e", "c_530dc533a5bf", "c_458c280e2735", "c_a5fa6a006997", "c_ea6c1a8a1dbc", "c_93226bc5362c", "c_a03e1a9309b6", "c_e16e9b9e74fd", "c_6f27fdbe624a", "c_a372590e37f1", "c_42937f979db5", "c_99030e21009b", "c_92ca327f58b8", "c_fc46a8116128", "c_d27941b99224"], "elapsed_ms": 786, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: tool_result
+data: {"step_id": "s3-11", "ok": true, "summary": "未来研究方向 后续工作 研究展望 → 22 块", "refs": ["c_210df222c632", "c_6b294a42c474", "c_90b781e6e1d4", "c_003d7fae55d8", "c_46528156f4f5", "c_77666a861f4e", "c_16b60964492e", "c_f4be9f8165b8", "c_ea6c1a8a1dbc", "c_530dc533a5bf", "c_5af9878eae9a", "c_a5fa6a006997", "c_93226bc5362c", "c_da8db6a62ac4", "c_42937f979db5", "c_95050c968e1f", "c_92ca327f58b8", "c_99030e21009b", "c_c3ab51b67db9", "c_31cdc5f1043d", "c_6f27fdbe624a", "c_a372590e37f1"], "elapsed_ms": 881, "payload": {"hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}
+
+event: trace
+data: {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 264 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}
+
+event: evidence
+data: {"channels": ["bm25", "dense"], "bm25_count": 0, "dense_count": 264, "hits": [{"chunk_id": "c_c67976e582f8", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3744, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks in an encoder-decoder configuration. The best\nperforming models also connect the encoder and ", "page": 1}, {"chunk_id": "c_5168490af823", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3936, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and", "page": 1}, {"chunk_id": "c_210df222c632", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4098, "rrf": 0.065309, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengchao Chen, Siavash Khallaghi, Csaba Szepesvári,\nMike Singer, Mykhailo Shvets, Abdalla Ibrahim, Stefan Hell, Ron Raphaeli, Diogo Tavares,\nAristotelis Siozopoulos,", "page": 11}, {"chunk_id": "c_c0c08a674bb2", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3879, "rrf": 0.06426, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or\nscholarly works.\nAttention Is All You Need\nAshish Vaswani∗\nNoam Shazeer∗\nGoogle Brain\navaswani@google.com\nGoogle Brain\nnoam@google.com\nLlion Jo", "page": 1}, {"chunk_id": "c_6b294a42c474", "paper_id": "p_093639f6b110", "section_path": "_front", "score": 0.3237, "rrf": 0.063803, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Understanding Deep Learning\nSimon J.D. Prince\nFebruary 8, 2026\nThe most recent version of this document can be found at http://udlbook.com.\nCopyright in this work has been licensed exclusively to The MIT Press,\nhttps://mitpress.mit.edu, which released the final version to the public in December 2023", "page": 1}, {"chunk_id": "c_a89116a3c66c", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3727, "rrf": 0.063748, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Ashish Vaswani∗\nGoogle Brain\navaswani@google.com\nNoam Shazeer∗\nGoogle Brain\nnoam@google.com\nNiki Parmar∗\nGoogle Research\nnikip@google.com\nJakob Uszkoreit∗\nGoogle Research\nusz@google.com\nLlion Jones∗\nGoogle Research\nllion@google.com\nAidan N. Gomez∗ †\nUniversity of Toronto\naidan@cs.toronto.edu\nŁukasz ", "page": 1}, {"chunk_id": "c_90b781e6e1d4", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4062, "rrf": 0.063748, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "l Sheikh, Ja-\ncob Horton, Felix Rammell, Sasha Luccioni, Akshil Patel, Alessandro Gentilini, Kevin M\nercier,\nKrzysztof Lichocki, Chuck Krapf, Brian Ha, Chris Kang, Leonardo Viotti, Kai Li, Himan Ab-\ndollahpouri, Ari Pakman, Giuseppe Antonio Di Luna, Dan Oneat,ă, Conrad Whiteley, Joseph\nSantarcangelo", "page": 11}, {"chunk_id": "c_eb3ac15b64de", "paper_id": "p_a19a95dbf468", "section_path": "7 Conclusion", "score": 0.3654, "rrf": 0.063283, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "In this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly fast", "page": 10}]}
+
+event: trace
+data: {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}
+
+event: verifier
+data: {"verdict": "insufficient", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "evidence_count": 8, "action": "recover"}
+
+event: delta
+data: {"text": "【"}
+
+event: delta
+data: {"text": "未"}
+
+event: delta
+data: {"text": "找到"}
+
+event: delta
+data: {"text": "依据"}
+
+event: delta
+data: {"text": "】"}
+
+event: delta
+data: {"text": "检索"}
+
+event: delta
+data: {"text": "到"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "片段"}
+
+event: delta
+data: {"text": "无法"}
+
+event: delta
+data: {"text": "回答"}
+
+event: delta
+data: {"text": "该"}
+
+event: delta
+data: {"text": "问题"}
+
+event: delta
+data: {"text": "。"}
+
+event: delta
+data: {"text": "现有"}
+
+event: delta
+data: {"text": "片段"}
+
+event: delta
+data: {"text": "仅"}
+
+event: delta
+data: {"text": "包含"}
+
+event: delta
+data: {"text": "《"}
+
+event: delta
+data: {"text": "Attention"}
+
+event: delta
+data: {"text": " Is"}
+
+event: delta
+data: {"text": " All"}
+
+event: delta
+data: {"text": " You"}
+
+event: delta
+data: {"text": " Need"}
+
+event: delta
+data: {"text": "》"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "摘要"}
+
+event: delta
+data: {"text": "、"}
+
+event: delta
+data: {"text": "作者"}
+
+event: delta
+data: {"text": "信息"}
+
+event: delta
+data: {"text": "与"}
+
+event: delta
+data: {"text": "结论"}
+
+event: delta
+data: {"text": "部分"}
+
+event: delta
+data: {"text": "，"}
+
+event: delta
+data: {"text": "以及"}
+
+event: delta
+data: {"text": "《"}
+
+event: delta
+data: {"text": "Understanding"}
+
+event: delta
+data: {"text": " Deep"}
+
+event: delta
+data: {"text": " Learning"}
+
+event: delta
+data: {"text": "》"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "版权"}
+
+event: delta
+data: {"text": "声明"}
+
+event: delta
+data: {"text": "与"}
+
+event: delta
+data: {"text": "致谢"}
+
+event: delta
+data: {"text": "名单"}
+
+event: delta
+data: {"text": "，"}
+
+event: delta
+data: {"text": "未"}
+
+event: delta
+data: {"text": "提供"}
+
+event: delta
+data: {"text": "两篇"}
+
+event: delta
+data: {"text": "论文"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "完整"}
+
+event: delta
+data: {"text": "核心"}
+
+event: delta
+data: {"text": "方法"}
+
+event: delta
+data: {"text": "细节"}
+
+event: delta
+data: {"text": "、"}
+
+event: delta
+data: {"text": "全部"}
+
+event: delta
+data: {"text": "实验"}
+
+event: delta
+data: {"text": "结果"}
+
+event: delta
+data: {"text": "，"}
+
+event: delta
+data: {"text": "也"}
+
+event: delta
+data: {"text": "未"}
+
+event: delta
+data: {"text": "涉及"}
+
+event: delta
+data: {"text": "任何"}
+
+event: delta
+data: {"text": "后续"}
+
+event: delta
+data: {"text": "研究"}
+
+event: delta
+data: {"text": "脉络"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "相关"}
+
+event: delta
+data: {"text": "内容"}
+
+event: delta
+data: {"text": "。"}
+
+event: delta
+data: {"text": "建议"}
+
+event: delta
+data: {"text": "补充"}
+
+event: delta
+data: {"text": "检索"}
+
+event: delta
+data: {"text": "两篇"}
+
+event: delta
+data: {"text": "论文"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "完整"}
+
+event: delta
+data: {"text": "正文"}
+
+event: delta
+data: {"text": "、"}
+
+event: delta
+data: {"text": "引用"}
+
+event: delta
+data: {"text": "文献"}
+
+event: delta
+data: {"text": "列表"}
+
+event: delta
+data: {"text": "，"}
+
+event: delta
+data: {"text": "或"}
+
+event: delta
+data: {"text": "指定"}
+
+event: delta
+data: {"text": "具体"}
+
+event: delta
+data: {"text": "的"}
+
+event: delta
+data: {"text": "研究"}
+
+event: delta
+data: {"text": "脉络"}
+
+event: delta
+data: {"text": "方向"}
+
+event: delta
+data: {"text": "进行"}
+
+event: delta
+data: {"text": "查询"}
+
+event: delta
+data: {"text": "。"}
+
+event: trace
+data: {"node": "responder", "title": "生成回答", "summary": "证据不足拒答 · 已附最近证据供人工判断", "payload": {"mode": "refusal", "claims": 0, "agent": "reader"}}
+
+event: trace
+data: {"node": "recover", "title": "恢复·重检索", "summary": "#3 · 改写 3 个检索面 · top_k → 28 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "不同论文方法的关联 方法演进脉络", "各论文的关键实验结果与性能指标": "论文关键实验结果 性能指标", "各论文的后续研究方向与未来工作": "论文后续研究方向 未来工作"}, "truncated": true}}
+
+event: plan
+data: {"round": 4, "mode": "summary", "steps": [{"step_id": "s4-1", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s4-2", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_a19a95dbf468", "query": "论文关键实验结果 性能指标"}, {"step_id": "s4-3", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_a19a95dbf468", "query": "论文后续研究方向 未来工作"}, {"step_id": "s4-4", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_a19a95dbf468", "query": "不同论文方法的关联 方法演进脉络"}, {"step_id": "s4-5", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s4-6", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_5e84333e8e1d", "query": "论文关键实验结果 性能指标"}, {"step_id": "s4-7", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_5e84333e8e1d", "query": "论文后续研究方向 未来工作"}, {"step_id": "s4-8", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_5e84333e8e1d", "query": "不同论文方法的关联 方法演进脉络"}, {"step_id": "s4-9", "title": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径"}, {"step_id": "s4-10", "title": "各论文的关键实验结果与性能指标", "aspect": "各论文的关键实验结果与性能指标", "paper_id": "p_093639f6b110", "query": "论文关键实验结果 性能指标"}, {"step_id": "s4-11", "title": "各论文的后续研究方向与未来工作", "aspect": "各论文的后续研究方向与未来工作", "paper_id": "p_093639f6b110", "query": "论文后续研究方向 未来工作"}, {"step_id": "s4-12", "title": "不同论文方法之间的关联与演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "paper_id": "p_093639f6b110", "query": "不同论文方法的关联 方法演进脉络"}]}
+
+event: tool_call
+data: {"step_id": "s4-1", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-2", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "论文关键实验结果 性能指标", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-3", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "论文后续研究方向 未来工作", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-4", "tool": "kb_search", "args": {"paper_id": "p_a19a95dbf468", "query": "不同论文方法的关联 方法演进脉络", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-5", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-6", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "论文关键实验结果 性能指标", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-7", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "论文后续研究方向 未来工作", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-8", "tool": "kb_search", "args": {"paper_id": "p_5e84333e8e1d", "query": "不同论文方法的关联 方法演进脉络", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-9", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-10", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "论文关键实验结果 性能指标", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-11", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "论文后续研究方向 未来工作", "top_k": 28}}
+
+event: tool_call
+data: {"step_id": "s4-12", "tool": "kb_search", "args": {"paper_id": "p_093639f6b110", "query": "不同论文方法的关联 方法演进脉络", "top_k": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-6", "ok": true, "summary": "论文关键实验结果 性能指标 → 28 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_9b5ddf48e4a6", "c_ccd987b31962", "c_7c5ea36a2955", "c_e347558eeeda", "c_2a87f3a6c450", "c_04cbbd1a2e05", "c_5240b80b896f", "c_53cfad0d0f61", "c_c82e8514ade9", "c_b2834e7a1f3d", "c_30cea1649da6", "c_6711ecb9a3e0", "c_dcba152154e6", "c_57a2c016466b", "c_67d8d2138ff2", "c_f80f2ff2a085", "c_c89a6c9291d8", "c_e737fa4616b6", "c_82255dad22a7", "c_eca17abea828", "c_28d83b2a6f75", "c_baea419873a6", "c_3be100db9817", "c_c53fbf18733b", "c_3c7a876fe12b"], "elapsed_ms": 684, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-3", "ok": true, "summary": "论文后续研究方向 未来工作 → 28 块", "refs": ["c_c67976e582f8", "c_a89116a3c66c", "c_eb3ac15b64de", "c_cd03adf2f4d1", "c_e7da4bbf31dd", "c_7dccadb30c62", "c_8901f92972a9", "c_aea2740b246e", "c_f8fa755d7bc6", "c_016ac7d7d611", "c_dc1ef4aad967", "c_3e7213849b41", "c_9b132214b715", "c_31a12f2f1f8b", "c_6b7279beb1ce", "c_580e8b12b43c", "c_7bab38988317", "c_6c706b2dea68", "c_e6d9ac212701", "c_97a2f93806da", "c_a88bfb14e273", "c_68aa0f7913ed", "c_2f9682e0a4f2", "c_5218c84ada92", "c_deccb9767f6a", "c_e8b28dc10a54", "c_e63453b66219", "c_5bfbee5a3e94"], "elapsed_ms": 698, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-5", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 28 块", "refs": ["c_5168490af823", "c_c0c08a674bb2", "c_151b9856609c", "c_3c7a876fe12b", "c_30cea1649da6", "c_53cfad0d0f61", "c_ccd987b31962", "c_4517e9e04f21", "c_eca17abea828", "c_9b5ddf48e4a6", "c_c89a6c9291d8", "c_6711ecb9a3e0", "c_2a87f3a6c450", "c_f745187f1404", "c_b2834e7a1f3d", "c_28d83b2a6f75", "c_deb9432c5e66", "c_fd83df3cbb64", "c_36ee12369ee1", "c_160c22f5d504", "c_ed9c4408c238", "c_01d9864b097f", "c_e8ca751a397f", "c_c53fbf18733b", "c_a3477be7f57a", "c_6041eb4efc24", "c_7c5ea36a2955", "c_04cbbd1a2e05"], "elapsed_ms": 742, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-7", "ok": true, "summary": "论文后续研究方向 未来工作 → 28 块", "refs": ["c_5168490af823", "c_ccd987b31962", "c_c0c08a674bb2", "c_151b9856609c", "c_53cfad0d0f61", "c_3c7a876fe12b", "c_eca17abea828", "c_e8ca751a397f", "c_4517e9e04f21", "c_ed9c4408c238", "c_30cea1649da6", "c_f80f2ff2a085", "c_754fcd8cf40f", "c_7c5ea36a2955", "c_b2834e7a1f3d", "c_28d83b2a6f75", "c_553234112c1d", "c_c89a6c9291d8", "c_e347558eeeda", "c_36ee12369ee1", "c_4deaa28b3626", "c_6041eb4efc24", "c_6711ecb9a3e0", "c_baea419873a6", "c_c53fbf18733b", "c_01d9864b097f", "c_f745187f1404", "c_c82e8514ade9"], "elapsed_ms": 725, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-4", "ok": true, "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "refs": ["c_c67976e582f8", "c_a89116a3c66c", "c_e7da4bbf31dd", "c_eb3ac15b64de", "c_7dccadb30c62", "c_3e7213849b41", "c_f8fa755d7bc6", "c_31a12f2f1f8b", "c_dc1ef4aad967", "c_97a2f93806da", "c_aea2740b246e", "c_016ac7d7d611", "c_6b7279beb1ce", "c_8901f92972a9", "c_7bab38988317", "c_9b132214b715", "c_a88bfb14e273", "c_580e8b12b43c", "c_68aa0f7913ed", "c_5b09b1387b62", "c_deccb9767f6a", "c_5218c84ada92", "c_e6d9ac212701", "c_6d1dfce78681", "c_e63453b66219", "c_2f9682e0a4f2", "c_68966e88d484", "c_f59f97425fae"], "elapsed_ms": 756, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-8", "ok": true, "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "refs": ["c_5168490af823", "c_3c7a876fe12b", "c_c0c08a674bb2", "c_53cfad0d0f61", "c_151b9856609c", "c_eca17abea828", "c_e8ca751a397f", "c_4517e9e04f21", "c_28d83b2a6f75", "c_ed9c4408c238", "c_754fcd8cf40f", "c_ccd987b31962", "c_36ee12369ee1", "c_4deaa28b3626", "c_b2834e7a1f3d", "c_30cea1649da6", "c_a3477be7f57a", "c_af44a2ab2b40", "c_2a87f3a6c450", "c_6711ecb9a3e0", "c_deb9432c5e66", "c_c53fbf18733b", "c_7c5ea36a2955", "c_c89a6c9291d8", "c_160c22f5d504", "c_f745187f1404", "c_7d75024843f7", "c_f80f2ff2a085"], "elapsed_ms": 770, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-9", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 28 块", "refs": ["c_210df222c632", "c_90b781e6e1d4", "c_77666a861f4e", "c_003d7fae55d8", "c_46528156f4f5", "c_6b294a42c474", "c_da8db6a62ac4", "c_16b60964492e", "c_92ca327f58b8", "c_a5fa6a006997", "c_ea6c1a8a1dbc", "c_6f27fdbe624a", "c_e16e9b9e74fd", "c_a03e1a9309b6", "c_93fd469a8d0a", "c_458c280e2735", "c_93226bc5362c", "c_5af9878eae9a", "c_99030e21009b", "c_f4be9f8165b8", "c_1a36efa19c0d", "c_ba873f4a7bca", "c_c3ab51b67db9", "c_5b6880ee16ff", "c_95050c968e1f", "c_530dc533a5bf", "c_d3b8ff56b8d2", "c_6a93e8180598"], "elapsed_ms": 760, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-1", "ok": true, "summary": "各论文提出的核心方法与技术路径 → 28 块", "refs": ["c_c67976e582f8", "c_a89116a3c66c", "c_eb3ac15b64de", "c_7dccadb30c62", "c_8901f92972a9", "c_97a2f93806da", "c_e7da4bbf31dd", "c_7bab38988317", "c_016ac7d7d611", "c_3e7213849b41", "c_f8fa755d7bc6", "c_aea2740b246e", "c_68aa0f7913ed", "c_2f9682e0a4f2", "c_dc1ef4aad967", "c_31a12f2f1f8b", "c_68966e88d484", "c_9b132214b715", "c_e63453b66219", "c_a88bfb14e273", "c_5b09b1387b62", "c_580e8b12b43c", "c_deccb9767f6a", "c_5218c84ada92", "c_6b7279beb1ce", "c_e6d9ac212701", "c_5bfbee5a3e94", "c_6c706b2dea68"], "elapsed_ms": 822, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-10", "ok": true, "summary": "论文关键实验结果 性能指标 → 28 块", "refs": ["c_210df222c632", "c_6b294a42c474", "c_46528156f4f5", "c_003d7fae55d8", "c_90b781e6e1d4", "c_5b6880ee16ff", "c_77666a861f4e", "c_fd7db79bbf69", "c_530dc533a5bf", "c_73ab2ae67cc2", "c_a5fa6a006997", "c_d7ca6cde29e5", "c_a03e1a9309b6", "c_b26dcb88d209", "c_ea6c1a8a1dbc", "c_c3ab51b67db9", "c_95050c968e1f", "c_0e03bc1ac013", "c_ba873f4a7bca", "c_ddc87274d5a3", "c_e16e9b9e74fd", "c_5af9878eae9a", "c_93226bc5362c", "c_5c116dad3782", "c_f4be9f8165b8", "c_63d342504825", "c_16b60964492e", "c_31cdc5f1043d"], "elapsed_ms": 763, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-11", "ok": true, "summary": "论文后续研究方向 未来工作 → 28 块", "refs": ["c_6b294a42c474", "c_003d7fae55d8", "c_210df222c632", "c_46528156f4f5", "c_90b781e6e1d4", "c_77666a861f4e", "c_ea6c1a8a1dbc", "c_a5fa6a006997", "c_42937f979db5", "c_95050c968e1f", "c_5af9878eae9a", "c_530dc533a5bf", "c_92ca327f58b8", "c_16b60964492e", "c_c3ab51b67db9", "c_a03e1a9309b6", "c_f4be9f8165b8", "c_da8db6a62ac4", "c_93226bc5362c", "c_99030e21009b", "c_31cdc5f1043d", "c_a2f7db38db99", "c_d7ca6cde29e5", "c_5c116dad3782", "c_6f27fdbe624a", "c_ed1224fc3c92", "c_63c8c87664dd", "c_bf01a74f3a23"], "elapsed_ms": 790, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-2", "ok": true, "summary": "论文关键实验结果 性能指标 → 28 块", "refs": ["c_c67976e582f8", "c_eb3ac15b64de", "c_a89116a3c66c", "c_8901f92972a9", "c_016ac7d7d611", "c_e63453b66219", "c_68966e88d484", "c_e6d9ac212701", "c_e7da4bbf31dd", "c_aea2740b246e", "c_7bab38988317", "c_1541c9f5bedf", "c_7dccadb30c62", "c_580e8b12b43c", "c_3e7213849b41", "c_b654ea7d8f15", "c_f8fa755d7bc6", "c_61f4e35eb513", "c_220953f65b6a", "c_5bfbee5a3e94", "c_b30ac321e4a2", "c_dc1ef4aad967", "c_0e9a2b3eed51", "c_2f9682e0a4f2", "c_6c706b2dea68", "c_6d1dfce78681", "c_deccb9767f6a", "c_f4a34ff7e6e3"], "elapsed_ms": 925, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: tool_result
+data: {"step_id": "s4-12", "ok": true, "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "refs": ["c_6b294a42c474", "c_210df222c632", "c_90b781e6e1d4", "c_003d7fae55d8", "c_46528156f4f5", "c_77666a861f4e", "c_530dc533a5bf", "c_a03e1a9309b6", "c_a5fa6a006997", "c_16b60964492e", "c_93226bc5362c", "c_e16e9b9e74fd", "c_da8db6a62ac4", "c_ea6c1a8a1dbc", "c_5b6880ee16ff", "c_458c280e2735", "c_f4be9f8165b8", "c_5af9878eae9a", "c_ba873f4a7bca", "c_3610852ccd44", "c_92ca327f58b8", "c_6f27fdbe624a", "c_eb667f9a1ef6", "c_c3ab51b67db9", "c_95050c968e1f", "c_31cdc5f1043d", "c_d27941b99224", "c_1efd17b4623a"], "elapsed_ms": 869, "payload": {"hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}
+
+event: trace
+data: {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 336 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}
+
+event: evidence
+data: {"channels": ["bm25", "dense"], "bm25_count": 0, "dense_count": 336, "hits": [{"chunk_id": "c_c67976e582f8", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3674, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks in an encoder-decoder configuration. The best\nperforming models also connect the encoder and ", "page": 1}, {"chunk_id": "c_5168490af823", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3925, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and", "page": 1}, {"chunk_id": "c_210df222c632", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4129, "rrf": 0.064789, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengchao Chen, Siavash Khallaghi, Csaba Szepesvári,\nMike Singer, Mykhailo Shvets, Abdalla Ibrahim, Stefan Hell, Ron Raphaeli, Diogo Tavares,\nAristotelis Siozopoulos,", "page": 11}, {"chunk_id": "c_a89116a3c66c", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3671, "rrf": 0.06426, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Ashish Vaswani∗\nGoogle Brain\navaswani@google.com\nNoam Shazeer∗\nGoogle Brain\nnoam@google.com\nNiki Parmar∗\nGoogle Research\nnikip@google.com\nJakob Uszkoreit∗\nGoogle Research\nusz@google.com\nLlion Jones∗\nGoogle Research\nllion@google.com\nAidan N. Gomez∗ †\nUniversity of Toronto\naidan@cs.toronto.edu\nŁukasz ", "page": 1}, {"chunk_id": "c_6b294a42c474", "paper_id": "p_093639f6b110", "section_path": "_front", "score": 0.3293, "rrf": 0.064067, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Understanding Deep Learning\nSimon J.D. Prince\nFebruary 8, 2026\nThe most recent version of this document can be found at http://udlbook.com.\nCopyright in this work has been licensed exclusively to The MIT Press,\nhttps://mitpress.mit.edu, which released the final version to the public in December 2023", "page": 1}, {"chunk_id": "c_c0c08a674bb2", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3864, "rrf": 0.064004, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or\nscholarly works.\nAttention Is All You Need\nAshish Vaswani∗\nNoam Shazeer∗\nGoogle Brain\navaswani@google.com\nGoogle Brain\nnoam@google.com\nLlion Jo", "page": 1}, {"chunk_id": "c_eb3ac15b64de", "paper_id": "p_a19a95dbf468", "section_path": "7 Conclusion", "score": 0.3601, "rrf": 0.0635, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "In this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly fast", "page": 10}, {"chunk_id": "c_003d7fae55d8", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.3427, "rrf": 0.063004, "kind": "summary", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "[章节概览] Acknowledgements（pp.10-10）：Preface\nThe history of deep learning is unusual in science. The perseverance of a small cabal of\nscientists, working over twenty-five years in a seemingly unpromising area, has revolution-\nized a field and dramatically impacted society. Usually, when researchers inv", "page": 11}]}
+
+event: trace
+data: {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}
+
+event: verifier
+data: {"verdict": "insufficient", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "evidence_count": 8, "action": "recover"}
+
+event: trace
+data: {"node": "responder", "title": "生成回答", "summary": "Reader Agent · 单篇精读 · 范围校验拒绝", "payload": {"mode": "refusal", "claims": 0, "agent": "reader"}}
+
+event: retrieval
+data: {"channels": ["bm25", "dense"], "bm25_count": 120, "dense_count": 912, "hits": [{"chunk_id": "c_c67976e582f8", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3674, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks in an encoder-decoder configuration. The best\nperforming models also connect the encoder and ", "page": 1}, {"chunk_id": "c_5168490af823", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3925, "rrf": 0.065574, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and", "page": 1}, {"chunk_id": "c_210df222c632", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.4129, "rrf": 0.064789, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengchao Chen, Siavash Khallaghi, Csaba Szepesvári,\nMike Singer, Mykhailo Shvets, Abdalla Ibrahim, Stefan Hell, Ron Raphaeli, Diogo Tavares,\nAristotelis Siozopoulos,", "page": 11}, {"chunk_id": "c_a89116a3c66c", "paper_id": "p_a19a95dbf468", "section_path": "_front", "score": 0.3671, "rrf": 0.06426, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Ashish Vaswani∗\nGoogle Brain\navaswani@google.com\nNoam Shazeer∗\nGoogle Brain\nnoam@google.com\nNiki Parmar∗\nGoogle Research\nnikip@google.com\nJakob Uszkoreit∗\nGoogle Research\nusz@google.com\nLlion Jones∗\nGoogle Research\nllion@google.com\nAidan N. Gomez∗ †\nUniversity of Toronto\naidan@cs.toronto.edu\nŁukasz ", "page": 1}, {"chunk_id": "c_6b294a42c474", "paper_id": "p_093639f6b110", "section_path": "_front", "score": 0.3293, "rrf": 0.064067, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Understanding Deep Learning\nSimon J.D. Prince\nFebruary 8, 2026\nThe most recent version of this document can be found at http://udlbook.com.\nCopyright in this work has been licensed exclusively to The MIT Press,\nhttps://mitpress.mit.edu, which released the final version to the public in December 2023", "page": 1}, {"chunk_id": "c_c0c08a674bb2", "paper_id": "p_5e84333e8e1d", "section_path": "_front", "score": 0.3864, "rrf": 0.064004, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or\nscholarly works.\nAttention Is All You Need\nAshish Vaswani∗\nNoam Shazeer∗\nGoogle Brain\navaswani@google.com\nGoogle Brain\nnoam@google.com\nLlion Jo", "page": 1}, {"chunk_id": "c_eb3ac15b64de", "paper_id": "p_a19a95dbf468", "section_path": "7 Conclusion", "score": 0.3601, "rrf": 0.0635, "kind": "detail", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "In this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.\nFor translation tasks, the Transformer can be trained significantly fast", "page": 10}, {"chunk_id": "c_003d7fae55d8", "paper_id": "p_093639f6b110", "section_path": "Acknowledgements", "score": 0.3427, "rrf": 0.063004, "kind": "summary", "aspect": "各论文提出的核心方法与技术路径", "rerank": null, "text": "[章节概览] Acknowledgements（pp.10-10）：Preface\nThe history of deep learning is unusual in science. The perseverance of a small cabal of\nscientists, working over twenty-five years in a seemingly unpromising area, has revolution-\nized a field and dramatically impacted society. Usually, when researchers inv", "page": 11}]}
+
+event: final
+data: {"answer": "【未找到依据】检索到的片段无法回答该问题。现有片段仅包含《Attention Is All You Need》的摘要、作者信息与结论部分，以及《Understanding Deep Learning》的版权声明与致谢名单，未提供两篇论文的完整核心方法细节、全部实验结果，也未涉及任何后续研究脉络的相关内容。建议补充检索两篇论文的完整正文、引用文献列表，或指定具体的研究脉络方向进行查询。\n\n> **最接近的证据**（未找到明确表述，以下供人工判断）：\n> 1. [E1] p1 · §_front · edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction mode…\n> 2. [E2] p1 · §_front · Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\nThe dominant sequence transduction model…\n> 3. [E3] p11 · §Acknowledgements · orav, Ma-\nsoud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor\nS.C.\nLui, Sumit Bhatia, Julian Asilis, Hengc…", "claims": [], "mode": "refusal", "guardrails": ["fanout_truncated", "insufficient_evidence:1", "insufficient_evidence:2", "insufficient_evidence:3", "no_citation_found"], "trace": [{"node": "router", "title": "意图识别 + Agent 分发", "summary": "summarize → Reader Agent · 单篇精读 · 4 个检索面", "payload": {"intent": {"type": "summarize", "aspects": ["各论文提出的核心方法与技术路径", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作", "不同论文方法之间的关联与演进脉络"], "language": "zh", "source": "llm"}, "agent": "reader"}}, {"node": "reader_entry", "title": "Reader Agent 接手", "summary": "单篇精读 · 4 篇在册", "payload": {"agent": "reader", "scope_lock": false}}, {"node": "planner", "title": "任务规划", "summary": "12 步 · 4 篇 × 4 面 · 扇出已截断", "payload": {"steps": [{"paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-1"}, {"paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-2"}, {"paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-3"}, {"paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-4"}, {"paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-5"}, {"paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-6"}, {"paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-7"}, {"paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-8"}, {"paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "step_id": "s1-9"}, {"paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "step_id": "s1-10"}, {"paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "step_id": "s1-11"}, {"paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "step_id": "s1-12"}], "truncated": true}}, {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "core methods and technical… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "core methods and technical paths proposed by each paper", "aspect": "各论文提出的核心方法与技术路径", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "key experimental results a… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "key experimental results and performance metrics of each paper", "aspect": "各论文的关键实验结果与性能指标", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "follow-up research directi… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "follow-up research directions and future work of each paper", "aspect": "各论文的后续研究方向与未来工作", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "retrieve_task", "title": "并行检索", "summary": "correlations and evolution… → 10 块", "payload": {"paper_id": "p_093639f6b110", "query": "correlations and evolution context between methods of different papers", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 10, "channels": ["bm25", "dense"], "bm25": 10, "dense": 10}}, {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 120 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}, {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}, {"node": "recover", "title": "恢复·重检索", "summary": "#1 · 改写 3 个检索面 · top_k → 16 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "研究方法 继承 改进 对比", "各论文的关键实验结果与性能指标": "实验数据集 准确率 召回率 性能对比", "各论文的后续研究方向与未来工作": "未来研究方向 局限性 改进展望"}, "truncated": true}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验数据集 准确率 召回率 性能对比 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "实验数据集 准确率 召回率 性能对比", "aspect": "各论文的关键实验结果与性能指标", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 局限性 改进展望 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "未来研究方向 局限性 改进展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "retrieve_task", "title": "并行检索", "summary": "研究方法 继承 改进 对比 → 16 块", "payload": {"paper_id": "p_093639f6b110", "query": "研究方法 继承 改进 对比", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 16, "channels": ["bm25", "dense"], "bm25": 0, "dense": 16}}, {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 192 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}, {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}, {"node": "recover", "title": "恢复·重检索", "summary": "#2 · 改写 3 个检索面 · top_k → 22 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "方法关联 技术演进 研究脉络", "各论文的关键实验结果与性能指标": "实验结果 性能对比 指标数据", "各论文的后续研究方向与未来工作": "未来研究方向 后续工作 研究展望"}, "truncated": true}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "实验结果 性能对比 指标数据 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "实验结果 性能对比 指标数据", "aspect": "各论文的关键实验结果与性能指标", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "未来研究方向 后续工作 研究展望 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "未来研究方向 后续工作 研究展望", "aspect": "各论文的后续研究方向与未来工作", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "retrieve_task", "title": "并行检索", "summary": "方法关联 技术演进 研究脉络 → 22 块", "payload": {"paper_id": "p_093639f6b110", "query": "方法关联 技术演进 研究脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 22, "channels": ["bm25", "dense"], "bm25": 0, "dense": 22}}, {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 264 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}, {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}, {"node": "responder", "title": "生成回答", "summary": "证据不足拒答 · 已附最近证据供人工判断", "payload": {"mode": "refusal", "claims": 0, "agent": "reader"}}, {"node": "recover", "title": "恢复·重检索", "summary": "#3 · 改写 3 个检索面 · top_k → 28 · 扇出已截断", "payload": {"strategy": "re_retrieve", "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"], "rewrites": {"不同论文方法之间的关联与演进脉络": "不同论文方法的关联 方法演进脉络", "各论文的关键实验结果与性能指标": "论文关键实验结果 性能指标", "各论文的后续研究方向与未来工作": "论文后续研究方向 未来工作"}, "truncated": true}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_a19a95dbf468", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_5e84333e8e1d", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "各论文提出的核心方法与技术路径 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "各论文提出的核心方法与技术路径", "aspect": "各论文提出的核心方法与技术路径", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文关键实验结果 性能指标 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "论文关键实验结果 性能指标", "aspect": "各论文的关键实验结果与性能指标", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "论文后续研究方向 未来工作 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "论文后续研究方向 未来工作", "aspect": "各论文的后续研究方向与未来工作", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "retrieve_task", "title": "并行检索", "summary": "不同论文方法的关联 方法演进脉络 → 28 块", "payload": {"paper_id": "p_093639f6b110", "query": "不同论文方法的关联 方法演进脉络", "aspect": "不同论文方法之间的关联与演进脉络", "hits": 28, "channels": ["bm25", "dense"], "bm25": 0, "dense": 28}}, {"node": "executor_fuse", "title": "证据融合", "summary": "RRF · 336 路原始 → 8 块证据 · 通道 bm25+dense · rerank 降级/未配置 → 融合排序截断", "payload": {"channels": ["bm25", "dense"], "branch_count": 12, "reranked": false}}, {"node": "verifier", "title": "证据校验", "summary": "不足 · 缺少 3 个检索面 → 交由 recover 恢复", "payload": {"sufficient": false, "missing": ["不同论文方法之间的关联与演进脉络", "各论文的关键实验结果与性能指标", "各论文的后续研究方向与未来工作"]}}, {"node": "responder", "title": "生成回答", "summary": "Reader Agent · 单篇精读 · 范围校验拒绝", "payload": {"mode": "refusal", "claims": 0, "agent": "reader"}}], "elapsed": 16.7, "agent": "reader", "handoffs": [{"from": "router", "to": "reader", "note": "summarize → Reader Agent · 单篇精读（LLM 意图分类）"}, {"from": "router", "to": "reader", "note": "自动路由 → 单篇精读"}], "anchors": {"E1": {"page": 1, "section_path": "_front", "paper_id": "p_a19a95dbf468", "paper_label": "P1", "bbox": [0.1879, 0.2323, 0.3529, 0.2753], "chunk_id": "c_c67976e582f8", "block_ids": ["b11"]}, "E2": {"page": 1, "section_path": "_front", "paper_id": "p_5e84333e8e1d", "paper_label": "P2", "bbox": [0.2031, 0.092, 0.7972, 0.1247], "chunk_id": "c_5168490af823", "block_ids": ["ovl", "b16"]}, "E3": {"page": 11, "section_path": "Acknowledgements", "paper_id": "p_093639f6b110", "paper_label": "P3", "bbox": [0.1551, 0.2591, 0.2715, 0.2852], "chunk_id": "c_210df222c632", "block_ids": ["b60"]}, "E4": {"page": 1, "section_path": "_front", "paper_id": "p_a19a95dbf468", "paper_label": "P1", "bbox": [0.1879, 0.2323, 0.3529, 0.2753], "chunk_id": "c_a89116a3c66c", "block_ids": ["b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9"]}, "E5": {"page": 1, "section_path": "_front", "paper_id": "p_093639f6b110", "paper_label": "P3", "bbox": [0.2579, 0.1976, 0.6757, 0.2194], "chunk_id": "c_6b294a42c474", "block_ids": ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10"]}, "E6": {"page": 1, "section_path": "_front", "paper_id": "p_5e84333e8e1d", "paper_label": "P2", "bbox": [0.2031, 0.092, 0.7972, 0.1247], "chunk_id": "c_c0c08a674bb2", "block_ids": ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11", "b12", "b13", "b14", "b15"]}, "E7": {"page": 10, "section_path": "7 Conclusion", "paper_id": "p_a19a95dbf468", "paper_label": "P1", "bbox": [0.1765, 0.1212, 0.8235, 0.1616], "chunk_id": "c_eb3ac15b64de", "block_ids": ["b103", "b104"]}, "E8": {"page": 11, "section_path": "Acknowledgements", "paper_id": "p_093639f6b110", "paper_label": "P3", "bbox": [0.1551, 0.2591, 0.2715, 0.2852], "chunk_id": "c_003d7fae55d8", "block_ids": []}}, "thread_id": "fanout_e2e_1:1", "conversation_id": "fanout_e2e_1"}
+
+event: done
+data: {"temperature": 0.1}
+
