@@ -15,7 +15,7 @@
 
 - [x] 9. 文献库黄色去重预警可见 —— 后端 `GET /api/papers` 已携带 dedup_alert（P0-1 修复 + 红绿测试）；
   真素材 3.1 复跑 `dedup_alert=有 · suggestion含「建议保留」=True`（downloads/cases_run2.log）；
-  前端 page.tsx:94 黄条渲染逻辑已有（浏览器截图见 screenshots/，待人工补拍则标注）
+  前端黄条**实拍可见**：screenshots/01_dedup_alert_bar.png（v1 卡片黄条「疑似旧版本…建议保留已有版本」）
 - [x] 10. 引用 chip 点击 → 弹原文页 + bbox 红框 —— PdfAnchored 组件 + final.anchors（D5 轮已交付，测试断言 anchors.page）
 - [x] 11. Writer 模式写作大纲卡片 —— P0-6 修复：final 恒带 outline（test_p0_6 绿）
 - [x] 12. TracePanel 时间线 + 回放入口 —— P1-1 修复：done→立即回放竞态消除（回放 10 连见 eval_gold.json replay_race）
@@ -68,3 +68,18 @@
 ## Release notes（tag v0.5.0-rc1 注释即发布说明）
 
 本轮修复清单 + 证据链接见上表与本目录；正式 Release 页面待 GitHub 网页端发布（无 gh CLI）。
+
+## 补充验收（2026-11-08 下午）
+
+- [x] CI 实跑核实：acceptance workflow **5/5 job 全 success**（run 42440128134 @ fe1231d：
+      api 46s / official-cases 54s / web 61s / docker 137s / smoke 16s；ci_jobs_latest.json）
+- [x] 浏览器四件套实拍（screenshots/）：
+      01 文献库黄色去重预警条 · 02 引用 chip→PDF p7+红色 bbox 弹层 · 03 Writer 大纲卡片
+      （Trace「大纲已下发」）· 04 Agent Trace 时间线（检索计划/kb_search/RRF 融合/L1-L4 校验）
+- [x] compose 从零到 health：**74 秒 ≤90s**（screenshots/compose_boot_timing.txt 含 compose ps；
+      注：宿主 3000 被无关容器 soc-grafana 占用 → web 容器本机未起，CI docker job 与本地
+      next start 均验证 web 侧正常）
+- [x] 走查中发现并修复：/pdf 容器内宿主绝对路径 404（数据目录幂等回退，6319d71）+
+      compose 数据卷指向错误（./api/data → ./data）
+- [x] GitHub Release v0.5.0-rc1 已发布（HTTP 201）；main 分支保护已启用（5 required checks
+      + strict + PR 要求，HTTP 200 回读验证）
