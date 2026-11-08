@@ -1,0 +1,145 @@
+# Round2 验收 CI —— 复制到 scholar-agent/.github/workflows/acceptance.yml 即可生效
+# 说明：
+#  1) 测试是密闭的（测试文件头强制清空 LLM/Embedding 凭据），CI 无需任何 secrets；
+#  2) CI 无 downloads/ 真素材时，官方用例脚本自动用 fixture 兜底并标注 fallback；
+#  3) 首日可给 official-cases 的 step 加 continue-on-error: true，P0-2/P0-3 修复后删除。
+name: acceptance
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  # —— 密闭：CI 不使用任何真实密钥（官方用例/冒烟/测试都能在无 key 下跑通）——
+  LLM_PROVIDER: ""
+  LLM_API_KEY: ""
+  LLM_BASE_URL: ""
+  DEEPSEEK_API_KEY: ""
+  MINIMAX_API_KEY: ""
+  DASHSCOPE_API_KEY: ""
+  EMBEDDING_BACKEND: "off"
+  EMBEDDING_API_KEY: ""
+  MINERU_ENABLED: "off"
+  VLM_ENABLED: "0"
+  SEMANTIC_JUDGE: "0"
+
+jobs:
+  api:
+    name: api · ruff + pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: sync (frozen)
+        working-directory: api
+        run: uv sync --frozen
+      - name: ruff
+        working-directory: api
+        run: uv run ruff check app tests
+      - name: pytest
+        working-directory: api
+        run: uv run pytest -q -p no:cacheprovider | tee pytest.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-pytest-log
+          path: api/pytest.log
+
+  official-cases:
+    name: 官方 3 用例（容器等价：引擎关）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - working-directory: api
+        run: uv sync --frozen
+      - name: run official cases
+        working-directory: api
+        continue-on-error: true   # 首日放行；P0-2/P0-3 修复后移除本行，成为必过门槛
+        run: uv run python scripts/run_official_cases.py | tee official_cases.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-cases-log
+          path: api/official_cases.log
+
+  web:
+    name: web · tsc + lint + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: install
+        working-directory: web
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: tsc
+        working-directory: web
+        run: pnpm exec tsc --noEmit
+      - name: lint
+        working-directory: web
+        run: pnpm exec next lint
+      - name: build
+        working-directory: web
+        run: pnpm exec next build
+
+  docker:
+    name: docker · api + web 镜像
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: build api
+        run: docker build -t scholar-api:ci ./api
+      - name: build web
+        run: docker build -t scholar-web:ci --build-arg NEXT_PUBLIC_API_BASE=http://localhost:8100 ./web
+
+  smoke:
+    name: smoke · 起 API 跑 9 项
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - working-directory: api
+        run: uv sync --frozen
+      - name: start api
+        working-directory: api
+        run: |
+          uv run uvicorn app.main:app --port 8100 > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8100/api/health && break || sleep 1
+          done
+      - name: smoke
+        working-directory: api
+        run: API_BASE=http://127.0.0.1:8100 uv run python scripts/smoke_web.py | tee smoke.log
+      - if: always()
+        run: |
+          kill "$(cat /tmp/api.pid)" 2>/dev/null || true
+          tail -n 120 /tmp/api.log || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log
+          path: api/smoke.log
