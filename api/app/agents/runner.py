@@ -175,10 +175,9 @@ def _push_success(q, final: dict, question: str, t0: float,
                      "elapsed": round(time.time() - t0, 1),
                      "agent": final.get("agent", "reader"),
                      "handoffs": final.get("handoffs", []),
+                     "anchors": final.get("anchors", {}),   # 恒在：溯源链路字段稳定（空=抽取式无锚点）
                      **({"compare_table": final["compare_table"]}
                         if final.get("compare_table") else {}),
-                     **({"anchors": final["anchors"]}
-                        if final.get("anchors") else {}),
                      **({"graph_data": final["graph_data"]}
                         if final.get("graph_data") else {}),
                      **({"outline": final["outline"]}
