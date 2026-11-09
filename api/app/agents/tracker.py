@@ -67,7 +67,7 @@ def _fetch_sickle(set_spec: str, from_date: str, limit: int) -> list[dict] | Non
                     "authors": list(meta.get("creator", []) or [])[:8],
                     "published": (meta.get("date", [""]) or [""])[0][:10],
                     # arXiv OAI 的 dc:description 即摘要（推荐 local/keyword 分量语料）
-                    "abstract": " ".join((meta.get("description", []) or [""]))[:800],
+                    "abstract": " ".join(meta.get("description", []) or [""])[:800],
                 })
                 if len(out) >= limit:
                     break
