@@ -20,7 +20,7 @@ from .. import db
 from ..config import DOCIR_DIR, settings
 from ..llm import client as llm
 from ..llm.prompts import resolve as _resolve
-from ..llm.schemas import CitationClassList, FutureWorkList, IdeaVerdictList
+from ..llm.schemas import CitationClassList, FutureCheckList, FutureWorkList, IdeaVerdictList
 from ..log import logger
 from ..rag.answering import validate_citations
 from ..rag.indexing import hybrid_search
@@ -118,13 +118,21 @@ def enrich(graph: dict) -> dict:
         cid = communities.get(pid, 0)
         year = years.get(pid)
         role = ""
+        role_reason = ""
         med = median_year.get(cid)
         if med is not None and year is not None:
             if year <= med and m["pagerank"] >= p70_pr and m["in_degree"] >= p70_in:
                 role = "cornerstone"     # 基石论文：早期 + 高 PageRank + 高被引
+                role_reason = (f"{year} 年发表（早于社区中位年 {med}）· "
+                               f"PageRank {m['pagerank']:.3f} ≥ P70({p70_pr:.3f}) · "
+                               f"被引 {m['in_degree']} ≥ P70({p70_in}) → 基石")
             elif year > med and m["in_degree"] <= p30_in and cross_ratio.get(pid, 0) >= 0.5:
                 role = "peripheral"      # 边缘衍生：新 + 低被引 + 跨社区桥接
+                role_reason = (f"{year} 年发表（晚于社区中位年 {med}）· "
+                               f"被引 {m['in_degree']} ≤ P30({p30_in}) · "
+                               f"跨社区邻居占比 {cross_ratio.get(pid, 0):.0%} → 边缘衍生")
         out_nodes.append({**m, "year": year, "community": cid, "role": role,
+                          "role_reason": role_reason,
                           "time_rank": _time_rank(pid, members_by_comm.get(cid, []), years)})
 
     return {
@@ -266,7 +274,33 @@ def classify_citations(paper_ids: list[str]) -> dict:
         weighted_edges.append({**e, "weight": weight, "examples": examples[:2]})
 
     return {"edges": weighted_edges, "edge_weights": edge_weights,
-            "class_stat": class_stat, "mention_count": len(mentions)}
+            "class_stat": class_stat, "mention_count": len(mentions),
+            "enriched": enriched}
+
+
+def reference_quality(paper_id: str) -> dict:
+    """单篇参考文献含金量（模块四 P0-2）：ref idx → {cls, weight, mentions, examples}。
+
+    供文献下钻/References 面板展示与可逆过滤：无引用句的条目不出现（前端显式
+    「无引用句」中性态，不假装判断）。cls 取该条所有引用句中权重最高者的分类。"""
+    r = classify_citations([paper_id])
+    out: dict[int, dict] = {}
+    for key, slot in (r.get("enriched") or {}).items():
+        pid, _, n = key.rpartition("|")
+        if pid != paper_id or not slot.get("mentions"):
+            continue
+        ms = slot["mentions"]
+        best = max(ms, key=lambda x: x["w"])
+        out[int(n)] = {
+            "cls": best["cls"],
+            "weight": round(sum(m["w"] for m in ms), 2),
+            "mention_count": len(ms),
+            "examples": [m["sentence"] for m in sorted(ms, key=lambda x: -x["w"])[:2]],
+            "target_in_library": bool(slot.get("target")),
+        }
+    return {"paper_id": paper_id, "qualities": out,
+            "class_stat": r.get("class_stat", {}),
+            "note": "无引用句的条目不在 qualities 中（中性态，不做判断）"}
 
 
 # ---------- 社区综述（洞察也抗幻觉） ----------
@@ -451,3 +485,195 @@ def future_works(paper_ids: list[str]) -> dict:
     opened = sorted([x for x in out if x["status"] == "open"],
                     key=lambda x: x["cited_count"])   # 越没人做越靠前
     return {"solved": solved, "open": opened, "total": len(out)}
+
+
+# ---------- 模块五 P0-2：整批领域综述 ----------
+
+_SURVEY_SECTIONS = ["背景与问题", "时间线与演进", "方法族（社区）", "基石与边缘", "开放问题"]
+
+
+def _evidence_pack(paper_ids: list[str], per_paper: int = 2) -> tuple[list[dict], dict[int, dict]]:
+    """批量证据池：每篇论文取其最有代表性的段落（标题+首段检索），编号 [E#]。"""
+    from ..rag.answering import format_context
+
+    hits: list[dict] = []
+    titles: dict[str, str] = {}
+    for pid in paper_ids:
+        rows = db.query("SELECT title FROM papers WHERE id=?", (pid,))
+        title = (rows[0]["title"] if rows else "") or pid
+        titles[pid] = title
+        r = hybrid_search([pid], title or "main contribution method", top_k=per_paper)
+        for h in r.get("hits", []):
+            h = dict(h)
+            h["_paper_title"] = title
+            hits.append(h)
+    context, eid_map = format_context(hits)
+    return hits, {"context": context, "eid_map": eid_map, "titles": titles}
+
+
+def survey(paper_ids: list[str], *, progress=None) -> dict:
+    """整批领域综述（模块五 P0-2）：五节结构，每节 Evidence Pack + 完整抗幻觉链。
+
+    结构来自图谱客观信号（年份跨度/社区/角色），生成走 LLM；每节独立
+    validate_citations → llm_claims → verify_claims（与社区综述同链）。
+    LLM 不可用 → 结构化骨架 + 图谱客观数据如实交付（不冒充综述正文）。"""
+    if len(paper_ids) < 2:
+        return {"error": "survey_needs_2_papers"}
+    graph = enrich(_citation_graph(paper_ids))
+    nodes = graph.get("nodes", [])
+    communities = graph.get("communities", [])
+    years = sorted({n.get("year") for n in nodes if n.get("year")})
+    cornerstones = [n for n in nodes if n.get("role") == "cornerstone"]
+    peripherals = [n for n in nodes if n.get("role") == "peripheral"]
+    stats = {"papers": len(paper_ids), "edges": len(graph.get("edges", [])),
+             "communities": len(communities), "years": [years[0], years[-1]] if years else [],
+             "cornerstones": [n["title"] for n in cornerstones][:5],
+             "peripherals_count": len(peripherals),
+             "external_count": graph.get("external_count", 0)}
+    hits, pack = _evidence_pack(paper_ids)
+    titles = pack["titles"]
+
+    community_note = "；".join(
+        f"社区{c['id']}（{c['size']} 篇）" for c in communities[:6]) or "单社区"
+    section_briefs = {
+        "背景与问题": f"这 {len(paper_ids)} 篇论文共同的研究问题与动机。涉及论文：" +
+                      "、".join((titles.get(p) or p)[:30] for p in paper_ids[:6]),
+        "时间线与演进": f"按年份梳理方法演进脉络。年份跨度 {stats['years']}。",
+        "方法族（社区）": f"按引用社区归纳方法流派：{community_note}。",
+        "基石与边缘": f"基石论文（PageRank+高被引+早期）与边缘衍生论文的角色分化；"
+                      f"基石示例：{'、'.join(stats['cornerstones']) or '（样本不足）'}。",
+        "开放问题": "基于证据中的 limitation/future work 表述，提炼尚待解决的问题。",
+    }
+
+    sections: list[dict] = []
+    guardrails_all: list[str] = []
+    if not llm.available():
+        skeleton = [f"## {name}\n\n{brief}\n\n（LLM 不可用：以上为图谱客观数据，综述正文待生成）"
+                    for name, brief in section_briefs.items()]
+        return {"sections": [{"title": n, "content": c, "claims": [], "anchors": {}}
+                             for n, c in zip(_SURVEY_SECTIONS, skeleton)],
+                "stats": stats, "guardrails": ["llm_unavailable_skeleton"],
+                "content_md": "# 领域综述（骨架 · 图谱客观数据）\n\n" + "\n\n".join(skeleton)}
+
+    for name in _SURVEY_SECTIONS:
+        if progress:
+            progress(name)
+        system, pv = _resolve("insights", "system_survey",
+                              "你是领域综述作者。只写证据支撑的事实，每论断带 [E#] 引用。")
+        res = llm.chat(
+            [{"role": "system", "content": system},
+             {"role": "user", "content":
+                 f"综述小节：{name}\n小节要点：{section_briefs[name]}\n\n"
+                 f"<evidence>\n{pack['context'][:6000]}\n</evidence>\n"
+                 f"请写出该小节内容。"}],
+            temperature=0.2, max_tokens=700, module="survey",
+            audit_prompt=f"survey:{name}", prompt_version=pv)
+        answer = (res.get("text") or "").strip()
+        if not answer:
+            answer = f"（{name} 生成失败，证据待补）"
+        answer, g1 = validate_citations(answer, pack["eid_map"])
+        claims, _ = llm_claims_safe(answer, hits)
+        claims, g2 = verify_claims(claims, pack["eid_map"])
+        guardrails_all += g1 + g2
+        from ..rag.answering import build_anchors
+        sections.append({"title": name, "content": answer, "claims": claims,
+                         "anchors": build_anchors(pack["eid_map"])})
+
+    content_md = ("# 领域综述（自动生成 · 机器草稿）\n\n"
+                  + "\n\n".join(f"## {s['title']}\n\n{s['content']}" for s in sections))
+    return {"sections": sections, "stats": stats, "guardrails": guardrails_all,
+            "content_md": content_md}
+
+
+# ---------- 模块五 P0-3：Future Work 外部最新进展核查 ----------
+
+def _idea_sig(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", (text or "").lower())).strip()[:120]
+
+
+def _dedup_ideas(ideas: list[dict], threshold: float = 0.55) -> list[dict]:
+    """语义去重（词元 Jaccard，离线确定性）：同一 idea 多篇提及合并，保最早论文为源。"""
+    def toks(t: str) -> set[str]:
+        return {w for w in re.findall(r"[a-z]{3,}", t.lower())}
+
+    kept: list[dict] = []
+    kept_toks: list[set[str]] = []
+    for idea in ideas:
+        tk = toks(idea["idea_text"])
+        dup = False
+        for i, kt in enumerate(kept_toks):
+            j = len(tk & kt) / max(len(tk | kt), 1)
+            if j >= threshold:
+                kept[i]["mention_papers"] = sorted(
+                    set(kept[i].get("mention_papers", [kept[i]["source_paper"]]))
+                    | {idea["source_paper"]})
+                dup = True
+                break
+        if not dup:
+            kept.append({**idea, "mention_papers": [idea["source_paper"]]})
+            kept_toks.append(tk)
+    return kept
+
+
+def future_checks(paper_ids: list[str], *, max_ideas: int = 8, progress=None) -> list[dict]:
+    """外部最新进展核查：抽取 → 语义去重 → S2 查后续论文 → 证据判定。
+
+    诚实性约定：无外部证据时 verdict=open_unverified（与「库内确认没人做」的
+    open 区分——外部没查到 ≠ 不存在）；solved/partial 必须点名来源论文+年份。"""
+    ideas = _dedup_ideas(_extract_future_ideas(paper_ids))[:max_ideas]
+    if progress:
+        progress(f"extracted:{len(ideas)}")
+    from ..rag.discovery import _s2_provider, title_norm
+
+    out: list[dict] = []
+    pending: list[int] = []
+    for i, idea in enumerate(ideas):
+        if progress:
+            progress(f"external:{i + 1}/{len(ideas)}")
+        ext: list[dict] = []
+        try:
+            r = _s2_provider(idea["idea_text"][:120], 5)
+            if r.get("ok"):
+                ext = [e for e in r.get("entries", [])
+                       if (e.get("year") or 0) >= (idea.get("source_year") or 0)
+                       and title_norm(e.get("title", "")) != ""][:4]
+        except Exception as e:  # noqa: BLE001 —— 外部源失败 → open_unverified 如实
+            logger.warning(f"future_check S2 失败: {e}", module="insights")
+        item = {**idea, "verdict": "open_unverified", "confidence": 0.0,
+                "external": [{"title": e["title"], "year": e.get("year", 0),
+                              "citation_count": e.get("citation_count"),
+                              "abstract": (e.get("abstract") or "")[:200]} for e in ext],
+                "reason": ""}
+        if ext:
+            pending.append(i)
+        else:
+            item["reason"] = "未获取到外部进展证据（断网或无后续）→ 未验证，不冒充已排除"
+        out.append(item)
+
+    if pending and llm.available():
+        try:
+            system, pv = _resolve("insights", "system_future_check",
+                                  "你是学术进展核查员。输出 JSON checks。")
+            lines = []
+            for i in pending:
+                ev = "；".join(f"[{e['title'][:60]} ({e['year']})] {e['abstract'][:100]}"
+                               for e in out[i]["external"]) or "（无）"
+                lines.append(f'{{"id":{i},"idea":{json.dumps(out[i]["idea_text"], ensure_ascii=False)},'
+                             f'"external":{json.dumps(ev, ensure_ascii=False)}}}')
+            data = llm.chat_json_validated(
+                [{"role": "system", "content": system},
+                 {"role": "user", "content": f"<ideas>\n[{', '.join(lines)}]\n</ideas>"}],
+                FutureCheckList, retries=1, module="future_check",
+                audit_prompt=out[pending[0]]["idea_text"][:200], prompt_version=pv,
+                temperature=0.0)
+            by_id = {int(c["id"]): c for c in (data or {}).get("checks", [])
+                     if c.get("verdict") in ("solved", "partial", "open")}
+            for i in pending:
+                c = by_id.get(i)
+                if c:
+                    out[i]["verdict"] = c["verdict"]
+                    out[i]["confidence"] = min(1.0, max(0.0, float(c.get("confidence", 0.5))))
+                    out[i]["reason"] = c.get("reason", "")
+        except Exception as e:  # noqa: BLE001 —— 判定失败 → 保持 open_unverified
+            logger.warning(f"future_check 判定失败: {e}", module="insights")
+    return out

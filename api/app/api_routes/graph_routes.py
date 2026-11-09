@@ -9,10 +9,29 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from ..agents.insights import classify_citations, community_summary, enrich, future_works
+from ..agents.insights import (
+    _idea_sig,
+    classify_citations,
+    community_summary,
+    enrich,
+    future_checks,
+    future_works,
+    reference_quality,
+    survey,
+)
 from ..agents.tools import _citation_graph
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/papers/{paper_id}/ref-quality")
+def get_ref_quality(paper_id: str):
+    """单篇参考文献含金量（模块四 P0-2）：References 面板懒加载 + 可逆过滤依据。"""
+    from .. import db
+
+    if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
+        raise HTTPException(404, "论文不存在")
+    return reference_quality(paper_id)
 
 
 def _parse_paper_ids(paper_ids: str | None) -> list[str]:
@@ -84,6 +103,140 @@ def graph_summary(body: SummaryBody):
                 kind, data = q.get(timeout=300)
             except queue_mod.Empty:
                 yield 'event: error\ndata: {"message":"summary timeout"}\n\n'
+                return
+            yield f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            if kind == "done":
+                return
+
+    return StreamingResponse(sse(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
+
+
+class SurveyBody(BaseModel):
+    paper_ids: list[str]
+    refresh: bool = False     # 命中缓存时是否强制重新生成
+
+
+@router.post("/graph/survey")
+def graph_survey(body: SurveyBody):
+    """整批领域综述 SSE（模块五 P0-2）：五节结构，每节 status → delta → final。
+    结果落 survey_reports（paper_ids_sig 缓存键），二次请求秒回缓存。"""
+    if len(body.paper_ids) < 2:
+        raise HTTPException(400, "综述至少选择 2 篇论文")
+    if len(body.paper_ids) > 50:
+        raise HTTPException(400, "单批上限 50 篇")
+    sig = ",".join(sorted(body.paper_ids))
+    from .. import db as _db
+    if not body.refresh:
+        hit = _db.query("SELECT * FROM survey_reports WHERE paper_ids_sig=? "
+                        "ORDER BY created_at DESC LIMIT 1", (sig,))
+        if hit and hit[0]["sections"]:
+            import json as _json
+            row = hit[0]
+            sections = _json.loads(row["sections"])
+            stats = _json.loads(row["stats"] or "{}")
+
+            def cached():
+                yield ('event: status\ndata: {"stage":"cache","note":"命中缓存"}\n\n')
+                for s in sections:
+                    for piece in _stream_by_sentence(s["content"]):
+                        yield f'event: delta\ndata: {_json.dumps({"section": s["title"], "text": piece}, ensure_ascii=False)}\n\n'
+                yield (f'event: final\ndata: {_json.dumps({"sections": sections, "stats": stats, "cached": True}, ensure_ascii=False)}\n\n')
+                yield 'event: done\ndata: {}\n\n'
+            from fastapi.responses import StreamingResponse as _SR
+            return _SR(cached(), media_type="text/event-stream",
+                       headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    q: queue_mod.Queue = queue_mod.Queue()
+
+    def worker() -> None:
+        import json as _json
+        import time as _time
+        try:
+            def prog(name: str) -> None:
+                q.put(("status", {"stage": "section", "note": f"生成小节：{name}"}))
+
+            out = survey(body.paper_ids, progress=prog)
+            if out.get("error"):
+                q.put(("error", {"message": out["error"]}))
+                return
+            for s in out["sections"]:
+                for piece in _stream_by_sentence(s["content"]):
+                    q.put(("delta", {"section": s["title"], "text": piece}))
+            q.put(("final", {"sections": out["sections"], "stats": out["stats"],
+                             "guardrails": out.get("guardrails", [])}))
+            with _db.tx() as c:
+                c.execute("INSERT INTO survey_reports(id,paper_ids_sig,stats,content_md,"
+                          "sections,created_at) VALUES(?,?,?,?,?,?)",
+                          (_db.new_id("sr_"), sig, _json.dumps(out["stats"], ensure_ascii=False),
+                           out.get("content_md", ""), _json.dumps(out["sections"], ensure_ascii=False),
+                           _time.time()))
+        except Exception as e:  # noqa: BLE001
+            q.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+        finally:
+            q.put(("done", {}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def sse():
+        while True:
+            try:
+                kind, data = q.get(timeout=900)
+            except queue_mod.Empty:
+                yield 'event: error\ndata: {"message":"survey timeout"}\n\n'
+                return
+            yield f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            if kind == "done":
+                return
+
+    return StreamingResponse(sse(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
+
+
+@router.post("/future-checks")
+def future_checks_route(body: IdeasBody):
+    """外部最新进展核查 SSE（模块五 P0-3）：抽取去重 → S2 外部证据 → 判定落库。
+    verdict ∈ solved|partial|open|open_unverified（无外部证据=未验证，不冒充已排除）。"""
+    if not body.paper_ids:
+        raise HTTPException(400, "paper_ids 为空")
+    q: queue_mod.Queue = queue_mod.Queue()
+
+    def worker() -> None:
+        import json as _json
+        import time as _time
+        try:
+            def prog(note: str) -> None:
+                q.put(("status", {"stage": "check", "note": note}))
+
+            items = future_checks(body.paper_ids, progress=prog)
+            now = _time.time()
+            from .. import db as _db
+            with _db.tx() as c:
+                for it in items:
+                    c.execute("INSERT OR REPLACE INTO future_checks(id,idea_sig,idea_text,"
+                              "source_paper,verdict,confidence,evidence,external_count,checked_at)"
+                              " VALUES(?,?,?,?,?,?,?,?,?)",
+                              (_db.new_id("fc_"), _idea_sig(it["idea_text"]),
+                               it["idea_text"][:400], it.get("source_paper", ""),
+                               it["verdict"], it.get("confidence", 0.0),
+                               _json.dumps(it.get("external", []), ensure_ascii=False),
+                               len(it.get("external", [])), now))
+            q.put(("final", {"items": items, "total": len(items)}))
+        except Exception as e:  # noqa: BLE001
+            q.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+        finally:
+            q.put(("done", {}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def sse():
+        while True:
+            try:
+                kind, data = q.get(timeout=900)
+            except queue_mod.Empty:
+                yield 'event: error\ndata: {"message":"future-checks timeout"}\n\n'
                 return
             yield f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
             if kind == "done":

@@ -233,3 +233,87 @@ def test_ideas_endpoint_sse(monkeypatch):
             if line.startswith("event: "):
                 events.append(line[7:].strip())
     assert "status" in events and "final" in events and "done" in events
+
+
+# ---------- 模块五 P0-2/P0-3：整批综述 + 外部进展核查 ----------
+
+def test_survey_skeleton_without_llm(monkeypatch):
+    """LLM 不可用 → 图谱客观数据骨架如实交付（不冒充综述正文）。"""
+    from app.agents import insights as ins
+    monkeypatch.setattr(ins.llm, "available", lambda: False)
+    out = ins.survey(["pA", "pB"])
+    assert "error" not in out
+    assert [s["title"] for s in out["sections"]] == ins._SURVEY_SECTIONS
+    assert "图谱客观数据" in out["content_md"]
+    assert "llm_unavailable_skeleton" in out["guardrails"]
+    assert ins.survey(["only-one"])["error"] == "survey_needs_2_papers"
+
+
+def test_survey_sections_with_stub_llm(monkeypatch):
+    from app.agents import insights as ins
+    monkeypatch.setattr(ins.llm, "available", lambda: True)
+    monkeypatch.setattr(ins.llm, "chat", lambda msgs, **kw: {
+        "text": "本节内容 [E1] 支撑。"})
+    monkeypatch.setattr(ins, "_evidence_pack", lambda pids: ([{"paper_id": "pA"}],
+                                                              {"context": "ctx",
+                                                               "eid_map": {1: {"paper_id": "pA"}},
+                                                               "titles": {}}))
+    monkeypatch.setattr(ins, "validate_citations", lambda a, m: (a, []))
+    monkeypatch.setattr(ins, "llm_claims_safe", lambda a, h: ([], {}))
+    monkeypatch.setattr(ins, "verify_claims", lambda c, m: (c, []))
+    import app.rag.answering as _ans
+    monkeypatch.setattr(_ans, "build_anchors", lambda m: {})
+    monkeypatch.setattr(ins, "_citation_graph", lambda pids: {"nodes": [], "edges": [], "external_count": 0})
+    monkeypatch.setattr(ins, "enrich", lambda g: g)
+    out = ins.survey(["pA", "pB"])
+    assert len(out["sections"]) == 5 and "[E1]" in out["sections"][0]["content"]
+    assert "content_md" in out and "## 背景" in out["content_md"]
+
+
+def test_dedup_ideas_merges_similar():
+    from app.agents import insights as ins
+    ideas = [
+        {"idea_text": "Study scaling laws for sparse attention models in future",
+         "source_paper": "p1"},
+        {"idea_text": "scaling laws sparse attention models future work",
+         "source_paper": "p2"},
+        {"idea_text": "Improve OCR for handwritten Chinese medical records",
+         "source_paper": "p1"},
+    ]
+    got = ins._dedup_ideas(ideas)
+    assert len(got) == 2, "前两条应合并（Jaccard ≥0.55）"
+    assert set(got[0]["mention_papers"]) == {"p1", "p2"}
+
+
+def test_future_check_no_evidence_open_unverified(monkeypatch):
+    """外部源失败 → open_unverified（不冒充已排除），不写死 open。"""
+    from app.agents import insights as ins
+    monkeypatch.setattr(ins, "_extract_future_ideas", lambda pids: [
+        {"idea_text": "Explore long-context retrieval augmentation", "source_paper": "p1"}])
+    from app.rag import discovery as _disc
+    monkeypatch.setattr(_disc, "_s2_provider", lambda q, l: {"ok": False, "entries": []})
+    got = ins.future_checks(["p1"])
+    assert len(got) == 1 and got[0]["verdict"] == "open_unverified"
+    assert "未验证" in got[0]["reason"]
+
+
+def test_future_check_with_evidence_llm_judge(monkeypatch):
+    from app.agents import insights as ins
+    monkeypatch.setattr(ins, "_extract_future_ideas", lambda pids: [
+        {"idea_text": "Explore long-context retrieval augmentation", "source_paper": "p1"}])
+    from app.rag import discovery as _disc
+    monkeypatch.setattr(_disc, "_s2_provider", lambda q, l: {"ok": True, "entries": [
+        {"title": "Long-Context RAG at Scale", "year": 2026, "citation_count": 42,
+         "abstract": "We fully implement long-context retrieval augmentation."}]})
+
+    class _FakeData:
+        pass
+
+    monkeypatch.setattr(ins.llm, "available", lambda: True)
+    monkeypatch.setattr(ins.llm, "chat_json_validated",
+                        lambda msgs, schema, **kw: {"checks": [
+                            {"id": 0, "verdict": "solved", "confidence": 0.9,
+                             "reason": "Long-Context RAG at Scale (2026) 已实现"}]})
+    got = ins.future_checks(["p1"])
+    assert got[0]["verdict"] == "solved" and got[0]["confidence"] == 0.9
+    assert got[0]["external"][0]["title"].startswith("Long-Context")

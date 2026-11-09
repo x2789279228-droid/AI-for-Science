@@ -90,6 +90,19 @@ class IdeaVerdictList(BaseModel):
     verdicts: list[IdeaVerdict] = Field(default_factory=list)
 
 
+# ---- 模块五 P0-3：Future Work 外部进展核查 ----
+
+class FutureCheck(BaseModel):
+    id: int
+    verdict: str = "open"          # solved | partial | open
+    confidence: float = Field(default=0.5)
+    reason: str = ""
+
+
+class FutureCheckList(BaseModel):
+    checks: list[FutureCheck] = Field(default_factory=list)
+
+
 # ---- 模块一 P0 升级：去重 LLM 判重（dedup-judge-v1） ----
 
 class DedupVerdict(BaseModel):
