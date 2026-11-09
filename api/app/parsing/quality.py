@@ -7,6 +7,9 @@ compute(docir, probe) → {"text_coverage", "toc_depth", "heading_rate", "title_
 P0-7 修订：旧 overall 只统计「产出存在性」（有公式/表格/标题层数），无法反映结构
 正确性（v7 章节整页错配仍得 0.85 的实证）——新增 heading_rate（toc 标题→块命中率）
 与 title_ok（标题非 stem 退化形），并把 ref_rate 收紧为 title 长度 ≥8 才算解析成功。
+
+Round4 扩展：heading_outline_hit（PDF 书签↔解析 toc 页码对齐率，出版级真值探针，
+无书签时 None 不惩罚）与 table_continuation（表头重复=跨页续表迹象，报告型不设门禁）。
 """
 from __future__ import annotations
 
@@ -19,7 +22,8 @@ _STEM_TITLE = re.compile(r"^(p_[0-9a-f]{6,}|seg_\d{2,}|fx_\w+)$", re.IGNORECASE)
 _CITE_MARK = re.compile(r"\[(\d{1,3})\]")
 
 
-def compute(docir: dict, probe: dict | None = None) -> dict[str, Any]:
+def compute(docir: dict, probe: dict | None = None,
+            outline: list[tuple[int, str, int]] | None = None) -> dict[str, Any]:
     blocks = docir.get("blocks", [])
     toc = docir.get("toc", [])
     tables = docir.get("tables", [])
@@ -82,19 +86,51 @@ def compute(docir: dict, probe: dict | None = None) -> dict[str, Any]:
     # ⑥ 扫描/救援页占比
     scanned_ratio = round(len(meta.get("scanned_pages") or []) / page_count, 3) if page_count else 0.0
 
+    # ⑥b Round4 正确性扩展：heading 与 PDF 书签（outline）的页码对齐率——书签是
+    # 出版级真值，toc 命中且页差 ≤1 才算对齐（章节整页错配探针；无书签则 None 不惩罚）
+    heading_outline_hit = None
+    if outline:
+        block_pages = {_norm_title(b.get("text", "")): b["page"]
+                       for b in blocks if b.get("type") == "heading" and (b.get("text") or "").strip()}
+        hits = 0
+        for _, otitle, opage in outline:
+            if not (otitle or "").strip() or not opage:
+                continue
+            nt = _LEAD_NUM.sub("", _norm_title(otitle), count=1)
+            for bn, bp in block_pages.items():
+                if bn == nt or _LEAD_NUM.sub("", bn, count=1) == nt:
+                    hits += int(abs(bp - (opage - 1)) <= 1)   # outline 1 基 → blocks 0 基
+                    break
+        total = sum(1 for _, t, p in outline if (t or "").strip() and p)
+        heading_outline_hit = round(hits / total, 3) if total else None
+
+    # ⑥c Round4 报告型指标：表格续表迹象（markdown 中表头行重复出现 = 跨页/续表合并）
+    table_continuation = sum(1 for t in tables if _has_repeated_header(t.get("markdown") or ""))
+
     overall = _overall(text_coverage, toc_depth, heading_rate, title_ok,
                        formula_count, table_count, ref_rate)
     return {"text_coverage": round(text_coverage, 3),
             "toc_depth": toc_depth,
             "heading_rate": heading_rate,
+            "heading_outline_hit": heading_outline_hit,
             "title_ok": title_ok,
             "formula_count": formula_count,
             "table_count": table_count,
+            "table_continuation": table_continuation,
             "reference_parse_rate": ref_rate,
             "ref_count_consistency": ref_consistency,
             "ref_anomaly": ref_anomaly,
             "scanned_ratio": scanned_ratio,
             "overall": round(overall, 3)}
+
+
+def _has_repeated_header(md: str) -> bool:
+    """表格 markdown 的表头行是否重复出现（跨页续表的典型形态）。报告型，不设门禁。"""
+    rows = [r.strip() for r in md.splitlines() if r.strip().startswith("|")]
+    if len(rows) < 3:
+        return False
+    header = rows[0]
+    return any(r == header for r in rows[2:])   # 跳过分隔行 |---|
 
 
 def _overall(text_coverage: float, toc_depth: int, heading_rate: float | None,

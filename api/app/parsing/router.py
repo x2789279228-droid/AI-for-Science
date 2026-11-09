@@ -130,7 +130,15 @@ def parse_document(pdf_path: str | Path, progress: ProgressCb | None = None,
         meta.setdefault("scanned_pages", [])
         if meta["scanned_pages"]:
             meta["scanned"] = True
-    q = quality.compute(docir, probe)
+    # Round4：PDF 书签（出版级真值）传给质量自检 → heading_outline_hit（章节错配探针）
+    outline: list | None = None
+    try:
+        _doc = fitz.open(pdf_path)
+        outline = _doc.get_toc() or None
+        _doc.close()
+    except Exception:  # noqa: BLE001 —— 书签读取失败不影响解析主链路
+        outline = None
+    q = quality.compute(docir, probe, outline=outline)
     meta["quality"] = q
     meta["parse_quality"] = q.pop("overall", 0.0)
     report(0.85, f"解析完成（{meta.get('parse_engine')}）：{len(docir['blocks'])} blocks / "

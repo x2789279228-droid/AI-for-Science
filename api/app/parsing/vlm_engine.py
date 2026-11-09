@@ -101,20 +101,31 @@ def markdown_to_docir(md: str, pageno: int, *, bid_start: int = 0,
 
     while i < len(lines):
         line = lines[i]
-        if line.strip().startswith("|"):                     # GFM 表格
+        stripped = line.strip()
+        first_clean, first_bbox = _parse_bbox_prefix(stripped)
+        # GFM 表格：| 开头，或 <<bbox>> 前缀后跟 |（表块首行定位标记，v2-grounding）
+        if stripped.startswith("|") or (first_bbox is not None
+                                        and first_clean.strip().startswith("|")):
             flush_para()
-            tbl: list[str] = []
+            tbl: list[str] = [first_clean if first_bbox is not None else stripped]
+            i += 1
             while i < len(lines) and lines[i].strip().startswith("|"):
-                tbl.append(lines[i])
+                tbl.append(lines[i].strip())
                 i += 1
+            # 表块 bbox：仅来自首行前缀且剥离后仍是表头行；缺失 → 整页占位+诚实标记
+            tbl_bbox = first_bbox
             md_tbl = "\n".join(tbl)
             headers, rows = parse_md_table(md_tbl)
             tid += 1
-            tables.append({"id": f"t{tid}", "page": pageno, "bbox": [0.0, 0.0, 1.0, 1.0],
-                           "markdown": md_tbl,
-                           **({"headers": headers, "rows": rows} if headers else {})})
+            t_entry = {"id": f"t{tid}", "page": pageno,
+                       "bbox": tbl_bbox or [0.0, 0.0, 1.0, 1.0],
+                       "markdown": md_tbl,
+                       **({"headers": headers, "rows": rows} if headers else {})}
+            if tbl_bbox is None:
+                t_entry["bbox_estimated"] = True
+            tables.append(t_entry)
             continue
-        clean, bbox = _parse_bbox_prefix(line)
+        clean, bbox = first_clean, first_bbox
         fm = _HEADING.match(clean)
         if fm:
             flush_para()
@@ -145,8 +156,12 @@ def markdown_to_docir(md: str, pageno: int, *, bid_start: int = 0,
         if fc:
             flush_para()
             fid += 1
-            figures.append({"id": f"f{fid}", "page": pageno,
-                            "caption": fc.group(1)[:200], "bbox": [0.0, 0.0, 1.0, 1.0]})
+            f_entry = {"id": f"f{fid}", "page": pageno,
+                       "caption": fc.group(1)[:200],
+                       "bbox": bbox or [0.0, 0.0, 1.0, 1.0]}
+            if bbox is None:
+                f_entry["bbox_estimated"] = True
+            figures.append(f_entry)
             i += 1
             continue
         if clean.strip():
@@ -158,6 +173,12 @@ def markdown_to_docir(md: str, pageno: int, *, bid_start: int = 0,
         i += 1
     flush_para()
     return {"page": pageno, "blocks": blocks, "tables": tables, "figures": figures}
+
+
+def bbox_stats(items: list[dict]) -> dict:
+    """条目 bbox 定位统计（grounded=有版面坐标 / estimated=整页占位诚实降级）。"""
+    est = sum(1 for x in items if x.get("bbox_estimated"))
+    return {"grounded": len(items) - est, "estimated": est}
 
 
 def _assemble(docir: dict, parts: list[dict], pdf_path: Path, page_count: int) -> dict:
@@ -207,6 +228,13 @@ def _assemble(docir: dict, parts: list[dict], pdf_path: Path, page_count: int) -
         "references": _parse_references("\n\n".join(ref_parts)) if ref_parts else [],
     })
     _mark_appendix(toc, docir["meta"], blocks=blocks)
+    # bbox 定位统计：文本块（段落/标题/公式）与表格/图分别计数——扫描件证据口径
+    docir["meta"]["vlm_bbox_stats"] = {
+        "text": bbox_stats([b for b in blocks
+                            if b.get("type") in ("paragraph", "heading", "formula")]),
+        "table": bbox_stats(tables),
+        "figure": bbox_stats(figures),
+    }
     return docir
 
 
@@ -292,4 +320,11 @@ def rescue_blank_pages(pdf_path: str | Path, docir: dict,
     docir["meta"]["rescued_pages"] = sorted(p["page"] for p in rescued)
     sp = docir["meta"].setdefault("scanned_pages", [])
     sp.extend(p for p in docir["meta"]["rescued_pages"] if p not in sp)
+    # 救援页并入后重新累计 bbox 统计
+    docir["meta"]["vlm_bbox_stats"] = {
+        "text": bbox_stats([b for b in docir["blocks"]
+                            if b.get("type") in ("paragraph", "heading", "formula")]),
+        "table": bbox_stats(docir["tables"]),
+        "figure": bbox_stats(docir["figures"]),
+    }
     return docir
