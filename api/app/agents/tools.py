@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,8 @@ def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     """维度对齐：按 (aspect, paper) 分组，每格取 RRF 最优命中 → 对比表结构。
 
     rows 与 aspects 一一对应；某篇某维度无命中时该格为空（合成阶段须如实呈现"未找到"）。
+    行级冲突启发（细粒度 P0 修订）：同一维度下 ≥2 篇的格子 quote 数字集合两两不相交
+    → row["conflict"]=True（数值类冲突信号，合成侧已有"双侧并列禁裁决"prompt 条款）。
     """
     best: dict[tuple[str, str], dict] = {}
     for h in evidence:
@@ -90,6 +93,12 @@ def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
                 }),
             })
         rows.append({"dimension": a, "cells": cells})
+    for row in rows:   # 冲突启发（纯规则，只打标不裁决——裁决权在用户）
+        num_sets = [set(re.findall(r"\d+(?:\.\d+)?%?", c.get("quote", "").replace(",", "")))
+                    for c in row["cells"] if c.get("found")]
+        num_sets = [s for s in num_sets if s]
+        if len(num_sets) >= 2 and all(not (x & y) for x, y in combinations(num_sets, 2)):
+            row["conflict"] = True
     return {"papers": list(paper_ids), "rows": rows}
 
 
@@ -319,7 +328,8 @@ def _arxiv_search(query: str, max_results: int = 8) -> dict:
             params={"search_query": f"all:{q}", "start": 0,
                     "max_results": max(1, min(int(max_results), 20)),
                     "sortBy": "submittedDate", "sortOrder": "descending"},
-            headers={"User-Agent": "meridian-scholar-agent/1.0"}, timeout=30)
+            headers={"User-Agent": "meridian-scholar-agent/1.0"}, timeout=30,
+            follow_redirects=True)   # arXiv http→https 301（不跟随则 raise_for_status 误报失败）
         resp.raise_for_status()
         root = ET.fromstring(resp.text)
         entries = []
