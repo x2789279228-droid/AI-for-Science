@@ -70,6 +70,9 @@ export interface Support {
   chunk_id: string;
   quote: string;
   match_score?: number;
+  block_id?: string;       // 原句块级锚点（quote 定位回 DocIR 具体块）
+  block_bbox?: number[];   // 原句块归一化 bbox（优先于 chunk 级高亮）
+  quote_coverages?: number[];  // L2 逐 support 覆盖率（修订后逐项校验）
 }
 
 export interface Claim {
@@ -79,7 +82,7 @@ export interface Claim {
   quote_status?: "verified" | "unverified";   // L2 引文子串校验结果
   quote_coverage?: number;
   unverified_numbers?: string[];              // L3：未在证据中命中的数值/型号
-  semantic_status?: "partial";                // L4：部分支撑
+  semantic_status?: "partial" | "unchecked";  // L4：partial=部分支撑；unchecked=语义判定未执行（诚实标注）
 }
 
 /** final.anchors：E# → 块级溯源锚点（页码 1 基，bbox 归一化 0-1）。 */
@@ -127,6 +130,7 @@ export interface GraphNode {
   in_degree: number;
   out_degree: number;
   betweenness: number;
+  role_reason?: string;   // 模块五 P1：角色判定解释（年份/分位/跨社区比）
 }
 
 export interface GraphData {
@@ -161,6 +165,7 @@ export interface CompareCell {
   paper_id: string;
   found: boolean;
   chunk_id?: string;
+  eid?: string;            // 格级证据编号（Evidence Pack 内的 E#，点击直通原文）
   page?: number;
   section_path?: string;
   quote?: string;
@@ -170,6 +175,7 @@ export interface CompareCell {
 export interface CompareRow {
   dimension: string;
   cells: CompareCell[];
+  conflict?: boolean;      // 行级数值冲突启发（双侧数字集合不相交 → 双侧并列人工裁决）
 }
 
 export interface CompareTable {
@@ -583,16 +589,19 @@ export interface TranslateHandlers {
   done?: () => void;
 }
 
-/** POST SSE 流式翻译（block 级增量 t_delta → final 统计 → done）。 */
+/** POST SSE 流式翻译（block 级增量 t_delta → final 统计 → done）。signal 中断整篇翻译。 */
 export async function streamTranslate(
   paperId: string,
-  body: { lang?: string; page?: number; section?: string; block_ids?: string[] },
-  on: TranslateHandlers
+  body: { lang?: string; page?: number; section?: string; block_ids?: string[];
+          include_extras?: boolean },
+  on: TranslateHandlers,
+  signal?: AbortSignal
 ): Promise<void> {
   const resp = await fetch(`${API}/api/papers/${encodeURIComponent(paperId)}/translate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
   const reader = resp.body.getReader();
@@ -657,6 +666,26 @@ export async function addTerm(term: string, translation: string): Promise<TermEn
   return r.ok ? (await r.json()).terms ?? [] : [];
 }
 
+// ---------------- 模块三 D：全文搜索 ----------------
+
+/** 全文搜索命中（snippet 为纯文本，前端自行 <mark> 高亮）。 */
+export interface SearchHit {
+  chunk_id: string; page: number; section_path: string;
+  snippet: string; score: number; block_ids: string[];
+}
+
+/** GET /papers/{id}/search：FTS5 chunk 级全文检索（跨页跳转用 block_ids[0]）。 */
+export async function searchPaper(
+  paperId: string, q: string, topK = 10
+): Promise<{ results: SearchHit[]; total: number }> {
+  const r = await fetch(
+    `${API}/api/papers/${encodeURIComponent(paperId)}/search`
+    + `?q=${encodeURIComponent(q)}&top_k=${topK}`,
+    { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
 // ---------------- 4.4 Discover 闭环 ----------------
 
 export interface ArxivEntry {
@@ -670,8 +699,9 @@ export interface ReproRepo {
 }
 
 export interface DiscoverHandlers {
-  status?: (d: { stage: string; note: string; arxiv_id?: string; paper_id?: string; query?: string }) => void;
-  results?: (d: { query: string; entries: ArxivEntry[]; source: string }) => void;
+  status?: (d: { stage: string; note: string; arxiv_id?: string; paper_id?: string;
+                  query?: string; source?: string }) => void;
+  results?: (d: { query: string; entries: ArxivEntry[] | MultiEntry[]; source: string }) => void;
   final?: (d: Record<string, unknown> & { note?: string }) => void;
   error?: (d: { message: string }) => void;
   done?: () => void;
@@ -714,7 +744,7 @@ export async function streamDiscover(
   }
 }
 
-/** 勾选下载：下载 → 入库 → 等解析。 */
+/** 勾选下载：下载 → 入库 → 等解析（arxiv_id 或开放 pdf_url 二选一）。 */
 export async function discoverDownload(arxivId: string): Promise<{
   paper_id: string; job_id: string | null; dedup?: string;
   existing_title?: string; parse?: { status: string; message?: string };
@@ -727,6 +757,19 @@ export async function discoverDownload(arxivId: string): Promise<{
   return r.json();
 }
 
+/** 多源候选下载：arXiv id 或开放 PDF 直链。 */
+export async function multiDownload(arxivId: string, pdfUrl?: string): Promise<{
+  paper_id: string; job_id: string | null; dedup?: string;
+  existing_title?: string; parse?: { status: string; message?: string };
+}> {
+  const r = await fetch(`${API}/api/discover/download`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ arxiv_id: arxivId || "", pdf_url: pdfUrl || "" }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
 /** 复现性查分（github_repro 工具）。 */
 export async function fetchRepro(title: string): Promise<{ ok: boolean; repos: ReproRepo[]; source?: string }> {
   const r = await fetch(
@@ -734,6 +777,122 @@ export async function fetchRepro(title: string): Promise<{ ok: boolean; repos: R
   if (!r.ok) return { ok: false, repos: [] };
   return r.json();
 }
+
+// ---------------- 模块四：多源检索 / 追踪 / 推荐 ----------------
+
+export interface MultiEntry {
+  title: string; authors: string[]; year: number; venue: string;
+  doi: string; arxiv_id: string; citation_count: number | null;
+  abstract: string; sources: string[]; pdf_url?: string;
+  raw?: string; resolved?: boolean;
+}
+
+/** 多源检索（SSE）：query/title/doi/arxiv_id/references_text 四选一入口。 */
+export async function streamMultiSearch(
+  body: { query?: string; title?: string; doi?: string; arxiv_id?: string;
+          references_text?: string },
+  on: DiscoverHandlers,
+): Promise<void> {
+  const resp = await fetch(`${API}/api/discover/search`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          const data = JSON.parse(line.slice(6));
+          if (event === "status") on.status?.(data);
+          else if (event === "discover_results") on.results?.(data);
+          else if (event === "final") on.final?.(data);
+          else if (event === "error") on.error?.(data);
+          else if (event === "done") on.done?.();
+        }
+      }
+      event = "";
+    }
+  }
+}
+
+/** 匿名多用户：localStorage uuid（推荐/反馈隔离键）。 */
+export function userId(): string {
+  if (typeof window === "undefined") return "anonymous";
+  let u = localStorage.getItem("scholar_uid");
+  if (!u) {
+    u = `u-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+    localStorage.setItem("scholar_uid", u);
+  }
+  return u;
+}
+
+function _uidHeaders(): Record<string, string> {
+  return { "X-User-Id": userId() };
+}
+
+export interface TrackingSub {
+  id: string; name: string; query_type: string; value: string;
+  enabled: number; new_count?: number; last_run?: number;
+}
+export interface TrackedItem {
+  id: string; sub_id: string; arxiv_id: string; title: string;
+  published: string; authors: string[]; status: string; added_at: number;
+}
+
+export const trackingApi = {
+  subs: async (): Promise<TrackingSub[]> =>
+    (await (await fetch(`${API}/api/tracking/subscriptions`)).json()).subscriptions ?? [],
+  addSub: async (name: string, query_type: string, value: string) => {
+    const r = await fetch(`${API}/api/tracking/subscriptions`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, query_type, value }),
+    });
+    if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+  },
+  delSub: async (id: string) => { await fetch(`${API}/api/tracking/subscriptions/${id}`, { method: "DELETE" }); },
+  refresh: async () => {
+    const r = await fetch(`${API}/api/tracking/refresh`, { method: "POST" });
+    if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+    return (await r.json()).results as { sub_id: string; channel: string; fetched: number; added: number }[];
+  },
+  items: async (params: { sub_id?: string; status?: string } = {}): Promise<TrackedItem[]> => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
+    const r = await fetch(`${API}/api/tracking/items?${q}`, { cache: "no-store" });
+    return (await r.json()).items ?? [];
+  },
+  dismiss: async (id: string) => { await fetch(`${API}/api/tracking/items/${id}/dismiss`, { method: "POST" }); },
+};
+
+export interface Recommendation {
+  id: string | null; title: string; arxiv_id: string;
+  scores: Record<string, number | null>; reason: string; my_vote?: number;
+}
+
+export const recommendApi = {
+  list: async (refresh = false): Promise<{ recommendations: Recommendation[]; note?: string; profile_keywords?: Record<string, number> }> => {
+    const r = await fetch(`${API}/api/recommendations?refresh=${refresh ? "true" : "false"}`,
+      { headers: _uidHeaders(), cache: "no-store" });
+    return r.json();
+  },
+  vote: async (recId: string, vote: 1 | -1) => {
+    const r = await fetch(`${API}/api/recommendations/${recId}/feedback`, {
+      method: "POST", headers: { "Content-Type": "application/json", ..._uidHeaders() },
+      body: JSON.stringify({ vote }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  },
+};
 
 // ---------------- 4.6 图谱挖掘与学术洞察 ----------------
 
@@ -762,6 +921,94 @@ export async function fetchGraph(paperIds?: string[]): Promise<FullGraph> {
   const r = await fetch(`${API}/api/graph${q}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+// ---- 模块五：整批领域综述 / 外部进展核查 ----
+
+export interface SurveySection {
+  title: string; content: string;
+  claims: Record<string, unknown>[];
+  anchors: Record<string, unknown>;
+}
+export interface SurveyOut {
+  sections: SurveySection[]; stats: Record<string, unknown>;
+  guardrails?: string[]; cached?: boolean;
+}
+
+export async function streamSurvey(
+  paperIds: string[], on: {
+    status?: (d: { stage: string; note: string }) => void;
+    delta?: (d: { section: string; text: string }) => void;
+    final?: (d: SurveyOut) => void;
+    error?: (d: { message: string }) => void;
+  }, refresh = false,
+): Promise<void> {
+  const resp = await fetch(`${API}/api/graph/survey`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds, refresh }),
+  });
+  if (resp.status === 400) throw new Error((await resp.json()).detail ?? "参数不合法");
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  await _consumeSse(resp.body, (ev, data) => {
+    if (ev === "status") on.status?.(data);
+    else if (ev === "delta") on.delta?.(data);
+    else if (ev === "final") on.final?.(data);
+    else if (ev === "error") on.error?.(data);
+  });
+}
+
+export interface FutureCheckItem {
+  idea_text: string; source_paper: string; mention_papers?: string[];
+  verdict: "solved" | "partial" | "open" | "open_unverified";
+  confidence: number; reason: string;
+  external: { title: string; year: number; citation_count: number | null; abstract: string }[];
+}
+
+export async function streamFutureChecks(
+  paperIds: string[], on: {
+    status?: (d: { stage: string; note: string }) => void;
+    final?: (d: { items: FutureCheckItem[]; total: number }) => void;
+    error?: (d: { message: string }) => void;
+  },
+): Promise<void> {
+  const resp = await fetch(`${API}/api/future-checks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds }),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  await _consumeSse(resp.body, (ev, data) => {
+    if (ev === "status") on.status?.(data);
+    else if (ev === "final") on.final?.(data);
+    else if (ev === "error") on.error?.(data);
+  });
+}
+
+/** 通用 SSE 消费（event/data 帧 → 回调）。 */
+async function _consumeSse(
+  body: ReadableStream<Uint8Array>,
+  cb: (event: string, data: any) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let event = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ") && event) {
+          cb(event, JSON.parse(line.slice(6)));
+          event = "";
+        }
+      }
+    }
+  }
 }
 
 export interface SummaryHandlers {
@@ -855,4 +1102,102 @@ export async function streamIdeas(paperIds: string[], on: IdeasHandlers): Promis
       event = "";
     }
   }
+}
+
+// ---------------- 模块六：Copilot（写作 / CSV 可视化 / 拓扑图） ----------------
+
+export interface WritingSection {
+  title: string; content: string; cited_refs: number[];
+  evidence_count?: number; deterministic?: boolean;
+}
+export interface WritingOut {
+  outline: Record<string, unknown>;
+  sections: WritingSection[];
+  references: { used: { ref_id: number; title: string; authors: string; year: number;
+    venue: string; arxiv_id: string; doi: string }[]; unused_count: number; whitelist_size: number };
+  content_md: string; guardrails: string[];
+}
+
+export async function streamWriting(
+  idea: string, paperIds: string[], on: {
+    status?: (d: { stage: string; note: string }) => void;
+    final?: (d: WritingOut) => void;
+    error?: (d: { message: string }) => void;
+  },
+): Promise<void> {
+  const resp = await fetch(`${API}/api/copilot/writing`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idea, paper_ids: paperIds }),
+  });
+  if (resp.status === 400) throw new Error((await resp.json()).detail ?? "参数不合法");
+  if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+  await _consumeSse(resp.body, (ev, data) => {
+    if (ev === "status") on.status?.(data);
+    else if (ev === "final") on.final?.(data);
+    else if (ev === "error") on.error?.(data);
+  });
+}
+
+export interface DatasetMeta {
+  id: string; name: string; row_count: number;
+  columns: { name: string; dtype: string }[]; created_at: number; note?: string;
+}
+
+export const datasetApi = {
+  upload: async (file: File): Promise<DatasetMeta> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`${API}/api/copilot/datasets`, { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+    return r.json();
+  },
+  list: async (): Promise<DatasetMeta[]> =>
+    (await (await fetch(`${API}/api/copilot/datasets`, { cache: "no-store" })).json()).datasets ?? [],
+  preview: async (id: string): Promise<{ name: string; columns: { name: string; dtype: string }[]; rows: string[][] }> => {
+    const r = await fetch(`${API}/api/copilot/datasets/${id}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  },
+};
+
+export interface ChartOut {
+  id: string; caption: string;
+  spec: { type: string; title: string; x?: { name: string; data: (string | number)[] };
+          series?: { name: string; data: (number | null)[] }[]; indicators?: { name: string; max: number }[];
+          columns?: string[]; rows?: string[][]; row_count?: number };
+}
+
+export async function buildChart(body: { dataset_id: string; chart_type: string;
+  x?: string; y?: string[]; title?: string; with_caption?: boolean }): Promise<ChartOut> {
+  const r = await fetch(`${API}/api/copilot/chart`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+  return r.json();
+}
+
+export interface DiagramOut {
+  spec: { nodes: { id: string; label: string }[]; edges: { from: string; to: string; label?: string }[] };
+  sources: { mermaid: string; dot: string; tikz: string };
+  matplotlib: { ok: boolean; image_url?: string; error?: string };
+  validation: Record<string, { ok: boolean | null; checker: string }>;
+}
+
+export async function generateDiagram(description: string): Promise<DiagramOut> {
+  const r = await fetch(`${API}/api/copilot/diagram`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description }),
+  });
+  if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function zh2enTranslate(text: string): Promise<{ translation: string; ok: boolean; reason?: string }> {
+  const r = await fetch(`${API}/api/copilot/translate`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+  return r.json();
 }

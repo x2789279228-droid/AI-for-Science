@@ -16,10 +16,8 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 from . import db
-from .config import DOCIR_DIR
 from .llm import client as llm
 from .llm.prompts import resolve as _resolve
 from .log import logger
@@ -103,9 +101,42 @@ def hit_terms(text: str) -> list[dict]:
 
 # ---------- LLM 翻译单块 ----------
 
-def _llm_translate(protected: str, terms: list[dict]) -> str:
-    system, pv = _resolve("translate", "system_translate",
-                          "你是学术文献翻译器。只译自然语言，⟦n⟧ 占位符原样保留；术语表优先；只输出译文。")
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_ZH2EN_BUILTIN = ("You are an academic translation engine (Chinese -> English). Translate "
+                  "natural language only, keep ⟦n⟧ placeholders verbatim, follow the "
+                  "terminology table, never add/omit claims. Output the translation only.")
+
+
+def detect_lang(text: str) -> str:
+    """粗粒度语言检测：CJK 字符占比 >8% 判 zh，否则 en（仅用于方向校验，非语言学断言）。"""
+    if not text:
+        return "en"
+    cjk = len(_CJK_RE.findall(text))
+    return "zh" if cjk / max(len(text), 1) > 0.08 else "en"
+
+
+def cache_key(lang: str, mode: str) -> str:
+    """复合缓存键 target_lang|mode。legacy 行（"zh"）读取时按 zh|academic 兼容命中，
+    写入恒为复合键——UNIQUE(paper_id, block_id, lang) 天然隔离不同方向/档位。"""
+    return f"{lang}|{mode}"
+
+
+def _system_for(target_lang: str, mode: str) -> tuple[str, str]:
+    """按方向选槽：en→zh 用 system_translate，zh→en 用 system_translate_zh2en；
+    literal 档位在两个方向上追加直译指令（同一槽位内分化，避免槽位爆炸）。"""
+    if target_lang == "en":
+        system, pv = _resolve("translate", "system_translate_zh2en", _ZH2EN_BUILTIN)
+    else:
+        system, pv = _resolve("translate", "system_translate",
+                              "你是学术文献翻译器。只译自然语言，⟦n⟧ 占位符原样保留；术语表优先；只输出译文。")
+    if mode == "literal":
+        system += "\n5. 直译档位：优先字面对应与句序，仅为保证目标语可读性作最小调整，禁止润色、扩写或意译。"
+    return system, pv
+
+
+def _llm_translate(protected: str, terms: list[dict],
+                   target_lang: str = "zh", mode: str = "academic") -> str:
+    system, pv = _system_for(target_lang, mode)
     term_txt = json.dumps([{ "term": t["term"], "translation": t["translation"]} for t in terms],
                           ensure_ascii=False) if terms else "（无）"
     last_err = ""
@@ -128,11 +159,19 @@ def _llm_translate(protected: str, terms: list[dict]) -> str:
 
 # ---------- 缓存 ----------
 
-def _cached(paper_id: str, block_id: str, lang: str, hash_: str) -> dict | None:
+def _cached(paper_id: str, block_id: str, lang: str, hash_: str,
+            legacy: str | None = None) -> dict | None:
+    """缓存命中（src_hash 校验原文未变）。legacy：兼容旧版裸 "zh" 行——升级到复合键
+    后旧译文仍可命中，不为同一内容重复花 LLM 费用。"""
     rows = db.query(
         "SELECT text, format_ok, src_hash FROM translations "
         "WHERE paper_id=? AND block_id=? AND lang=?",
         (paper_id, block_id, lang))
+    if not rows and legacy:
+        rows = db.query(
+            "SELECT text, format_ok, src_hash FROM translations "
+            "WHERE paper_id=? AND block_id=? AND lang=?",
+            (paper_id, block_id, legacy))
     if rows and rows[0]["src_hash"] == hash_:   # 原文变了 → 旧译文失效，重译
         return dict(rows[0])
     return None
@@ -151,15 +190,22 @@ def _store(paper_id: str, block_id: str, lang: str, text: str, hash_: str, ok: b
 # ---------- DocIR 读取 ----------
 
 def load_blocks(paper_id: str) -> dict:
-    path = Path(DOCIR_DIR) / f"{paper_id}.json"
-    if not path.exists():
+    """DocIR 读取（与 docir 端点同源：DB docir_path 优先、数据目录回退——统一 404 判据）。"""
+    from .rag.version_diff import load_docir_for
+
+    data = load_docir_for(paper_id)
+    if data is None:
         raise FileNotFoundError(f"docir_missing:{paper_id}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return data
 
 
 def select_block_ids(docir: dict, *, page: int | None = None,
-                     section: str | None = None, block_ids: list[str] | None = None) -> list[str]:
-    """选择需翻译的块：自然语言块（paragraph/heading）；按页 / 按章 / 显式清单。"""
+                     section: str | None = None, block_ids: list[str] | None = None,
+                     include_extras: bool = False) -> list[str]:
+    """选择需翻译的块：自然语言块（paragraph/heading）；按页 / 按章 / 显式清单。
+
+    include_extras（模块三 P1）：纳入表格（markdown）与图注（caption）——伪块 id
+    即 DocIR 的 t#/f#，译文缓存/读取与普通块同一套（translations.block_id）。"""
     out = []
     for b in docir.get("blocks", []):
         if b.get("type") not in ("paragraph", "heading") or not (b.get("text") or "").strip():
@@ -171,6 +217,24 @@ def select_block_ids(docir: dict, *, page: int | None = None,
         if section is not None and not (b.get("section_path") or "").startswith(section):
             continue
         out.append(b["id"])
+    if include_extras:
+        want = set(block_ids) if block_ids is not None else None
+        for t in docir.get("tables", []):
+            if not (t.get("markdown") or "").strip():
+                continue
+            if want is not None and t["id"] not in want:
+                continue
+            if page is not None and t.get("page") != page:
+                continue
+            out.append(t["id"])
+        for f in docir.get("figures", []):
+            if not (f.get("caption") or "").strip():
+                continue
+            if want is not None and f["id"] not in want:
+                continue
+            if page is not None and f.get("page") != page:
+                continue
+            out.append(f["id"])
     return out
 
 
@@ -178,18 +242,27 @@ def _block_text(docir: dict, block_id: str) -> str:
     for b in docir.get("blocks", []):
         if b["id"] == block_id:
             return b.get("text") or ""
+    for t in docir.get("tables", []):
+        if t["id"] == block_id:
+            return t.get("markdown") or ""
+    for f in docir.get("figures", []):
+        if f["id"] == block_id:
+            return (f.get("caption") or "").strip()
     return ""
 
 
 # ---------- 批量入口 ----------
 
 def translate_blocks(paper_id: str, block_ids: list[str], *, lang: str = "zh",
-                     progress=None, should_stop=None) -> dict:
+                     mode: str = "academic", progress=None, should_stop=None) -> dict:
     """批量翻译（缓存优先，未命中走限流并发）。progress(done,total,block_id,text,ok)。
 
+    lang/mode 共同构成缓存键（cache_key）；zh|academic 读侧兼容 legacy "zh" 行。
     should_stop() 返回 True 时提前停止（已完成部分已落缓存 → 续译天然成立）。
     """
     docir = load_blocks(paper_id)
+    key = cache_key(lang, mode)
+    legacy = "zh" if key == "zh|academic" else None
     total = len(block_ids)
     stats = {"done": 0, "cached": 0, "failed": 0, "format_bad": 0}
     if total == 0:
@@ -200,7 +273,7 @@ def translate_blocks(paper_id: str, block_ids: list[str], *, lang: str = "zh",
         text = _block_text(docir, bid)
         if not text:
             continue
-        hit = _cached(paper_id, bid, lang, src_hash(text))
+        hit = _cached(paper_id, bid, key, src_hash(text), legacy=legacy)
         if hit:
             stats["done"] += 1
             stats["cached"] += 1
@@ -214,13 +287,13 @@ def translate_blocks(paper_id: str, block_ids: list[str], *, lang: str = "zh",
         terms = hit_terms(text)
         protected, mapping = protect(text, terms)
         try:
-            raw = _llm_translate(protected, terms)
+            raw = _llm_translate(protected, terms, target_lang=lang, mode=mode)
             restored, ok = restore(raw, mapping)
             if not ok:
                 restored, ok = text, False   # 占位符被翻译/丢失 → 回退原文，绝不交付烂译文
                 with _translate_lock:
                     stats["format_bad"] += 1
-            _store(paper_id, bid, lang, restored, src_hash(text), ok)
+            _store(paper_id, bid, key, restored, src_hash(text), ok)
             with _translate_lock:
                 stats["done"] += 1
                 done, ok_flag = stats["done"], ok
@@ -249,12 +322,12 @@ def translate_blocks(paper_id: str, block_ids: list[str], *, lang: str = "zh",
     return stats
 
 
-def translate_selection(text: str, context: str = "") -> dict:
-    """划词翻译：上下文感知短译 + 术语命中提示。"""
+def translate_selection(text: str, context: str = "", *, target_lang: str = "zh",
+                        mode: str = "academic") -> dict:
+    """划词翻译：上下文感知短译 + 术语命中提示。target_lang=en → 中→英学术短译。"""
     terms = hit_terms(text)
     protected, mapping = protect(text, terms)
-    system, pv = _resolve("translate", "system_translate",
-                          "你是学术翻译器。只译自然语言，⟦n⟧ 占位符原样保留；只输出译文。")
+    system, pv = _system_for(target_lang, mode)
     res = llm.chat(
         [{"role": "system", "content": system},
          {"role": "user", "content":
@@ -273,8 +346,18 @@ def translate_selection(text: str, context: str = "") -> dict:
     return {"translation": out, "term_hit": terms[0] if terms else None, "ok": True}
 
 
-def cached_translations(paper_id: str, lang: str = "zh") -> dict[str, dict]:
-    rows = db.query(
-        "SELECT block_id, text, format_ok FROM translations WHERE paper_id=? AND lang=?",
-        (paper_id, lang))
-    return {r["block_id"]: {"text": r["text"], "format_ok": bool(r["format_ok"])} for r in rows}
+def cached_translations(paper_id: str, lang: str = "zh", mode: str = "academic") -> dict[str, dict]:
+    """缓存译文读取：复合键行优先，zh|academic 无命中时回退 legacy "zh" 行（旧数据
+    兼容）；两者都存在时复合键覆盖（同一块以新键重译过则以新译文为准）。"""
+    key = cache_key(lang, mode)
+    out: dict[str, dict] = {}
+    if key == "zh|academic":
+        for r in db.query(
+                "SELECT block_id, text, format_ok FROM translations WHERE paper_id=? AND lang=?",
+                (paper_id, "zh")):
+            out[r["block_id"]] = {"text": r["text"], "format_ok": bool(r["format_ok"])}
+    for r in db.query(
+            "SELECT block_id, text, format_ok FROM translations WHERE paper_id=? AND lang=?",
+            (paper_id, key)):
+        out[r["block_id"]] = {"text": r["text"], "format_ok": bool(r["format_ok"])}
+    return out
