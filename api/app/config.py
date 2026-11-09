@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     tracking_interval_s: int = 21600
     # 单次订阅刷新的条目上限（OAI/Atom 全量拉回后再截断，防止巨类目刷库）
     tracking_max_items: int = 30
+    # Round4 横切：匿名用户限流（重端点 POST 每分钟次数；0 = 关闭）。单机单进程
+    # 令牌桶口径——比赛演示档，非分布式限流（如实注明，不冒充多租户治理）
+    rate_limit_per_min: int = 30
 
     # --- 派生属性 ---
 

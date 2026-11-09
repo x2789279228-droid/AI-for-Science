@@ -139,12 +139,20 @@ event: done        → {}
 | POST | `/api/chat/{thread_id}/resume` | 断点续跑：从最近 checkpoint 续跑（SSE 事件流同 /api/chat） |
 | GET | `/api/qa/{trace_id}` | 回放一次问答的完整事件流（trace_id = thread_id；trace_events 落盘，含断点续跑并入的事件） |
 
-## 透明度 / 健康
+## 透明度 / 健康 / 限流（Round4 横切）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/audit/prompts?limit=50` | 调用日志（模块/模型/token/耗时/guardrail）+ 系统状态 |
 | GET | `/api/health` | LLM 连通性（真实 ping）/ Dense 开关 / 论文数 |
+| GET | `/api/metrics` | 运行指标：请求计数（总数/状态码/限流命中/in-flight）+ LLM 聚合（qa_logs：调用数/token/平均时延）+ 任务/翻译计数 + 进程 RSS/CPU |
+
+**Request-ID**：所有响应回写 `X-Request-Id`（透传调用方值或自动生成 12 位 hex），与日志绑定。
+
+**限流（匿名多用户口径）**：重端点 POST（chat/上传/翻译/copilot/discover/graph/recommend 等）
+按 `X-User-Id`（无则 client host）分桶令牌桶限流，默认 30 次/分/用户（`RATE_LIMIT_PER_MIN`，
+0=关闭）；超限 `429` + `Retry-After` + `X-RateLimit-Limit/Remaining` 头。单机单进程口径——
+比赛演示档滥用防护，**非多租户鉴权**（无登录/租户隔离，如实注明）。
 
 ## 翻译与导出（模块三）
 

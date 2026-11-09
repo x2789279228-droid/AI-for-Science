@@ -81,7 +81,10 @@ async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastA
     content = await file.read()
     if len(content) > 200 * 1024 * 1024:
         raise HTTPException(413, "文件超过 200MB")
-    result = jobs.upload_pdf(file.filename, content)
+    try:
+        result = jobs.upload_pdf(file.filename, content)
+    except ValueError as e:   # Round4 安全体检：魔数/大小护栏 → 400（而非 500）
+        raise HTTPException(400, str(e)) from e
     return result
 
 

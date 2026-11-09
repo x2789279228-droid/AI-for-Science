@@ -725,9 +725,15 @@ def upload_pdf(filename: str, content: bytes) -> dict:
 
     hash 查重先于写文件（消灭孤儿文件）；插入+复用在 _dedup_lock 内串行，
     file_hash 唯一索引作并发最后防线。
+    Round4 安全体检：入口魔数（%PDF-）+ 大小上限（100MB，与下载侧同口径）——
+    伪装 .pdf 后缀的任意文件不再进入解析管线。
     """
     import hashlib
 
+    if len(content) < 1024 or bytes(content[:5]) != b"%PDF-":
+        raise ValueError("not_a_pdf:文件必须是以 %PDF- 开头的真实 PDF（≥1KB）")
+    if len(content) > 100 * 1024 * 1024:
+        raise ValueError("file_too_large:超过 100MB 上限")
     h = hashlib.sha256(content).hexdigest()
     with _dedup_lock:
         exact = db.query("SELECT id,title FROM papers WHERE file_hash=?", (h,))
