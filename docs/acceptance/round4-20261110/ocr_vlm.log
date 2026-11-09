@@ -1,0 +1,7 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+=== 3.2a-2 VLM channel on v1_img ===
+[ACCEPT-32A-VLM] engine=qwen-vl elapsed=663s blocks=153 toc=17 formulas=3 tables=4 coverage=1.0 vlm_failed_pages=[14] fallback=None
+  headings: ['Attention Is All You Need', 'Abstract', '1 Introduction', '3.3 Position-wise Feed-Forward']
+  formulas: ['\\mathrm{FFN}(x) = \\max(0, xW_1 + b_1)W_2 + b_2 \\ta', 'PE_{(pos,2i)} = \\sin(pos / 10000^{2i/d_{\\text{mode']
+ALL DONE

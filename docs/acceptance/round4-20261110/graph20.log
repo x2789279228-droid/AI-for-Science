@@ -1,0 +1,34 @@
+建图对象：22 篇
+综述：5 节 · 42 claims · 78.0s
+nodes=23 edges=51 external=1624 roles={'cornerstone': 8, 'peripheral': 1, '': 14} · 6.5s
+== graph20 PASS ==
+已写出：D:\传智杯\scholar-agent\docs\acceptance\round4-20261110\graph20.json
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 00:50:33.755[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/graph 6500ms[0m
+[32m2026-11-10 00:50:33.767[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/graph/survey 0ms[0m
+[32m2026-11-10 00:50:33.784[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:34.354[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:34.936[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:35.532[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:36.222[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:36.870[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:37.500[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:38.090[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:38.737[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:39.446[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:40.010[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:40.633[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:41.328[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:42.277[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:42.911[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:43.566[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:44.421[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:45.015[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:45.594[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:46.165[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:46.788[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:47.662[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 00:50:48.284[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m

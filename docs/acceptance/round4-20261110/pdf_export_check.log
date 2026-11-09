@@ -1,0 +1,27 @@
+== PDF 导出检查 p_5e84333e8e1d ==
+  [overlay] ✓ pages=18/15 img=3/3 cjk=2044 overflow=19
+  [bilingual] ✓ pages=18/15 img=3/3 cjk=904 overflow=0
+== PDF 导出检查 p_9387136178c3 ==
+  [overlay] ✓ pages=76/75 img=83/83 cjk=1406 overflow=1
+  [bilingual] ✓ pages=78/75 img=83/83 cjk=827 overflow=0
+
+== PDF 导出回归 PASS · 62.0s ==
+已写出：D:\传智杯\scholar-agent\docs\acceptance\round4-20261110\pdf_export_check.json（含 3 页/版 PNG 样张供人工核验）
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 00:52:17.016[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_5e84333e8e1d/translate 31ms[0m
+[32m2026-11-10 00:52:30.638[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_5e84333e8e1d/translate 31ms[0m
+[32m2026-11-10 00:52:42.010[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_5e84333e8e1d/translate 15ms[0m
+[32m2026-11-10 00:52:49.280[0m | [1mINFO    [0m | [36mapp.export.pdf_export[0m:[36mexport_pdf[0m:[36m201[0m - [1mexport_pdf p_5e84333e8e1d → p_5e84333e8e1d.zh.academic.overlay.pdf（22 块替换 / 19 溢出）[0m
+[32m2026-11-10 00:52:49.285[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_5e84333e8e1d/export 500ms[0m
+[32m2026-11-10 00:52:49.950[0m | [1mINFO    [0m | [36mapp.export.pdf_export[0m:[36mexport_pdf[0m:[36m201[0m - [1mexport_pdf p_5e84333e8e1d → p_5e84333e8e1d.zh.academic.bilingual.pdf（18 块替换 / 0 溢出）[0m
+[32m2026-11-10 00:52:49.952[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_5e84333e8e1d/export 250ms[0m
+[32m2026-11-10 00:52:50.793[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_9387136178c3/translate 16ms[0m
+[32m2026-11-10 00:52:56.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_9387136178c3/translate 31ms[0m
+[32m2026-11-10 00:53:09.738[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_9387136178c3/translate 32ms[0m
+[32m2026-11-10 00:53:17.648[0m | [1mINFO    [0m | [36mapp.export.pdf_export[0m:[36mexport_pdf[0m:[36m201[0m - [1mexport_pdf p_9387136178c3 → p_9387136178c3.zh.academic.overlay.pdf（28 块替换 / 1 溢出）[0m
+[32m2026-11-10 00:53:17.648[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_9387136178c3/export 234ms[0m
+[32m2026-11-10 00:53:18.259[0m | [1mINFO    [0m | [36mapp.export.pdf_export[0m:[36mexport_pdf[0m:[36m201[0m - [1mexport_pdf p_9387136178c3 → p_9387136178c3.zh.academic.bilingual.pdf（16 块替换 / 0 溢出）[0m
+[32m2026-11-10 00:53:18.259[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_9387136178c3/export 109ms[0m

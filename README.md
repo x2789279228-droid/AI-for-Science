@@ -60,6 +60,7 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 | 五 图谱与综述 | ✅ | Louvain 社区+基石🪨/边缘衍生🌿+含金量加权边；G6 交互图谱 + **批量选择 5–20 篇** + PNG/JSON 导出；**整批领域综述**（五节结构：背景/时间线/方法族/基石边缘/开放问题，每节 [E#]+ClaimTrace，survey_reports 缓存）；**Future Work 外部核查**（语义去重→S2 外部证据→solved/partial/open/**open_unverified** 诚实态+置信度+证据链）；/ideas 两栏 |
 | 六 写作与可视化 Copilot | ✅ | `/copilot` 四 Tab：**① 无幻觉论文框架**（固定章节 Abstract→…→References；白名单=选中论文 references+库内条目去重；正文 [R#] 白名单外自动剔除；References 代码组装双向一致 0 编造；guardrails 审计）**② CSV 可视化**（≤5MB/10 万行护栏+编码嗅探+公式注入清洗+按行预算截断防烂 JSON；table/line/bar/雷达（多维）/scatter3d 真 3D 散点（echarts-gl grid3D，≥3 数值维+第 4 维 visualMap）；Figure Caption 数字全部可回溯数据集，LLM 润色数字越界自动回退模板）**③ 中→英学术翻译**（复用模块三管线）**④ 拓扑图脚本**（LLM 只产 DiagramSpec→确定性渲染 Mermaid/Graphviz DOT/TikZ + matplotlib sandbox PNG；幽灵边剔除+语法校验） |
 | 翻译底座 | ✅ | 占位符保护（公式/代码/[n]）+术语表优先+缓存续译+2 并发限流；SSE；导出审计 translation_exports |
+| 横切生产化（Round4） | ✅ | 重端点 POST 令牌桶限流（30/min/匿名用户，429+Retry-After）· X-Request-Id · `GET /api/metrics`（请求/LLM 聚合/进程资源）· 上传 %PDF- 魔数护栏 · 匿名多用户画像隔离（**非多租户鉴权，如实口径**）· bench 性能基准（建图 0.2s/100k CSV 0.8s/10 并发 p95 5.7s 0 错） |
 | Prompt 审计 | ✅ | `app/prompts/*.yaml` 版本化（translate 1.1.0 / insights 1.1.0 / copilot 1.0.0 新增）；qa_logs.prompt_version；`/audit` 版本分布 |
 
 ### 诚实边界（如实标注，不冒充）
@@ -67,7 +68,9 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 - PDF overlay 导出**保留原表格**（避免破坏版式），表格译文进 MD/HTML 与双语文本视图；
 - S2/OpenAlex 无 key 有共享限速：适配器缓存+退避，断网时 `source=cache_offline` 如实回放；
 - Future Work 外部核查无证据时标 `open_unverified`（≠确认没人做）；引用含金量无引用句条目显示「无引用句」中性态；
-- LLM 不可用时：综述出图谱客观数据骨架、写作节标「待补：证据不足」、图注回退确定性模板——均不冒充生成。
+- LLM 不可用时：综述出图谱客观数据骨架、写作节标「待补：证据不足」、图注回退确定性模板——均不冒充生成；
+- 限流/隔离是**单机单进程匿名多用户画像**口径（X-User-Id 分桶），非多租户鉴权/分布式治理；
+- 中文查询→英文语料的检索依赖 Dense 多语向量桥接（BM25 无法跨语言）——embedding 配额限速时如实降级（Round4 实测记录于 docs/acceptance/round4-20261110/）。
 
 ## 核心机制（对应参赛方案评分点）
 
@@ -86,20 +89,23 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 ## 测试
 
 ```bash
-cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（241 用例，HTTP 全 mock）
-cd web && pnpm e2e                  # Playwright UI 验收 6 用例：双语滚动同步 / [n]→References 跳转 /
-                                    #   Copilot CSV→ECharts 出图+图注 / Discover 多源搜索 / Graph G6 渲染 /
-                                    #   PDF↔译文联动 bbox 锚定
+cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（274 用例，HTTP 全 mock）
+cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚动同步 / [n]→References /
+                                    #   CSV 出图+图注 / 多源搜索 / G6 / PDF↔译文 bbox 双向（⑦反向）/ 
+                                    #   discover 含金量可逆过滤 / 滚动同步中线块锚定量化 / 拓扑四格式渲染
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
-#   13 项门禁（Round3 收紧：strict R@5 + compare 细分进门禁）——最新 round3 见 docs/acceptance/
-# 集成：真实论文 1706.03762v7（无该 PDF 时自动跳过）；
-# 数据快照：scripts/fetch_corpus.py（BERT/PreLN/ScalingLaws/GPT-3 + UDL 固化 data-real）
+#   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
+#   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round4 见 docs/acceptance/
+# 一键验收：python scripts/accept_round.py --round round4-<date>（quick 门禁 + 全套真实证据链）
+# 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real）
 ```
 
-### 对比语料（data-real，references 全部健康）
+### 语料（data-real 快照 20 篇同领域，references 健康）
 
-Attention(40) · BERT(56) · **GPT-3 Language Models are Few-Shot Learners(118)** ·
-PreLN(101) · Scaling Laws(43) · UDL(245)。
+基线六篇：Attention(40) · BERT(56) · **GPT-3(118)** · PreLN(101) · ScalingLaws(43) · UDL(245)；
+Round4 扩充十四篇 transformer 家族：RoBERTa · ALBERT · ELECTRA · XLNet · BART · Longformer ·
+BigBird · Reformer · DeBERTa · ViT · LoRA · FlashAttention · Megatron-LM · T5。
+边界如实：Reformer(24)/BART(34) 条 refs（author-year 切分保守=宁少勿脏）、ELECTRA anomaly 11/59。
 勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；GPT 系原文以 GPT-3 论文代表
 （GPT-2 原文无 arXiv 版，OpenAI 技术报告 PDF 不在 arXiv 通道——如实注明）。
 

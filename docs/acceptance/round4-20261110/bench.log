@@ -1,0 +1,26 @@
+== ① graph build（LLM off 确定性）==
+  {'papers': 22, 'nodes': 23, 'edges': 51, 'elapsed_s': 0.2}
+== ② CSV 100k == 
+  {'rows': 100000, 'truncated': 0, 'parse_s': 0.46, 'serialize_s': 0.35, 'serialized_rows': 100000, 'json_valid': True}
+== ③ 10 并发问答（LLM off 抽取式降级）==
+  {'concurrency': 10, 'wall_s': 5.7, 'p50_ms': 5187.0, 'p95_ms': 5713.0, 'errors': 0, 'ok': True}
+== ④ PDF overlay（20+ 页，需缓存译文）==
+  {'skipped': '该论文无缓存译文（先翻 2-3 页再跑；如实跳过）'}
+
+== bench PASS ==
+已写出：D:\传智杯\scholar-agent\docs\acceptance\round4-20261110\bench.json
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 00:49:52.264[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 00:49:52.264[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 00:49:52.264[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 00:49:52.264[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 00:49:52.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 00:49:52.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 31ms[0m
+[32m2026-11-10 00:49:52.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 47ms[0m
+[32m2026-11-10 00:49:52.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 31ms[0m
+[32m2026-11-10 00:49:52.271[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 31ms[0m
+[32m2026-11-10 00:49:52.279[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 00:49:57.944[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_2c98718315d1/translation 0ms[0m

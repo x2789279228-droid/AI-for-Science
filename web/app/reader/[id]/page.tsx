@@ -518,10 +518,12 @@ function ReaderInner() {
           const dst = dstPane.querySelector(`[data-bid="${bid}"]`) as HTMLElement | null;
           window.requestAnimationFrame(() => {
             if (!dst) return;
-            const rel = (src.offsetTop + src.offsetHeight / 2 - srcPane.scrollTop)
-              / Math.max(1, srcPane.clientHeight);
-            dstPane.scrollTop = dst.offsetTop + dst.offsetHeight / 2
-              - Math.min(1, Math.max(0, rel)) * dstPane.clientHeight;
+            // Round4 量化修复：顶偏保持映射——目标块顶在目标视口中的偏移 =
+            // 源块顶在源视口中的偏移：dst.scrollTop = dst.offsetTop - (src.scrollTop
+            // - src.offsetTop)。等高两栏时退化为 scrollTop 直传（首版实现误写为
+            // dst.offsetTop + rel，双计 offsetTop，实测 right=1264/left=600 过冲）
+            const rel = src.offsetTop - srcPane.scrollTop;
+            dstPane.scrollTop = Math.max(0, dst.offsetTop - rel);
           });
           break;
         }
@@ -1354,7 +1356,12 @@ function ReaderInner() {
                             {!t.format_ok && <span className="chip warn" style={{ fontSize: 10, marginLeft: 6 }}>占位符校验未过 · 已回退原文</span>}
                           </p>
                         ) : (
-                          <p className="kv">未翻译（点上方「翻译本页」）</p>
+                          /* Round4 对齐修复：未译块显示原文（dimmed）而非空壳占位——
+                             右栏空壳使两侧块高结构悬殊（实测 22px vs 202px），块级
+                             滚动同步的量化误差被放大；渲染原文后两侧逐块等高对齐 */
+                          <p className="kv" title="未翻译（点上方「翻译本页」）——暂显原文">
+                            {b.text}
+                          </p>
                         )}
                       </div>
                     );
@@ -1403,7 +1410,12 @@ function ReaderInner() {
                             {!t.format_ok && <span className="chip warn" style={{ fontSize: 10, marginLeft: 6 }}>占位符校验未过 · 已回退原文</span>}
                           </p>
                         ) : (
-                          <p className="kv">未翻译（点上方「翻译本页」）</p>
+                          /* Round4 对齐修复：未译块显示原文（dimmed）而非空壳占位——
+                             右栏空壳使两侧块高结构悬殊（实测 22px vs 202px），块级
+                             滚动同步的量化误差被放大；渲染原文后两侧逐块等高对齐 */
+                          <p className="kv" title="未翻译（点上方「翻译本页」）——暂显原文">
+                            {b.text}
+                          </p>
                         )}
                       </div>
                     );

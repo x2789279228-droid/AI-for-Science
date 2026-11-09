@@ -1,0 +1,30 @@
+{
+  "time": "2026-11-10 00:49:57",
+  "mode": "deterministic(LLM off)",
+  "graph_build": {
+    "papers": 22,
+    "nodes": 23,
+    "edges": 51,
+    "elapsed_s": 0.2
+  },
+  "csv_100k": {
+    "rows": 100000,
+    "truncated": 0,
+    "parse_s": 0.46,
+    "serialize_s": 0.35,
+    "serialized_rows": 100000,
+    "json_valid": true
+  },
+  "chat_concurrent": {
+    "concurrency": 10,
+    "wall_s": 5.7,
+    "p50_ms": 5187.0,
+    "p95_ms": 5713.0,
+    "errors": 0,
+    "ok": true
+  },
+  "pdf_overlay": {
+    "skipped": "该论文无缓存译文（先翻 2-3 页再跑；如实跳过）"
+  },
+  "ok": true
+}

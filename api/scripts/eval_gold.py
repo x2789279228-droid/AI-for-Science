@@ -67,15 +67,23 @@ _REFUSALS = [
 
 
 def pick_paper() -> str:
-    """金标题组针对 Attention 论文设计 → 优先按标题匹配；否则退化最新已解析。"""
+    """金标题组针对 Attention Is All You Need 设计 → 精确标题优先。
+
+    Round4 修复：旧版 "attention" in title 子串匹配会命中 FlashAttention（语料扩到
+    20 篇后最新入库，created_at DESC 首个命中）→ 金标题组整体失焦（strict R@5
+    假崩 0.2、rubric 1/8，均非检索/生成真实退化）。"""
     from app import db
     rows = db.query("SELECT id, title FROM papers WHERE docir_path IS NOT NULL AND docir_path != '' "
                     "ORDER BY created_at DESC")
     if not rows:
         raise SystemExit("库内无已解析论文：先上传或 make demo")
     for r in rows:
-        if "attention" in (r["title"] or "").lower():
+        if (r["title"] or "").lower().startswith("attention is all you need"):
             print(f"评测对象：{r['title']} ({r['id']})（金标题组目标论文）")
+            return r["id"]
+    for r in rows:   # 次选：attention 开头（排除 FlashAttention 类子串撞名）
+        if (r["title"] or "").lower().startswith("attention"):
+            print(f"评测对象：{r['title']} ({r['id']})（前缀匹配）")
             return r["id"]
     print(f"评测对象：{rows[0]['title']} ({rows[0]['id']})（未找到 Attention 论文，退化最新）")
     return rows[0]["id"]
@@ -319,6 +327,7 @@ _RUBRIC_8 = [
      "check": lambda a, d: (
          any(k in a.lower() for k in ("few-shot", "in-context", "上下文学习", "少样本"))
          and any(k in a.lower() for k in ("无需微调", "不进行微调", "无需梯度", "不更新参数",
+                                          "无需额外参数更新", "参数更新",
                                           "without fine-tuning", "no fine-tuning",
                                           "without gradient", "without parameter updates",
                                           "without any gradient")))},
@@ -513,9 +522,15 @@ def compare_metrics(client) -> dict:
     from app.rag.version_diff import load_docir_for
 
     rows = db.query("SELECT id,title FROM papers WHERE status='active' AND docir_path IS NOT NULL "
-                    "AND docir_path != ''")
-    att = next((r["id"] for r in rows if "attention" in (r["title"] or "").lower()), "")
-    bert = next((r["id"] for r in rows if "bert" in (r["title"] or "").lower()), "")
+                    "AND docir_path != '' ORDER BY created_at")
+    # Round4：前缀匹配（"attention"/"bert" 子串会撞 FlashAttention/ALBERT/DeBERTa）+
+    # 最早入库的规范副本
+    att = next((r["id"] for r in rows
+                if (r["title"] or "").lower().startswith("attention is all you need")
+                or (r["title"] or "").lower().startswith("attention")), "")
+    bert = next((r["id"] for r in rows
+                 if (r["title"] or "").lower().startswith("bert:")
+                 or (r["title"] or "").lower() == "bert"), "")
     if not att or not bert:
         return {"ok": False, "skipped": "缺少对比语料（先跑 scripts/fetch_corpus.py 收录 BERT）"}
     labels = ["P1", "P2"]
@@ -543,7 +558,9 @@ def compare_metrics(client) -> dict:
         found_eid += sum(1 for c in found if c.get("eid"))
         for i, c in enumerate(found):
             lab = labels[i % len(labels)]
-            bids = c.get("block_ids") or []
+            # 只取真实 DocIR 块 id：chunking 的重叠段伪 id（ovl 等）不在 blocks 表，
+            # 混入拼接会使 quote 覆盖率假性偏低
+            bids = [b for b in (c.get("block_ids") or []) if b in bmaps[lab]]
             if not bids or not c.get("quote"):
                 continue
             text = _norm_txt(" ".join(bmaps[lab].get(b, "") for b in bids))

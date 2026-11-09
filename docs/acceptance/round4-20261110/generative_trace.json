@@ -1,0 +1,174 @@
+{
+  "question": "How many GPUs were the base models trained on?",
+  "answer": "The base models were trained on 8 NVIDIA P100 GPUs [E1].",
+  "mode": "generative",
+  "claims": [
+    {
+      "text": "The base models were trained on 8 NVIDIA P100 GPUs.",
+      "status": "supported",
+      "support": [
+        {
+          "eid": "E1",
+          "page": 7,
+          "section_path": "5.2 Hardware and Schedule",
+          "chunk_id": "c_645d76163ae9",
+          "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
+          "block_id": "b73",
+          "block_bbox": [
+            0.1732,
+            0.1907,
+            0.8252,
+            0.2614
+          ]
+        }
+      ],
+      "quote_coverages": [
+        1.0
+      ],
+      "quote_status": "verified"
+    }
+  ],
+  "anchors": {
+    "E1": {
+      "page": 7,
+      "section_path": "5.2 Hardware and Schedule",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1732,
+        0.1907,
+        0.8252,
+        0.2614
+      ],
+      "chunk_id": "c_645d76163ae9",
+      "block_ids": [
+        "b73"
+      ]
+    },
+    "E2": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_0e9a2b3eed51",
+      "block_ids": [
+        "b90"
+      ]
+    },
+    "E3": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_e63453b66219",
+      "block_ids": [
+        "b87",
+        "b88"
+      ]
+    },
+    "E4": {
+      "page": 1,
+      "section_path": "_front",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1879,
+        0.2323,
+        0.3529,
+        0.2753
+      ],
+      "chunk_id": "c_e6d9ac212701",
+      "block_ids": [
+        "b11"
+      ]
+    },
+    "E5": {
+      "page": 1,
+      "section_path": "1 Introduction",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.7172,
+        0.8252,
+        0.7866
+      ],
+      "chunk_id": "c_a88bfb14e273",
+      "block_ids": [
+        "b19"
+      ]
+    },
+    "E6": {
+      "page": 8,
+      "section_path": "6.3 English Constituency Parsing",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.2092,
+        0.1174,
+        0.7892,
+        0.3081
+      ],
+      "chunk_id": "c_c1a4e7f13232",
+      "block_ids": [
+        "t2"
+      ]
+    },
+    "E7": {
+      "page": 9,
+      "section_path": "6.3 English Constituency Parsing",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1716,
+        0.1604,
+        0.8333,
+        0.4697
+      ],
+      "chunk_id": "c_5b27f90c987a",
+      "block_ids": [
+        "t3"
+      ]
+    },
+    "E8": {
+      "page": 7,
+      "section_path": "5.3 Optimizer",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1716,
+        0.303,
+        0.8252,
+        0.3333
+      ],
+      "chunk_id": "c_61f4e35eb513",
+      "block_ids": [
+        "b75",
+        "b76",
+        "b77"
+      ]
+    }
+  },
+  "guardrails": [],
+  "elapsed_s": 5.6,
+  "conversation_id": "gold_55ee7bf6",
+  "thread_id": "gold_55ee7bf6:1",
+  "model": "doubao-seed-2.1-lite",
+  "usage": {
+    "prompt_tokens": 1702,
+    "completion_tokens": 87,
+    "latency_ms": 1770
+  }
+}

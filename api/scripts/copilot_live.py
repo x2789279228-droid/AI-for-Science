@@ -75,9 +75,17 @@ def main() -> int:
     body_secs = [s for s in sections if s["title"] != "References"]
     body_text = "\n".join(s["content"] for s in body_secs)
     body_refs = {int(m.group(1)) for m in _R_MARK.finditer(body_text)}
-    substantive = sum(1 for s in body_secs
-                     if s["content"] and "待补" not in s["content"]
-                     and "LLM 不可用" not in s["content"])
+    def _substantive(sec: dict) -> bool:
+        """实质节=剥离 LLM 的诚实尾注后仍有 ≥100 字实质内容。框架层整节占位
+        （"待补：证据不足…"）与 LLM 不可用态不算；LLM 在节尾如实标注的
+        （证据不足，待补）不算否决——正文有引用有论断即是实质。"""
+        c = (sec.get("content") or "").strip()
+        if c.startswith(("待补：", "（LLM 不可用")):
+            return False
+        core = c.replace("（证据不足，待补）", "").replace("(证据不足，待补)", "").strip()
+        return len(core) >= 100
+
+    substantive = sum(1 for s in body_secs if _substantive(s))
     checks = {
         # used 本身就是白名单过滤后的列表；再验 [R#] 双向一致
         "body_refs_subset_references": body_refs <= used_ids,

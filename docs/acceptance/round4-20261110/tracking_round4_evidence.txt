@@ -1,0 +1,9 @@
+[32m2026-11-09 23:08:41.904[0m | [33m[1mWARNING [0m | [36mapp.agents.tracker[0m:[36m_fetch_sickle[0m:[36m70[0m - [33m[1mtracking Sickle 通道失败 → Atom 回退: BadArgument: The request includes illegal arguments, is missing required arguments, includes a repeated argument, or values for arguments have an illegal syntax. Reason: Set does not exist[0m
+订阅数: 0
+{"sub_id": "ts_r4ev", "channel": "atom", "fetched": 20, "added": 20, "deduped": 0}
+ - 2611.09402 | A Spiking Neural Model of the Mental Lex | new | abstract 800 字符
+ - 2611.09454 | From LoRA to Language: Recovering Skill  | new | abstract 800 字符
+ - 2611.09491 | An Effective Spoken Language Understandi | new | abstract 800 字符
+ - 2611.09505 | BEiTScore++: Reference-free Image Captio | new | abstract 800 字符
+ - 2611.09506 | On the Effectiveness and Limitations of  | new | abstract 800 字符
+耗时 1.4 s

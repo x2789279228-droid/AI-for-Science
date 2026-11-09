@@ -1,0 +1,23 @@
+== provider 直连（生产代码路径）==
+  [arxiv] ✓ transformer attention · 5 条 · 2101ms
+  [arxiv] ✓ scaling laws language models · 5 条 · 2660ms
+  [arxiv] ✓ retrieval augmented generation · 5 条 · 2793ms
+  [s2] ✗ attention is all you need · 0 条 · 3749ms
+  [s2] ✗ bert pre-training · 0 条 · 3493ms
+  [s2] ✗ gpt-3 few-shot · 0 条 · 3019ms
+  [openalex] ✓ vision transformer · 5 条 · 2257ms
+  [openalex] ✓ instruction tuning · 5 条 · 1507ms
+  [openalex] ✓ mixture of experts · 5 条 · 520ms
+== search_multi 三源并行去重 ==
+  entries=16 per_source={"arxiv": true, "s2": false, "openalex": true}
+== 超时对照（15ms）==
+  raised=True ConnectTimeout
+== 离线降级 ==
+  graceful=True no_live_source=True
+
+== live probe PASS ==
+已写出：D:\传智杯\scholar-agent\docs\acceptance\round4-20261110\live_probe.json
+
+[stderr]
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(

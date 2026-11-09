@@ -94,6 +94,7 @@ def main() -> int:
     report["threshold_calibrated"] = bool(calibrated)
     ok = bool(len(nodes) >= args.min_papers and (g.get("edge_count") or 0) > 0 and calibrated
               and (survey is None or survey.get("ok")))
+    report["ok"] = bool(ok)   # 门禁值入档（summary/自评表直接引用）
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "graph20.json").write_text(json.dumps(report, ensure_ascii=False, indent=2),

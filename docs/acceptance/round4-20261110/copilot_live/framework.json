@@ -1,0 +1,38 @@
+{
+  "idea": "面向低资源场景的高效注意力机制：线性复杂度变体与检索增强的对比研究",
+  "paper_ids": [
+    "p_5e84333e8e1d",
+    "p_eb4a1c1f12c6",
+    "p_9387136178c3"
+  ],
+  "elapsed_s": 17.8,
+  "checks": {
+    "body_refs_subset_references": true,
+    "references_all_cited": true,
+    "sections_complete": true,
+    "substantive_sections": true,
+    "guardrails_recorded": true
+  },
+  "ok": true,
+  "guardrails": [],
+  "outline": {
+    "idea": "面向低资源场景的高效注意力机制：线性复杂度变体与检索增强的对比研究",
+    "sections": [
+      "Abstract",
+      "Introduction",
+      "Related Work",
+      "Method",
+      "Experiments",
+      "Conclusion"
+    ],
+    "papers": 3,
+    "whitelist_size": 80
+  },
+  "references_used": [
+    {
+      "ref_id": 20,
+      "title": "Adam: A method for stochastic optimization",
+      "year": 0
+    }
+  ]
+}

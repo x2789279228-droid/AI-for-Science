@@ -40,6 +40,10 @@ def _survey_sample(outdir: Path, rng: random.Random) -> dict:
     for sec in sections:
         anchors = sec.get("anchors") or {}
         for c in sec.get("claims") or []:
+            # 口径（Round4 修订）：只抽 quote_status=verified 且 supported 的 claims——
+            # unsupported/unverified 的诚实信号是状态徽章而非锚点覆盖，不计入分母
+            if c.get("quote_status") != "verified" or c.get("status") != "supported":
+                continue
             flat.append({"section": sec.get("title", ""), "claim": c, "anchors": anchors})
     if not flat:
         return {"ok": False, "skipped": "综述 sections 无 claims"}

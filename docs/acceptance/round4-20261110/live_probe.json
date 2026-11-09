@@ -1,0 +1,135 @@
+{
+  "time": "2026-11-10 00:50:25",
+  "providers": {
+    "arxiv": [
+      {
+        "query": "transformer attention",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 2101,
+        "error": ""
+      },
+      {
+        "query": "scaling laws language models",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 2660,
+        "error": ""
+      },
+      {
+        "query": "retrieval augmented generation",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 2793,
+        "error": ""
+      }
+    ],
+    "s2": [
+      {
+        "query": "attention is all you need",
+        "ok": false,
+        "entries": 0,
+        "latency_ms": 3749,
+        "error": "HTTPStatusError: Client error '429 ' for url 'https://api.semanticscholar.org/graph/v1/paper/search?query=attention+is+a"
+      },
+      {
+        "query": "bert pre-training",
+        "ok": false,
+        "entries": 0,
+        "latency_ms": 3493,
+        "error": "HTTPStatusError: Client error '429 ' for url 'https://api.semanticscholar.org/graph/v1/paper/search?query=bert+pre-train"
+      },
+      {
+        "query": "gpt-3 few-shot",
+        "ok": false,
+        "entries": 0,
+        "latency_ms": 3019,
+        "error": "HTTPStatusError: Client error '429 ' for url 'https://api.semanticscholar.org/graph/v1/paper/search?query=gpt-3+few-shot"
+      }
+    ],
+    "openalex": [
+      {
+        "query": "vision transformer",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 2257,
+        "error": ""
+      },
+      {
+        "query": "instruction tuning",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 1507,
+        "error": ""
+      },
+      {
+        "query": "mixture of experts",
+        "ok": true,
+        "entries": 5,
+        "latency_ms": 520,
+        "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://api.openalex.org/works?search=mixture+of+experts&"
+      }
+    ]
+  },
+  "provider_sources_ok": [
+    true,
+    false,
+    true
+  ],
+  "all3_sources_ok_strict": false,
+  "search_multi": {
+    "ok": true,
+    "entries": 16,
+    "per_source": {
+      "arxiv": {
+        "ok": true,
+        "source": "live",
+        "error": ""
+      },
+      "s2": {
+        "ok": false,
+        "source": "none",
+        "error": "HTTPStatusError: Client error '429 ' for url 'https://api.semanticscholar.org/graph/v1/paper/search?query=transformer+at"
+      },
+      "openalex": {
+        "ok": true,
+        "source": "cache_offline",
+        "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://api.openalex.org/works?search=transformer+attenti"
+      }
+    },
+    "latency_ms": 4465
+  },
+  "timeout_probe": {
+    "raised": true,
+    "exc": "ConnectTimeout",
+    "latency_ms": 61
+  },
+  "offline_probe": {
+    "graceful": true,
+    "entries": 15,
+    "per_source": {
+      "arxiv": {
+        "ok": true,
+        "source": "cache_offline",
+        "error": ""
+      },
+      "s2": {
+        "ok": true,
+        "source": "cache_offline",
+        "error": "ConnectionError: offline-probe"
+      },
+      "openalex": {
+        "ok": true,
+        "source": "cache_offline",
+        "error": "ConnectionError: offline-probe"
+      }
+    },
+    "sources_labeled": {
+      "arxiv": "cache_offline",
+      "s2": "cache_offline",
+      "openalex": "cache_offline"
+    },
+    "no_live_source": true
+  },
+  "ok": true
+}

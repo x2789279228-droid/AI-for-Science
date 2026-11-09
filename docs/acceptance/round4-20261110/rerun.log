@@ -1,0 +1,7 @@
+eval rc=1
+graph20 rc=0
+audit rc=0
+copilot rc=1
+ocr_vlm rc=0
+eval rc=1
+copilot rc=0

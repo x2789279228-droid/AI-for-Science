@@ -1,0 +1,95 @@
+{
+  "time": "2026-11-10 00:52:16",
+  "papers": [
+    {
+      "paper_id": "p_5e84333e8e1d",
+      "origin": {
+        "page_count": 15,
+        "images": 3,
+        "drawings": 2710,
+        "cjk_chars": 0
+      },
+      "layouts": {
+        "overlay": {
+          "ok": true,
+          "page_count": 18,
+          "images": 3,
+          "drawings": 2710,
+          "cjk_chars": 2044,
+          "overflow_blocks": 19,
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true
+          },
+          "drawing_delta": 0
+        },
+        "bilingual": {
+          "ok": true,
+          "page_count": 18,
+          "images": 3,
+          "drawings": 2710,
+          "cjk_chars": 904,
+          "overflow_blocks": 0,
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true
+          },
+          "drawing_delta": 0
+        }
+      },
+      "warm": {
+        "warmed_pages": 3,
+        "cached": 0,
+        "failed": 0
+      }
+    },
+    {
+      "paper_id": "p_9387136178c3",
+      "origin": {
+        "page_count": 75,
+        "images": 83,
+        "drawings": 317,
+        "cjk_chars": 0
+      },
+      "layouts": {
+        "overlay": {
+          "ok": true,
+          "page_count": 76,
+          "images": 83,
+          "drawings": 317,
+          "cjk_chars": 1406,
+          "overflow_blocks": 1,
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true
+          },
+          "drawing_delta": 0
+        },
+        "bilingual": {
+          "ok": true,
+          "page_count": 78,
+          "images": 83,
+          "drawings": 317,
+          "cjk_chars": 827,
+          "overflow_blocks": 0,
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true
+          },
+          "drawing_delta": 0
+        }
+      },
+      "warm": {
+        "warmed_pages": 3,
+        "cached": 0,
+        "failed": 0
+      }
+    }
+  ],
+  "ok": true,
+  "elapsed_s": 62.0
+}
