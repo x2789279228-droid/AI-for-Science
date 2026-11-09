@@ -47,3 +47,12 @@ api/docir/
 api/parsing/
 api/fastembed_cache/
 api/scholar.db
+
+# Playwright 产物（.last-run.json 已另行归档 docs/acceptance）
+web/test-results/
+web/playwright-report/
+web/dbg_*.mjs
+api/_tmp_dbg*
+api/tests/_[a-z]*_[0-9a-f]*/
+api/fgv_*/
+api/pytest-of-*/

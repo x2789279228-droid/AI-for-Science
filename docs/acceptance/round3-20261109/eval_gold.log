@@ -1,0 +1,108 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-09 09:35:23.127[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:24.140[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:24.758[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:25.502[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:26.164[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:26.784[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:27.386[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:28.029[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:28.625[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:29.267[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:29.886[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:30.600[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:31.177[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:31.842[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:32.498[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:36.446[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:39.546[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:42.168[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:45.133[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:47.810[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:50.950[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:35:56.697[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:05.937[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:14.747[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:17.316[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:25.336[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:30.171[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:36.005[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:40.435[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:45.718[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:50.713[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:36:56.340[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:01.069[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:07.367[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:12.031[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:18.221[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:27.872[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:34.211[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:37:47.606[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:00.127[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:10.772[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:17.623[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:17.627[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:17.629[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-09 09:38:17.637[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m92[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+评测对象：Attention Is All You Need (p_a19a95dbf468)（金标题组目标论文）
+  [R@5] ✓+s r1 How many GPUs were the base models trained
+  [R@5] ✓+s r1 How long did the big model train for?
+  [R@5] ✓+s r1 What BLEU score did the big model achieve 
+  [R@5] ✗ r0 What attention mechanism computes in const
+  [R@5] ✓+s r1 Which optimizer was used?
+  [R@5] ✓ r1 What learning rate schedule was applied?
+  [R@5] ✓+s r1 What is the dropout applied to the sum of 
+  [R@5] ✓ r1 How many encoder and decoder layers?
+  [R@5] ✗ r0 What is the model dimension d_model?
+  [R@5] ✓+s r1 Which regularization prevented overfitting
+  [ZH] ✓ 注意力机制是怎么计算的？
+  [ZH] ✓ 训练用了多少块 GPU？
+  [ZH] ✓ 模型在 WMT14 英德翻译上拿到了多少 BLEU？
+  [ZH] ✓ 编码器和解码器各有几层？
+  [ZH] ✓ 使用了什么优化器？
+  [REF] ✓ 今天天气怎么样？
+  [REF] ✓ 帮我写一首诗
+  [REF] ✓ 股票代码 AAPL 现在多少钱？
+  [REF] ✓ 推荐几家好吃的餐厅
+  [REF] ✓ 1+1 等于几？
+  [GEN] generative · claims=1 · 6.0s · We trained our models on one machine wit
+  [GEN] generative · claims=3 · 8.7s · Training took 3.5 days on 8 P100 GPUs.
+  [GEN] generative · claims=1 · 9.5s · What BLEU score did the big model achiev
+  [GEN] refusal · claims=0 · 2.6s · What attention mechanism computes in con
+  [GEN] generative · claims=4 · 7.8s · We used warmup_steps = 4000.
+  [REPLAY 1/10] 200 · events=34
+  [REPLAY 2/10] 200 · events=37
+  [REPLAY 3/10] 200 · events=34
+  [REPLAY 4/10] 200 · events=34
+  [REPLAY 5/10] 200 · events=35
+  [REPLAY 6/10] 200 · events=34
+  [REPLAY 7/10] 200 · events=34
+  [REPLAY 8/10] 200 · events=57
+  [REPLAY 9/10] 200 · events=37
+  [REPLAY 10/10] 200 · events=34
+  [TRANS p0] {'done': 14, 'total': 14, 'cached': 14, 'failed': 0, 'format_bad': 0, 'stopped': False} · 0.0s · 缓存块 27
+  [TRANS p1] {'done': 13, 'total': 13, 'cached': 13, 'failed': 0, 'format_bad': 0, 'stopped': False} · 0.0s · 缓存块 27
+  [RUBRIC] ✓ [作者/机构] 这篇论文的作者和所属机构？
+  [RUBRIC] ✓ [超参数] β1、β2 设置为多少？
+  [RUBRIC] ✓ [训练事实] 训练用了什么 GPU、多少块、多久？
+  [RUBRIC] ✓ [表格数值] 在 WMT 2014 EN-DE 上 BLEU 是多少？
+  [RUBRIC] ✓ [论证链] 多头注意力为什么比单头好？
+  [RUBRIC] ✓ [引用解析] [11] 的完整引用信息？
+  [CMP] ✓ rows=2 found=4/4 eid=1.0 halluc=0.07142857142857142 P1P2=True
+
+== 金标门禁 ==
+  [PASS] recall_at5>=0.8
+  [FAIL] strict_recall_at5>=0.7
+  [PASS] refusal>=0.9
+  [PASS] zh_top8>=0.8
+  [PASS] supported>=0.8
+  [PASS] hallucination<=0.1
+  [PASS] replay_10_10
+  [PASS] anchor_precision>=0.7
+  [PASS] rubric8>=0.75
+  [PASS] compare_ok
+  [PASS] compare_cell_coverage>=0.5
+  [PASS] compare_eid_coverage>=0.6
+  [PASS] compare_unsupported<=0.25
+已写出：..\docs\acceptance\round3-20261109\eval_gold.json

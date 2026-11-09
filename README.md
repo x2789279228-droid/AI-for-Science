@@ -49,18 +49,25 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 查询时零重算；无 key 时 `EMBEDDING_BACKEND=local` 走 fastembed 本地 BGE-M3，
 或纯 BM25 单路降级，检索管线不变。
 
-## 当前模块状态（MVP 闭环已通）
+## 当前模块状态（模块三~六已按赛题要求补齐；下列 ✅ = 端到端可用且带自动化测试）
 
 | 模块 | 状态 | 说明 |
 |---|---|---|
-| 一 PDF 解析 | ✅ | **解析路由**（docs/01 §4.1）：probe→native(MinerU 2.5.4 middle.json)/scanned(Qwen-VL 逐页)/gray(逐页 VLM 救援)/long(50 页/批流式+大纲先出+前 120 页索引)；失败→PyMuPDF 兜底；公式 LaTeX→KaTeX；表格 html+markdown+headers/rows；解析报告六指标（`docs/adr-001-bbox.md` 标定记录） |
-| 二 溯源问答 | ✅ | BM25(中文 bigram)+可选 Dense→RRF→Rerank；Evidence Pack `[E#]` 编号引用；L1-L4 Claim-Citation 校验器；ClaimTrace 三态徽章；引用点击跳 PDF bbox 高亮；SSE 流式 |
-| 三 阅读器 | ✅ | 四视图：PDF 原文（pdf.js bbox 高亮）/ DocIR 文本 / **双语对照**（block 级对齐+防回环滚动同步）/ 原版对照（公式→bbox 联动）；`?page&bbox` URL 定位；**按需加载**（outline 秒开+按页正文）；阅读顺序红绿开关；划词翻译+术语表；[n]↔References 双向跳转；解析报告（含峰值内存曲线） |
-| 四 检索追踪 | ✅ | **检索发现闭环**：研究方向→arXiv 检索→勾选下载（主备源+精确去重）→解析→检索（13 个 ToolSpec 工具白名单矩阵；`/discover` SSE） |
-| 五 引用图谱 | ✅ | louvain 社区+模块度+基石🪨/边缘衍生🌿+引用含金量加权（规则+LLM 两档）；**AntV G6 交互图谱**；社区演进综述（[E#] 强制+ClaimTrace 校验）；**/ideas Future Work 去重两栏**（无后继引用→open） |
-| 六 写作 Copilot | ✅ | Writer Agent 大纲先行（artifact+final.outline）→按大纲流式生成→逐论断校验；证据池 ≥3 才写（Evidence-First 拒答） |
-| 翻译 | ✅ | block 级占位符保护（公式/代码/[n]）+术语表优先+缓存续译+2 并发限流；`/api/papers/{id}/translate` SSE |
-| Prompt 审计 | ✅ | `app/prompts/*.yaml` 版本化（changelog+default/strict A/B 运行时切档）；qa_logs.prompt_version；`/audit` 版本分布 |
+| 一 PDF 解析 | ✅ | **解析路由**：probe→native(MinerU 2.5.4)/scanned(Qwen-VL 逐页)/gray(逐页 VLM 救援)/long(50 页/批+前 120 页索引)；失败→PyMuPDF 兜底；公式 LaTeX→KaTeX；**References 三通道切分**（行内 [n] / 字母键 [ABC+18] / author-year 作者头 + 标题粘连兜底，Appendix 边界截断；authors/year/venue/title_norm 富字段落库）——BERT 56 / PreLN 101 / **GPT-3 118** / ScalingLaws 43 / UDL 245 条，零脏巨块；`ref_count_consistency` 质量探针 |
+| 二 溯源问答 | ✅ | BM25(中文 bigram)+可选 Dense→RRF→Rerank；Evidence Pack `[E#]`；L1-L4 Claim-Citation 校验；ClaimTrace 三态；引用点击跳 PDF bbox；SSE 流式 |
+| 三 阅读与双向翻译 | ✅ | 五视图（PDF/文本/双语对照/原版对照/**PDF↔译文联动**）；**[n]↔References 双向无损跳转**（含跨页回退）；双语 IntersectionObserver 防回环同步；**双向翻译**：英→中 + 中→英学术体（target_lang/mode，复合缓存键 `zh\|academic`，legacy 缓存兼容命中）；划词/悬停（可开悬停即译）/整篇（含表格+图注）翻译；**导出**：MD/HTML（对照/单栏）+ **PDF 原位替换 overlay**（redaction 保图保矢量、公式不动、溢出进补遗页）+ 双语交替版；术语表 CRUD+导入导出 |
+| 四 检索追踪推荐 | ✅ | **多源检索**（arXiv Atom + Semantic Scholar + OpenAlex，DOI→arXiv→title_norm 三索引去重）；**参考文献列表下钻**（BibTeX/RIS/纯文本→S2 batch 补全，未解析如实标注）；**引用含金量**（实质/背景/凑数 → References 面板可逆过滤）；**arXiv 追踪**（Sickle OAI-PMH 主通道+Atom 回退、订阅表、后台 worker、last_run 水位线续跑、库内已知标记）；**个性化推荐**（本地库画像打分 local/recency/citation/github/keyword 五分量+可解释理由，👍👇 反馈重加权，X-User-Id 多用户隔离）；`/discover` 四区 UI |
+| 五 图谱与综述 | ✅ | Louvain 社区+基石🪨/边缘衍生🌿+含金量加权边；G6 交互图谱 + **批量选择 5–20 篇** + PNG/JSON 导出；**整批领域综述**（五节结构：背景/时间线/方法族/基石边缘/开放问题，每节 [E#]+ClaimTrace，survey_reports 缓存）；**Future Work 外部核查**（语义去重→S2 外部证据→solved/partial/open/**open_unverified** 诚实态+置信度+证据链）；/ideas 两栏 |
+| 六 写作与可视化 Copilot | ✅ | `/copilot` 四 Tab：**① 无幻觉论文框架**（固定章节 Abstract→…→References；白名单=选中论文 references+库内条目去重；正文 [R#] 白名单外自动剔除；References 代码组装双向一致 0 编造；guardrails 审计）**② CSV 可视化**（≤5MB/10 万行护栏+编码嗅探+公式注入清洗+按行预算截断防烂 JSON；table/line/bar/雷达（多维）/scatter3d 真 3D 散点（echarts-gl grid3D，≥3 数值维+第 4 维 visualMap）；Figure Caption 数字全部可回溯数据集，LLM 润色数字越界自动回退模板）**③ 中→英学术翻译**（复用模块三管线）**④ 拓扑图脚本**（LLM 只产 DiagramSpec→确定性渲染 Mermaid/Graphviz DOT/TikZ + matplotlib sandbox PNG；幽灵边剔除+语法校验） |
+| 翻译底座 | ✅ | 占位符保护（公式/代码/[n]）+术语表优先+缓存续译+2 并发限流；SSE；导出审计 translation_exports |
+| Prompt 审计 | ✅ | `app/prompts/*.yaml` 版本化（translate 1.1.0 / insights 1.1.0 / copilot 1.0.0 新增）；qa_logs.prompt_version；`/audit` 版本分布 |
+
+### 诚实边界（如实标注，不冒充）
+
+- PDF overlay 导出**保留原表格**（避免破坏版式），表格译文进 MD/HTML 与双语文本视图；
+- S2/OpenAlex 无 key 有共享限速：适配器缓存+退避，断网时 `source=cache_offline` 如实回放；
+- Future Work 外部核查无证据时标 `open_unverified`（≠确认没人做）；引用含金量无引用句条目显示「无引用句」中性态；
+- LLM 不可用时：综述出图谱客观数据骨架、写作节标「待补：证据不足」、图注回退确定性模板——均不冒充生成。
 
 ## 核心机制（对应参赛方案评分点）
 
@@ -79,20 +86,31 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 ## 测试
 
 ```bash
-cd api && uv run pytest -q
-# E2E：上传→解析→索引→溯源问答→去重→审计（6 passed）
-# 集成：真实论文 1706.03762v7（无该 PDF 时自动跳过；
-#       下载 https://arxiv.org/pdf/1706.03762v7 到 downloads/1706.03762/）
+cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（241 用例，HTTP 全 mock）
+cd web && pnpm e2e                  # Playwright UI 验收 6 用例：双语滚动同步 / [n]→References 跳转 /
+                                    #   Copilot CSV→ECharts 出图+图注 / Discover 多源搜索 / Graph G6 渲染 /
+                                    #   PDF↔译文联动 bbox 锚定
+# 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
+#   13 项门禁（Round3 收紧：strict R@5 + compare 细分进门禁）——最新 round3 见 docs/acceptance/
+# 集成：真实论文 1706.03762v7（无该 PDF 时自动跳过）；
+# 数据快照：scripts/fetch_corpus.py（BERT/PreLN/ScalingLaws/GPT-3 + UDL 固化 data-real）
 ```
+
+### 对比语料（data-real，references 全部健康）
+
+Attention(40) · BERT(56) · **GPT-3 Language Models are Few-Shot Learners(118)** ·
+PreLN(101) · Scaling Laws(43) · UDL(245)。
+勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；GPT 系原文以 GPT-3 论文代表
+（GPT-2 原文无 arXiv 版，OpenAI 技术报告 PDF 不在 arXiv 通道——如实注明）。
 
 ## 快速开始
 
 ```bash
 # 本地开发（Windows / Git Bash）
 cd scholar-agent
-make install          # api: uv sync · web: pnpm install
+make install          # api: uv sync · web: pnpm install（含 sickle/bibtexparser 可选依赖）
 cp .env.example .env  # 填 LLM/EMBEDDING key（无 key 也可跑：抽取式降级闭环）
-make api              # 终端 1：API :8100
+make api              # 终端 1：API :8100（启动即挂 arXiv 追踪 worker，间隔 TRACKING_INTERVAL_S）
 make web              # 终端 2：前端 :3000
 ```
 

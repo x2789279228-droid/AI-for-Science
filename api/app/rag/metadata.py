@@ -35,6 +35,7 @@ class AuthorMeta(BaseModel):
 class MetaSchema(BaseModel):
     """LLM 抽取目标 schema（首页信息足够回答：作者是谁、属哪个机构、摘要是什么）。"""
 
+    title: str = ""
     authors: list[AuthorMeta] = Field(default_factory=list)
     abstract: str = ""
     venue: str = ""
@@ -45,9 +46,10 @@ class MetaSchema(BaseModel):
 # ---------- 第 1 层：arXiv API ----------
 
 def fetch_arxiv_meta(arxiv_base: str, timeout: float = 8.0) -> dict | None:
-    """arXiv 基 id → {authors:[{name,affiliation:[]}], abstract, year, categories, doi}。
+    """arXiv 基 id → {title, authors:[{name,affiliation}], abstract, year, categories, doi}。
 
     affiliation arXiv Atom 不提供 → 返回 affiliation 留空，由 LLM 层补齐。
+    title 供 stem 形标题回填与 Crossref 题名检索。
     失败返回 None（网络/限流/无效 id 均降级，绝不抛出阻断解析）。
     """
     base = (arxiv_base or "").strip()
@@ -68,6 +70,7 @@ def fetch_arxiv_meta(arxiv_base: str, timeout: float = 8.0) -> dict | None:
     entry = root.find(f"{{{ _ATOM }}}entry")
     if entry is None:
         return None
+    title = re.sub(r"\s+", " ", (entry.findtext(f"{{{ _ATOM }}}title") or "")).strip()
     authors: list[dict] = []
     for a in entry.findall(f"{{{ _ATOM }}}author"):
         name = (a.findtext(f"{{{ _ATOM }}}name") or "").strip()
@@ -80,7 +83,7 @@ def fetch_arxiv_meta(arxiv_base: str, timeout: float = 8.0) -> dict | None:
     doi = (entry.findtext(f"{{{ _ARXIV }}}doi") or "").strip()
     journal_ref = (entry.findtext(f"{{{ _ARXIV }}}journal_ref") or "").strip()
     categories = [c.get("term", "") for c in entry.findall(f"{{{ _ATOM }}}category")]
-    return {"authors": authors, "abstract": summary, "year": year,
+    return {"title": title, "authors": authors, "abstract": summary, "year": year,
             "doi": doi, "journal_ref": journal_ref,
             "categories": [c for c in categories if c]}
 
@@ -89,6 +92,7 @@ def fetch_arxiv_meta(arxiv_base: str, timeout: float = 8.0) -> dict | None:
 
 _LLM_PROMPT = (
     "从下面这篇论文的第一页文本中抽取结构化元数据。只输出 JSON，字段：\n"
+    "title: 论文标题（逐字，不要改写）\n"
     "authors: [{name, affiliation}]（作者与其机构，机构看标题下的上标对应；推不出机构则留空串）\n"
     "abstract: 摘要原文（不要改写）\nvenue: 发表载体（会议/期刊名，推不出留空）\n"
     "year: 发表年份（整数，推不出 0）\ndoi: DOI（推不出留空）\n"
@@ -96,6 +100,9 @@ _LLM_PROMPT = (
 )
 
 _META_CACHE_PREFIX = "arxiv_meta_cache:"
+_CROSSREF_CACHE_PREFIX = "crossref_cache:"
+_DOI_RE = re.compile(r"10\.\d{4,9}/[\w.\-/:]+", re.IGNORECASE)
+_STEM_TITLE = re.compile(r"^(p_[0-9a-f]{6,}|seg_\d{2,}|fx_\w+)$", re.IGNORECASE)
 
 
 def llm_extract(first_page_text: str) -> dict | None:
@@ -106,7 +113,7 @@ def llm_extract(first_page_text: str) -> dict | None:
     res = client.chat_json_validated(
         [{"role": "user", "content": _LLM_PROMPT + text}], MetaSchema,
         module="meta_extract", audit_prompt="[meta_extract] first page",
-        prompt_version="meta-v1")
+        prompt_version="meta-v2")
     if not res:
         return None
     try:
@@ -121,11 +128,15 @@ def llm_extract(first_page_text: str) -> dict | None:
 # ---------- 第 3 层：启发式摘要 ----------
 
 def heuristic_abstract(docir: dict) -> str:
-    """Abstract/摘要 标题（或段落起始）之后的连续块拼摘要；找不到返回 ''。"""
+    """Abstract/摘要 标题（或行内形式）之后的连续块拼摘要；找不到返回 ''。
+
+    细粒度 P1/P2：支持 IEEE 行内形式 "Abstract—We propose…"（em/en-dash 无冒号）；
+    书籍前言（前言/序言/序/Preface/Foreword）取首段 ≤600 字（meta 语义为文档自述首段）。
+    """
     blocks = docir.get("blocks", [])
     for i, b in enumerate(blocks):
         t = (b.get("text") or "").strip()
-        if not t or b.get("page", 0) > 1:
+        if not t or b.get("page", 0) > 5:
             break
         if re.match(r"^(abstract|摘要)\b[:：]?\s*$", t, re.IGNORECASE):
             parts: list[str] = []
@@ -140,9 +151,24 @@ def heuristic_abstract(docir: dict) -> str:
                 if sum(len(p) for p in parts) > 2500:
                     break
             return " ".join(parts)
-        m = re.match(r"^(?:abstract|摘要)\b[:：]\s*(.+)$", t, re.IGNORECASE)
+        m = re.match(r"^(?:abstract|摘要)\b[:：—–-]\s*(.+)$", t, re.IGNORECASE)
         if m and len(m.group(1)) > 80:
             return m.group(1)
+        # 书籍前言形态：标题命中后取首段（前言是文档自述，非严格"摘要"，仅离线兜底）
+        if re.match(r"^(前言|序言|序|preface|foreword)\b[:：]?\s*$", t, re.IGNORECASE):
+            parts = []
+            for nb in blocks[i + 1:]:
+                if nb.get("page", 0) > b.get("page", 0) + 2:
+                    break
+                nt = (nb.get("text") or "").strip()
+                if re.match(r"^(keywords|关键词|\d[\s.．]|chapter\b|第\s*[一二三1-9一-龥]+\s*[章讲])", nt, re.IGNORECASE):
+                    break
+                if nt:
+                    parts.append(nt)
+                if sum(len(p) for p in parts) > 600:
+                    break
+            if parts:
+                return " ".join(parts)[:600]
     return ""
 
 
@@ -161,13 +187,95 @@ def first_page_text(docir: dict, max_chars: int = 3000) -> str:
     return "\n".join(parts)[:max_chars]
 
 
+# ---------- Crossref 兜底（细粒度 P0-3，用户选定外呼方案） ----------
+
+def _norm_text(t: str) -> str:
+    return re.sub(r"\s+", " ", (t or "")).strip().casefold()
+
+
+def _title_stem_like(meta: dict) -> bool:
+    """meta.title 是否为"文件名退化形"（p_xxx/seg_xxx/fx_* / 空）——回填判定。"""
+    t = (meta.get("title") or "").strip()
+    return (not t) or bool(_STEM_TITLE.match(t)) or t == (meta.get("file") or "").rsplit(".", 1)[0]
+
+
+def _load_kv_cache(paper_id: str, key: str) -> dict | None:
+    rows = db.query("SELECT meta_json FROM papers WHERE id=?", (paper_id,))
+    if not rows:
+        return None
+    try:
+        mj = json.loads(rows[0]["meta_json"] or "{}")
+    except Exception:  # noqa: BLE001
+        return None
+    v = mj.get(key)
+    return v if isinstance(v, dict) else None
+
+
+def _save_kv_cache(paper_id: str, key: str, value: dict) -> None:
+    with db.tx() as c:
+        rows = c.execute("SELECT meta_json FROM papers WHERE id=?", (paper_id,)).fetchall()
+        if not rows:
+            return
+        try:
+            mj = json.loads(rows[0]["meta_json"] or "{}")
+        except Exception:  # noqa: BLE001
+            mj = {}
+        mj[key] = value
+        c.execute("UPDATE papers SET meta_json=? WHERE id=?",
+                  (json.dumps(mj, ensure_ascii=False), paper_id))
+
+
+def _fetch_crossref(title: str, paper_id: str, timeout: float = 8.0) -> dict | None:
+    """标题 → Crossref 查 {doi, venue, year}；归一化相似度 <0.6 或失败返回 None（静默）。
+
+    结果（含空命中）缓存进 meta_json，重解析零重复请求。"""
+    from difflib import SequenceMatcher
+
+    t = _norm_text(title)
+    if len(t) < 12:
+        return None
+    cache_key = _CROSSREF_CACHE_PREFIX + t
+    cached = _load_kv_cache(paper_id, cache_key)
+    if cached is not None:
+        return cached or None
+    try:
+        resp = httpx.get(
+            "https://api.crossref.org/works",
+            params={"query.bibliographic": t, "rows": 3},
+            timeout=timeout,
+            headers={"User-Agent": "evitrace/1.0 (academic-assistant)"},
+        )
+        resp.raise_for_status()
+        items = (resp.json().get("message", {}) or {}).get("items", [])
+    except Exception as e:  # noqa: BLE001 —— 网络故障静默降级（空缓存防重复打）
+        logger.warning(f"Crossref 查询失败: {type(e).__name__}: {e}", module="meta")
+        _save_kv_cache(paper_id, cache_key, {})
+        return None
+    best: tuple[float, dict] | None = None
+    for it in items:
+        ct = (it.get("title") or [""])[0]
+        ratio = SequenceMatcher(None, t, _norm_text(ct)).ratio()
+        if ratio >= 0.6 and (best is None or ratio > best[0]):
+            best = (ratio, it)
+    result: dict = {}
+    if best:
+        it = best[1]
+        year_parts = ((it.get("issued", {}) or {}).get("date-parts") or [[0]])
+        result = {"doi": (it.get("DOI") or "").strip(),
+                  "venue": ((it.get("container-title") or [""])[0] or "").strip(),
+                  "year": int(year_parts[0][0] or 0)}
+    _save_kv_cache(paper_id, cache_key, result)
+    return result or None
+
+
 # ---------- 编排：抽取 + 落库 ----------
 
 def extract_and_store_metadata(paper_id: str, docir: dict) -> dict:
     """跑分层抽取，合并进 docir["meta"] 并更新 papers 行；返回最终 meta。
 
     合并规则：作者取「并集」——arXiv API 提供权威姓名列表，LLM 补 affiliation；
-    abstract/venue/year/doi 优先 arXiv API，缺失处用 LLM 结果补。
+    abstract/venue/year/doi 优先 arXiv API，缺失处依次 Crossref/LLM/启发式补；
+    标题为 stem 退化形时用 arXiv/LLM title 回填（细粒度 P0-2）。
     """
     meta = docir.setdefault("meta", {})
     arxiv_base = _base_of(meta.get("arxiv_id", ""))
@@ -187,17 +295,41 @@ def extract_and_store_metadata(paper_id: str, docir: dict) -> dict:
         # LLM 兜顶：API 缺失、或作者缺机构、或缺摘要时才调用（省 token）
         llm_meta = llm_extract(first_page_text(docir))
 
+    # 标题回填（stem 退化形 → 权威层 title）：papers.title 由 jobs 在本调用之后落库
+    new_title = (api_meta or {}).get("title") or (llm_meta or {}).get("title", "")
+    if new_title and _title_stem_like(meta):
+        meta["title"] = new_title
+
     authors = _merge_authors(api_meta, llm_meta)
     abstract = (api_meta or {}).get("abstract") or (llm_meta or {}).get("abstract") \
         or heuristic_abstract(docir)
-    venue = (api_meta or {}).get("journal_ref") or (api_meta or {}).get("venue") \
-        or (llm_meta or {}).get("venue", "")
+    venue = (api_meta or {}).get("journal_ref") or (llm_meta or {}).get("venue", "")
     year = (api_meta or {}).get("year") or (llm_meta or {}).get("year") or 0
     doi = (api_meta or {}).get("doi") or (llm_meta or {}).get("doi", "")
+    # DOI 链（细粒度 P0-3）：首页正文正则 → arXiv 官方合成 DOI（确认 arXiv 文档时）
+    if not doi:
+        fp = first_page_text(docir, 3000)
+        m_doi = _DOI_RE.search(fp)
+        if m_doi:
+            doi = m_doi.group(0).rstrip(".,;")
+    if not doi and arxiv_base:
+        doi = f"10.48550/arXiv.{arxiv_base}"
+    # Crossref 兜底（用户选定外呼方案）：venue/doi 仍空且有可用标题时按题名查
+    cr_meta = None
+    lookup_title = (api_meta or {}).get("title") or (llm_meta or {}).get("title", "")
+    if (not venue or not doi.startswith("10.48550/")) and lookup_title:
+        cr_meta = _fetch_crossref(lookup_title, paper_id)
+    if cr_meta:
+        venue = venue or cr_meta.get("venue", "")
+        if not doi or doi.startswith("10.48550/"):
+            doi = cr_meta.get("doi", "") or doi
+        year = year or cr_meta.get("year", 0)
 
     sources = []
     if api_meta:
         sources.append("arxiv_api")
+    if cr_meta:
+        sources.append("crossref")
     if llm_meta:
         sources.append("llm")
     if not sources:

@@ -58,29 +58,54 @@ def extract_claims_numbers(claim_text: str) -> list[str]:
 
 # ---------- L2 引文子串 ----------
 
+def _support_evidence_text(s: dict, eid_map: dict[int, dict]) -> str:
+    """单个 support 引用的证据文本（按 s.eid 精确对位——quote 必须来自它引用的那条）。"""
+    eid = str(s.get("eid", ""))
+    idx = int(eid[1:]) if eid[1:].isdigit() else None
+    if idx is None or idx not in eid_map:
+        return ""
+    return eid_map[idx].get("text", "")
+
+
 def check_quotes(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dict], list[str]]:
-    """校验每条 claim 的 quote 是否为被引证据原文子串；失败重抽 1 次。"""
+    """L2（P0 修订）：逐 support 校验——每个 support 的 quote 对**它自己引用的证据**
+    算覆盖率，全部 ≥0.85 才 verified（旧实现只校验 support[0] 的 quote，多支持时
+    support[1..n] 的引文从不被检查）。失败重抽 1 次，回填到覆盖率最低的 support。"""
     guardrails: list[str] = []
     failed: list[dict] = []
     for c in claims:
         if not c.get("support"):
             continue  # 无出处论断（unsupported）不做 L2 quote 校验
-        texts = _evidence_texts(c, eid_map)
-        cov = max((quote_coverage(c["support"][0].get("quote", ""), t) for t in texts), default=0.0)
-        c["quote_status"] = "verified" if cov >= QUOTE_COVERAGE_MIN else "unverified"
-        if cov < QUOTE_COVERAGE_MIN:
-            c["quote_coverage"] = round(cov, 3)
+        covs: list[float] = []
+        for s in c["support"]:
+            t = _support_evidence_text(s, eid_map)
+            covs.append(round(quote_coverage(s.get("quote", ""), t), 3))
+        c["quote_coverages"] = covs
+        min_cov = min(covs) if covs else 0.0
+        c["quote_status"] = "verified" if covs and min_cov >= QUOTE_COVERAGE_MIN else "unverified"
+        if covs and min_cov < QUOTE_COVERAGE_MIN:
+            c["quote_coverage"] = round(min_cov, 3)
+            c["quote_worst_support"] = covs.index(min(covs))
             failed.append(c)
     if failed and llm.available():
         re_quotes = _re_extract_quotes(failed, eid_map)
         for c in failed:
             new_q = re_quotes.get(c["text"], "")
-            if new_q:
-                c["support"][0]["quote"] = new_q
-                texts = _evidence_texts(c, eid_map)
-                cov = max((quote_coverage(new_q, t) for t in texts), default=0.0)
-                c["quote_status"] = "verified" if cov >= QUOTE_COVERAGE_MIN else "unverified"
-                c["quote_coverage"] = round(cov, 3)
+            if not new_q:
+                continue
+            k = c.get("quote_worst_support", 0)
+            if k >= len(c["support"]):
+                k = 0
+            c["support"][k]["quote"] = new_q
+            t = _support_evidence_text(c["support"][k], eid_map)
+            cov = round(quote_coverage(new_q, t), 3)
+            covs = c.get("quote_coverages") or []
+            if k < len(covs):
+                covs[k] = cov
+            c["quote_coverages"] = covs
+            min_cov = min(covs) if covs else cov
+            c["quote_status"] = "verified" if min_cov >= QUOTE_COVERAGE_MIN else "unverified"
+            c["quote_coverage"] = round(min_cov, 3)
     n_bad = sum(1 for c in claims if c.get("quote_status") == "unverified")
     if n_bad:
         guardrails.append(f"quote_unverified:{n_bad}")
@@ -154,16 +179,27 @@ _SYSTEM_JUDGE = (
 )
 
 
+def _mark_unchecked(claims: list[dict], cand: list[tuple[int, dict]]) -> None:
+    """L4 缺席的诚实标注：绿色「已验证」仅代表 L2/L3 通过，语义判定未执行。"""
+    for _i, c in cand:
+        c["semantic_status"] = "unchecked"
+
+
 def judge_claims(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dict], list[str]]:
-    """L4：批量一次调用判定每条 claim 的语义支持性。verdict=no → unsupported。"""
+    """L4：批量一次调用判定每条 claim 的语义支持性。verdict=no → unsupported。
+    开关关闭 / LLM 不可用 / 判定失败 → 候选 claim 一律标 semantic_status=unchecked
+    （P0 修订：旧实现静默返回，claims 伪装绿色「已验证」且无任何 guardrail）。"""
     guardrails: list[str] = []
     cand = [(i, c) for i, c in enumerate(claims)
             if c.get("status") in ("supported", "needs_check") and c.get("support")]
     if not cand:
         return claims, guardrails
     if not settings.semantic_judge:
+        _mark_unchecked(claims, cand)
+        guardrails.append("semantic_judge_off")
         return claims, guardrails
     if not llm.available():
+        _mark_unchecked(claims, cand)
         guardrails.append("semantic_judge_skipped")
         return claims, guardrails
 
@@ -189,6 +225,7 @@ def judge_claims(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dic
                 for v in verdicts if isinstance(v, dict)}
     except Exception as e:  # noqa: BLE001 —— L4 属增强校验，失败规则兜底跳过（不误杀）
         logger.warning(f"semantic judge 跳过（规则兜底）: {type(e).__name__}: {e}", module="verify")
+        _mark_unchecked(claims, cand)
         guardrails.append("semantic_judge_skipped")
         return claims, guardrails
 

@@ -305,6 +305,11 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 .toc-item:hover { background: var(--surface-2); color: var(--ink); }
+.toc-item.active {
+  background: var(--accent-soft, rgba(37, 99, 235, 0.10));
+  color: var(--ink); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent, #2563eb);
+}
 .toc-item .toc-page { color: var(--ink-3); font-size: var(--text-xs); }
 .block-item { margin: var(--space-3) 0; }
 .block-item p { font-size: var(--text-md); }
@@ -451,6 +456,43 @@ h1, h2, h3, p { margin: 0; }
   50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.05); }
 }
 .claim.needs-check { border-left-color: var(--warn); background: var(--warn-soft); }
+
+/* ---- 模块三：PDF 取词文本层（pdfjs TextLayer，透明可选中） ---- */
+.textLayer {
+  position: absolute; inset: 0; overflow: hidden;
+  line-height: 1; text-align: initial;
+  text-size-adjust: none; forced-color-adjust: none;
+  z-index: 1;                            /* 高于 canvas，低于 bbox 红框（红框后渲染） */
+}
+.textLayer span, .textLayer br {
+  color: transparent; position: absolute;
+  white-space: pre; cursor: text;
+  transform-origin: 0% 0%;
+}
+.textLayer ::selection { background: rgba(37, 99, 235, 0.25); }
+.textLayer span::-moz-selection { background: rgba(37, 99, 235, 0.25); }
+
+/* ---- 模块三：块级 flash 高亮（TOC/搜索/快捷键跳转，2.5s 自动清除） ---- */
+.block-item.flash {
+  background: var(--accent-soft, rgba(37, 99, 235, 0.10));
+  outline: 2px solid var(--accent, #2563eb);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- 模块三：简易 toast（续读恢复提示） ---- */
+.rd-toast {
+  position: fixed; right: 20px; bottom: 20px; z-index: 120;
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  background: var(--surface, #fff); color: var(--ink, #111);
+  border: 1px solid var(--line, #e5e7eb);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.12));
+  font-size: var(--text-sm);
+  animation: rdToastIn 0.25s ease-out;
+}
+@keyframes rdToastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* 原文溯源浮层（EvidenceModal） */
 .ev-overlay {

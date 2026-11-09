@@ -44,6 +44,7 @@ const GUARD_LABEL: Record<string, string> = {
   quote_unverified: "部分引文未通过原文比对",
   number_not_in_evidence: "部分数值未在证据中命中",
   semantic_judge_skipped: "语义 judge 跳过（LLM 不可用）",
+  semantic_judge_off: "语义 judge 关闭 · 论断仅过 L1-L3",
 };
 
 /** guardrail 标签：精确匹配 + 前缀匹配（graph_error:* / quote_unverified:2 等动态键）。 */
@@ -53,6 +54,11 @@ const guardLabel = (g: string): string => {
   if (g.startsWith("agent_unready:")) return `Agent 未实装降级：${g.slice("agent_unready:".length)}`;
   if (g.startsWith("quote_unverified:")) return `${g.slice("quote_unverified:".length)} 条引文未通过原文比对`;
   if (g.startsWith("number_not_in_evidence:")) return `${g.slice("number_not_in_evidence:".length)} 条论断数值待核对`;
+  if (g.startsWith("compare_coverage_low:"))
+    return `对比表命中不足：${g.slice("compare_coverage_low:".length)} 格`;
+  if (g.startsWith("compare_conflict:")) return `${g.slice("compare_conflict:".length)} 个维度双侧数值冲突`;
+  if (g.startsWith("compare_one_sided:"))
+    return `对比单侧风险：叙述仅覆盖 ${g.slice("compare_one_sided:".length)} 篇`;
   return "";
 };
 
@@ -622,7 +628,10 @@ function CompareTableView({ table, anchors, onEvidence }: {
               <tr key={r.dimension}>
                 <td style={{ padding: "6px 8px", borderBottom: "1px dashed var(--line)",
                   whiteSpace: "nowrap", maxWidth: 180, overflow: "hidden",
-                  textOverflow: "ellipsis" }}>{r.dimension}</td>
+                  textOverflow: "ellipsis" }}>
+                  {r.dimension}
+                  {r.conflict && <span className="badge warn" title="双侧数值集合不相交——请人工核对原文（冲突双侧并列，系统不裁决）"> ⚠ 冲突</span>}
+                </td>
                 {r.cells.map((c: CompareCell) => (
                   <td key={c.paper_id} style={{ padding: "6px 8px",
                     borderBottom: "1px dashed var(--line)" }}>
@@ -631,10 +640,10 @@ function CompareTableView({ table, anchors, onEvidence }: {
                         <span className={`chip accent anchor-chip ${anchorForChunk(c.chunk_id) ? "clickable" : ""}`}
                           onClick={() => {
                             const a = anchorForChunk(c.chunk_id);
-                            if (a) onEvidence?.(undefined, a, c.quote);
+                            if (a) onEvidence?.(c.eid, a, c.quote);
                           }}
                           title={anchorForChunk(c.chunk_id) ? "点击查看原文页 + 高亮" : undefined}>
-                          原文 p{c.page ?? 1} · §{secName(c.section_path ?? "")}
+                          {c.eid ? `${c.eid} · ` : ""}原文 p{c.page ?? 1} · §{secName(c.section_path ?? "")}
                         </span>
                         <span className="kv">{(c.quote ?? "").slice(0, 90)}
                           {(c.quote ?? "").length > 90 ? "…" : ""}</span>
@@ -750,6 +759,9 @@ function Claims({ claims, anchors, hits, onEvidence }: {
             {c.semantic_status === "partial" && (
               <span className="badge" title="语义 judge：证据部分支撑（L4）">部分支撑</span>
             )}
+            {c.semantic_status === "unchecked" && (
+              <span className="badge" title="语义 judge 未执行（关闭或 LLM 不可用）——绿色仅代表 L2/L3 通过">语义未核</span>
+            )}
             <span>{c.text.slice(0, 160)}{c.text.length > 160 ? "…" : ""}</span>
           </div>
           {c.status === "needs_check" && c.unverified_numbers?.length ? (
@@ -759,16 +771,21 @@ function Claims({ claims, anchors, hits, onEvidence }: {
           ) : null}
           {c.support.length > 0 && (
             <div className="anchor">
-              出处：{c.support.map((s, k) => (
-                <span key={k} className="chip anchor-chip clickable"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEvidence?.(s.eid, anchors?.[s.eid ?? ""], s.quote);
-                  }}
-                  title={s.eid && anchors?.[s.eid] ? `点击查看原文 p${s.page}` : undefined}>
-                  {s.eid ? `${s.eid} · ` : ""}p{s.page} §{secName(s.section_path)}
-                </span>
-              ))}
+              出处：{c.support.map((s, k) => {
+                const a0 = anchors?.[s.eid ?? ""];
+                // 原句块级锚点优先：support.block_bbox 是 quote 定位回的具体 DocIR 块
+                const a = a0 && s.block_bbox?.length === 4 ? { ...a0, bbox: s.block_bbox } : a0;
+                return (
+                  <span key={k} className="chip anchor-chip clickable"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEvidence?.(s.eid, a, s.quote);
+                    }}
+                    title={a ? `点击查看原文 p${s.page}${s.block_bbox ? "（原句块级高亮）" : ""}` : undefined}>
+                    {s.eid ? `${s.eid} · ` : ""}p{s.page} §{secName(s.section_path)}
+                  </span>
+                );
+              })}
             </div>
           )}
           {open === i && c.support.map((s, k) => {

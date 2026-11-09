@@ -19,6 +19,8 @@ dependencies = [
     "psutil>=5.9",
     "loguru>=0.7",
     "pyyaml>=6.0",
+    "bibtexparser>=2.1.0",
+    "sickle>=0.7.0",
 ]
 
 [project.optional-dependencies]

@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   id         TEXT PRIMARY KEY,
   paper_id   TEXT DEFAULT '',
   kind       TEXT NOT NULL,
-  status     TEXT NOT NULL DEFAULT 'queued',  -- queued|running|done|error
+  status     TEXT NOT NULL DEFAULT 'queued',  -- queued|running|error
   progress   REAL DEFAULT 0,
   message    TEXT DEFAULT '',
   payload    TEXT DEFAULT '{}',
@@ -97,6 +97,117 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_kind_paper ON jobs(kind, paper_id, created_at);
+
+CREATE TABLE IF NOT EXISTS translation_exports (   -- 模块三 P0-2：导出审计
+  id             TEXT PRIMARY KEY,
+  paper_id       TEXT NOT NULL,
+  fmt            TEXT NOT NULL,             -- pdf | md | html
+  target_lang    TEXT NOT NULL DEFAULT 'zh',
+  mode           TEXT NOT NULL DEFAULT 'academic',
+  layout         TEXT NOT NULL DEFAULT 'overlay',  -- overlay | bilingual | mono
+  path           TEXT NOT NULL,
+  pages          INTEGER DEFAULT 0,
+  replaced       INTEGER DEFAULT 0,
+  overflow_count INTEGER DEFAULT 0,
+  created_at     REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tracking_subscriptions (  -- 模块四 P0-3：arXiv 订阅
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  query_type TEXT NOT NULL,             -- keyword | author | category
+  value      TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at REAL NOT NULL,
+  last_run   REAL NOT NULL DEFAULT 0    -- 水位线：重启续跑/断网补拉的 from 锚点
+);
+
+CREATE TABLE IF NOT EXISTS tracked_items (           -- 模块四 P0-3：追踪条目（去重入库）
+  id        TEXT PRIMARY KEY,
+  sub_id    TEXT NOT NULL,
+  arxiv_id  TEXT NOT NULL,
+  title     TEXT DEFAULT '',
+  published TEXT DEFAULT '',
+  authors   TEXT DEFAULT '[]',
+  status    TEXT DEFAULT 'new',         -- new | known(库内已有) | dismissed
+  added_at  REAL NOT NULL,
+  UNIQUE(sub_id, arxiv_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_profiles (           -- 模块四 P0-4：多用户画像（冷启动内容推荐）
+  user_id   TEXT PRIMARY KEY,
+  keywords  TEXT DEFAULT '{}',         -- 关键词 → 计数（反馈 ±加权）
+  updated_at REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS recommendations (         -- 模块四 P0-4：推荐流水（含理由与分量）
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  arxiv_id   TEXT DEFAULT '',
+  pdf_url    TEXT DEFAULT '',
+  scores     TEXT NOT NULL,            -- JSON：各分量分值（可解释）
+  reason     TEXT NOT NULL,
+  created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recommend_feedback (      -- 模块四 P0-4：赞/踩（重加权依据）
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  rec_id     TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  vote       INTEGER NOT NULL,         -- 1 赞 | -1 踩
+  created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS survey_reports (           -- 模块五 P0-2：整批综述缓存
+  id           TEXT PRIMARY KEY,
+  paper_ids_sig TEXT NOT NULL,         -- 排序后 paper_ids 拼接（缓存键）
+  stats        TEXT DEFAULT '{}',      -- 图谱统计（节点/边/社区/年份跨度）
+  content_md   TEXT DEFAULT '',
+  sections     TEXT DEFAULT '[]',      -- [{title, content, claims, anchors}]
+  created_at   REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS future_checks (           -- 模块五 P0-3：外部进展核查证据
+  id             TEXT PRIMARY KEY,
+  idea_sig       TEXT NOT NULL,        -- idea 归一签名（去重键）
+  idea_text      TEXT NOT NULL,
+  source_paper   TEXT DEFAULT '',
+  verdict        TEXT NOT NULL,        -- solved | partial | open | open_unverified
+  confidence     REAL DEFAULT 0.0,
+  evidence       TEXT DEFAULT '[]',    -- [{title, year, citation_count, quote}]
+  external_count INTEGER DEFAULT 0,
+  checked_at     REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS writing_drafts (           -- 模块六 P0-2：论文框架草稿
+  id              TEXT PRIMARY KEY,
+  idea            TEXT NOT NULL,
+  paper_ids       TEXT DEFAULT '[]',
+  outline         TEXT DEFAULT '[]',
+  sections        TEXT DEFAULT '[]',
+  references_json TEXT DEFAULT '[]',    -- references 为 SQL 关键字，故用 _json 后缀
+  guardrails      TEXT DEFAULT '[]',
+  created_at      REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS csv_datasets (             -- 模块六 P0-3：CSV 数据集
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  columns     TEXT NOT NULL,          -- JSON [{name, dtype}]
+  row_count   INTEGER NOT NULL,
+  data        TEXT NOT NULL,          -- JSON rows（≤5MB 上限由路由守卫）
+  sha256      TEXT DEFAULT '',
+  created_at  REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS viz_artifacts (            -- 模块六 P0-3：图表与图注产物
+  id          TEXT PRIMARY KEY,
+  dataset_id  TEXT NOT NULL,
+  spec        TEXT NOT NULL,          -- ECharts 兼容 spec（table/line/bar/radar）
+  caption     TEXT DEFAULT '',
+  created_at  REAL NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS qa_logs (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,10 +255,14 @@ CREATE TABLE IF NOT EXISTS version_diffs (
 def connect() -> sqlite3.Connection:
     conn = getattr(_local, "conn", None)
     if conn is None:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         conn.execute("PRAGMA foreign_keys=ON")
+        # FTS5 merge 等操作会写磁盘临时文件；bash 启动环境泄漏 TMPDIR=/tmp 时
+        # （Windows 无此路径）报 "unable to open database file"——内存临时存储根治
+        conn.execute("PRAGMA temp_store=MEMORY")
         _local.conn = conn
     return conn
 
@@ -160,7 +275,27 @@ def init_db() -> None:
         _migrate_qa_prompt_version(conn)
         _migrate_papers_module1(conn)
         _migrate_papers_dedup2(conn)
+        _migrate_references_rich(conn)
         conn.commit()
+
+
+def _migrate_references_rich(conn: sqlite3.Connection) -> None:
+    """Phase 0：references 加结构化列——authors/year/venue/title_norm。
+    解析层本就产出 year（旧版落库丢弃）；authors/venue/title_norm 为新增抽取。
+    供模块五图谱 title_norm 匹配与模块六写作 References 白名单去重使用。"""
+    cols = [r[1] for r in conn.execute('PRAGMA table_info("references")')]
+    if not cols:
+        return
+    add = {
+        "authors":    "TEXT DEFAULT ''",   # 作者跨度（title 前段，>180 字符截断 et al.）
+        "year":       "INTEGER DEFAULT 0",
+        "venue":      "TEXT DEFAULT ''",   # 期刊/会议线索（尾段清洗）
+        "title_norm": "TEXT DEFAULT ''",   # 归一标题：白名单/图谱匹配键
+    }
+    for name, decl in add.items():
+        if name not in cols:
+            conn.execute(f'ALTER TABLE "references" ADD COLUMN {name} {decl}')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_refs_title_norm ON "references"(title_norm)')
 
 
 def _migrate_papers_module1(conn: sqlite3.Connection) -> None:

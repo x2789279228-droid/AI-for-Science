@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     prompt_variant: str = "default"
     # GitHub 仓库搜索（4.4 复现性分）；无 token 时 GitHub API 限流 10 次/分，如实降级
     github_token: str = ""
+    # arXiv 动态追踪（模块四 P0-3）：后台刷新间隔秒（默认 6h；演示可调小）；0 = 关闭定时
+    tracking_interval_s: int = 21600
+    # 单次订阅刷新的条目上限（OAI/Atom 全量拉回后再截断，防止巨类目刷库）
+    tracking_max_items: int = 30
 
     # --- 派生属性 ---
 
