@@ -20,6 +20,8 @@ for _k in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER", "DEEPSEEK_API_KEY",
     os.environ[_k] = ""
 os.environ.setdefault("MINERU_ENABLED", "off")
 os.environ.setdefault("EMBEDDING_BACKEND", "off")
+# Round4：限流在密闭测试中关闭（限流专项测试自行注入桶参数）
+os.environ["RATE_LIMIT_PER_MIN"] = "0"
 
 # 上一批会话目录清理（保留最近 3 个，防积盘）
 def _prune_old_sessions() -> None:
