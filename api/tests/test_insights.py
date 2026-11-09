@@ -317,3 +317,70 @@ def test_future_check_with_evidence_llm_judge(monkeypatch):
     got = ins.future_checks(["p1"])
     assert got[0]["verdict"] == "solved" and got[0]["confidence"] == 0.9
     assert got[0]["external"][0]["title"].startswith("Long-Context")
+
+
+# ---------- Round4：20 篇阈值校准 + ±10% 扰动稳定性 ----------
+
+def _seed_20_papers() -> list[str]:
+    """20 篇合成论文：3 篇 2015-2016 早期枢纽 + 13 篇 2017-2022 中坚 + 4 篇 2024 新作。"""
+    pids = []
+    with db.tx() as c:
+        for i in range(20):
+            pid = f"p_g20_{i:02d}"
+            year = 2015 + i // 2 + (2 if i >= 16 else 0)   # 2015..2022 + 2024 尾段
+            aid = f"{year % 100:02d}01.{10000 + i}"
+            c.execute("INSERT OR REPLACE INTO papers(id,title,arxiv_id,status,file_path,"
+                      "file_hash,created_at) VALUES(?,?,?,?,?,?,?)",
+                      (pid, f"Synthetic Transformer Study {i}", f"{aid}v1", "active", "", f"h{pid}", 0.0))
+            pids.append(pid)
+    return pids
+
+
+def _build_g20_edges(pids: list[str]) -> list[dict]:
+    """引用结构：3 个早期枢纽被 12 篇引用（高 in_degree）；4 篇 2024 新作各引 1 个
+    不同枢纽（跨社区桥接、低被引 → 边缘衍生候选）。"""
+    hubs = pids[:3]
+    mids = pids[3:15]
+    news = pids[16:20]
+    edges = []
+    for i, m in enumerate(mids):
+        edges.append({"source": m, "target": hubs[i % 3]})
+    for j, nw in enumerate(news):
+        edges.append({"source": nw, "target": hubs[j % 3]})   # 每篇连不同枢纽=跨社区
+        edges.append({"source": nw, "target": mids[j]})       # 加一条避免全孤点
+    return edges
+
+
+def test_role_threshold_calibration_20_papers():
+    """20 篇下角色判据应产出分化（非全空/非全基石），且 ±10% 扰动下基石集合稳定。"""
+    pids = _seed_20_papers()
+    try:
+        nodes = [{"id": p, "title": f"Synthetic Transformer Study {i}"}
+                  for i, p in enumerate(pids)]
+        edges = _build_g20_edges(pids)
+        g = enrich({"nodes": nodes, "edges": edges, "external_count": 0})
+        roles = [n.get("role", "") for n in g["nodes"]]
+        n_corner = roles.count("cornerstone")
+        n_periph = roles.count("peripheral")
+        assert 0 < n_corner < len(pids), f"基石应分化而非全空/全基石（实际 {n_corner}）"
+        assert all(n.get("role_reason") for n in g["nodes"] if n.get("role")), "角色必须带可解释理由"
+
+        # ±10% 扰动：增/删 10% 引用边（19 条中 ±2 条）→ 基石集合成员应基本保持
+        def corner_set(eds):
+            gg = enrich({"nodes": nodes, "edges": eds, "external_count": 0})
+            return {n["paper_id"] if "paper_id" in n else n["id"]
+                    for n in gg["nodes"] if n.get("role") == "cornerstone"}
+
+        base = corner_set(edges)
+        perturbed_up = edges + [{"source": pids[10], "target": pids[0]},
+                                {"source": pids[11], "target": pids[1]}]
+        perturbed_dn = [e for k, e in enumerate(edges) if k not in (0, 1)]
+        up = corner_set(perturbed_up)
+        dn = corner_set(perturbed_dn)
+        assert len(up & base) >= len(base) - 1, "+10% 扰动基石集合应稳定"
+        assert len(dn & base) >= len(base) - 1, "-10% 扰动基石集合应稳定"
+        assert up and dn, "扰动后角色判定不应全体塌缩为空"
+        _ = n_periph   # 边缘角色在本合成结构下可为 0（跨社区判据较严），不设硬门禁
+    finally:
+        with db.tx() as c:
+            c.execute("DELETE FROM papers WHERE id LIKE 'p_g20_%'")

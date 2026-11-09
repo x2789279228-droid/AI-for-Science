@@ -1,15 +1,15 @@
-"""对比语料收录（抗幻觉 P0：多篇真实对比的证据基础）。
+"""对比语料收录（抗幻觉 P0：多篇真实对比的证据基础）+ Round4 20 篇图谱语料。
 
 下载 arXiv 论文 → 入库 → 解析（宿主机引擎，MinerU 可用时质量最优）：
-  BERT       1810.04805  （BERT: Pre-training of Deep Bidirectional Transformers）
-  PreLN      2002.04745  （On Layer Normalization in the Transformer Architecture）
-  ScalingLaws 2001.08361 （Scaling Laws for Neural Language Models, Kaplan et al.）
-  GPT3       2005.14165  （Language Models are Few-Shot Learners, Brown et al.）
+  round3 基线 4 篇（BERT/PreLN/ScalingLaws/GPT3，compare 金标语料）
+  + round4 扩充 15 篇 transformer 家族（Attention/RoBERTa/ALBERT/ELECTRA/XLNet/
+    BART/Longformer/BigBird/Reformer/DeBERTa/ViT/LoRA/FlashAttention/MegatronLM/T5）
+  + 库内 UDL 1 篇 = 20 篇同领域语料（模块五 20 篇图谱/综述证据）。
   —— 命名勘误：2001.08361 是 Kaplan 缩放律而非 GPT（旧注释误写"GPT2 (Few-Shot
   Learners)"双重错误：Few-Shot Learners 是 GPT-3 (2005.14165)）；GPT 系原文以
   GPT-3 论文代表（GPT-2 原文无 arXiv 版，OpenAI 技术报告 PDF 不在 arXiv 通道）。
---snapshot：把对比语料 + UDL 的解析产物固化进 data-real/（演示快照），
-  供 make demo 直接恢复多篇对比演示现场。
+--snapshot：把语料 + UDL 的解析产物固化进 data-real/（演示快照），
+  供 make demo 直接恢复多篇对比演示现场。单篇失败自动跳过（≥18 篇即达标并如实记录）。
 
 用法：cd api && uv run python scripts/fetch_corpus.py [--snapshot]
 前置：宿主机 .env（MinerU/LLM 可用则质量最优；纯 PyMuPDF 也可入库，评测质量如实下降）。
@@ -29,10 +29,28 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 CORPUS = [
+    # ---- round3 基线（4 篇：对比金标语料）----
     ("1810.04805", "BERT"),
     ("2002.04745", "PreLN"),
     ("2001.08361", "ScalingLaws"),
     ("2005.14165", "GPT3"),
+    # ---- round4 扩充（15 篇：transformer 家族同领域，凑足 20 篇图谱/综述语料；
+    #      单篇失败自动跳过（≥18 篇即达标）；页数过大者由长文档路由分批处理）----
+    ("1706.03762", "Attention"),
+    ("1907.11692", "RoBERTa"),
+    ("1909.11942", "ALBERT"),
+    ("2003.10555", "ELECTRA"),
+    ("1906.08237", "XLNet"),
+    ("1910.13461", "BART"),
+    ("2004.05150", "Longformer"),
+    ("2007.14062", "BigBird"),
+    ("2001.04451", "Reformer"),
+    ("2006.03654", "DeBERTa"),
+    ("2010.11929", "ViT"),
+    ("2106.09685", "LoRA"),
+    ("2205.14135", "FlashAttention"),
+    ("1909.08053", "MegatronLM"),
+    ("1910.10683", "T5"),
 ]
 _SNAPSHOT_TABLES = ("papers", "chunks", "chunks_fts", '"references"')
 
