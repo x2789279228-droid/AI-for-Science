@@ -357,6 +357,60 @@ def step_smoke(ctx: Ctx, skip: bool) -> None:
 
 # ---------------------------------------------------------------- 汇总
 
+# ---------------------------------------------------------------- Round4 证据链
+
+def _evidence(ctx: Ctx, name: str, script: str, outdir: Path, *extra: str,
+              timeout: int = 3600) -> bool:
+    """宿主证据脚本统一跑法：--out 指向 docs/acceptance/<round>/，退出码即门禁；
+    控制台输出同步落 <round>/<script>.log（证据目录自包含）。"""
+    code, out = run(ctx, f"ev_{name}", [ctx.py, f"scripts/{script}", "--out", str(outdir), *extra],
+                    cwd=ctx.api, timeout=timeout)
+    (outdir / f"{script.replace('.py', '')}.log").write_text(out, encoding="utf-8")
+    return code == 0
+
+
+def step_round_evidence(ctx: Ctx, round_name: str) -> None:
+    """Round4 证据链（宿主机 + 真实 .env；CI 不跑）。
+
+    顺序依赖：graph20 --with-survey 先产出 survey_reports → audit_sampling 才有得抽。
+    """
+    outdir = ctx.repo / "docs" / "acceptance" / round_name
+    outdir.mkdir(parents=True, exist_ok=True)
+    ok = _evidence(ctx, "eval_gold", "eval_gold.py", outdir, timeout=3600)
+    ctx.add(Result("证据：eval_gold（真实 LLM，16 门禁）", "PASS" if ok else "FAIL",
+                   "详见 eval_gold.json/log"))
+    # e2e（Playwright 自起 api+web）
+    if ctx.node and (ctx.web / "node_modules").is_dir():
+        pw = _node_bin(ctx, "node_modules/@playwright/test/cli.js")
+        if pw:
+            code, out = run(ctx, "ev_e2e", [*pw, "test", "--reporter=line"], cwd=ctx.web,
+                            timeout=1800)
+            (outdir / "playwright.log").write_text(out, encoding="utf-8")
+            ctx.add(Result("证据：Playwright e2e（10 用例）", "PASS" if code == 0 else "FAIL",
+                           "log=playwright.log"))
+        else:
+            ctx.add(Result("证据：Playwright e2e", "SKIP", "未找到 @playwright/test"))
+    else:
+        ctx.add(Result("证据：Playwright e2e", "SKIP", "web 依赖未安装"))
+    for name, script, extra in (
+        ("bench", "bench.py", ()),
+        ("live_probe", "live_probe.py", ()),
+        ("graph20", "graph20.py", ("--with-survey",)),
+        ("audit_sampling", "audit_sampling.py", ()),
+        ("copilot_live", "copilot_live.py", ()),
+        ("pdf_export_check", "pdf_export_check.py", ()),
+    ):
+        ok = _evidence(ctx, name, script, outdir, *extra)
+        ctx.add(Result(f"证据：{name}", "PASS" if ok else "FAIL",
+                       f"产物在 docs/acceptance/{round_name}/"))
+    # OCR 真实扫描件（官方 3.2a/3.2b 材料；MinerU/VLM 宿主通道）
+    code, out = run(ctx, "ev_ocr", [ctx.py, "scripts/accept_real_materials.py"],
+                    cwd=ctx.api, timeout=3600)
+    (outdir / "ocr_real.log").write_text(out, encoding="utf-8")
+    ctx.add(Result("证据：OCR 真实扫描件（3.2a/3.2b）", "PASS" if code == 0 else "FAIL",
+                   "详见 ocr_real.log"))
+
+
 def write_summary(ctx: Ctx) -> int:
     fail = [r for r in ctx.results if r.status == "FAIL"]
     skip = [r for r in ctx.results if r.status == "SKIP"]
@@ -384,9 +438,12 @@ def write_summary(ctx: Ctx) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Round2 一键验收")
+    ap = argparse.ArgumentParser(description="Round 一键验收（quick / --full / --round）")
     ap.add_argument("--repo", default=None)
     ap.add_argument("--full", action="store_true", help="追加 web/docker/smoke")
+    ap.add_argument("--round", default="", metavar="NAME",
+                    help="Round4 证据链：eval_gold/e2e/bench/live_probe/graph20+survey/"
+                         "audit/copilot_live/pdf_export/OCR → docs/acceptance/<NAME>/（宿主机）")
     ap.add_argument("--strict-git", action="store_true")
     ap.add_argument("--min-tests", type=int, default=109)
     ap.add_argument("--min-p0-tests", type=int, default=7)
@@ -415,6 +472,8 @@ def main() -> int:
         step_web(ctx, args.skip_web)
         step_docker(ctx, args.skip_docker)
         step_smoke(ctx, args.skip_smoke)
+    if args.round:
+        step_round_evidence(ctx, args.round)
     return write_summary(ctx)
 
 
