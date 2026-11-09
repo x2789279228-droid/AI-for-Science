@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from pydantic import BaseModel, Field
 
@@ -137,12 +138,23 @@ def render_matplotlib_png(spec: DiagramSpec) -> dict:
     return {"ok": False, "error": (out.get("stderr") or "sandbox_failed")[:300]}
 
 
+_MERMAID_HEAD = re.compile(r"^\s*(graph|flowchart)\s+\w+", re.IGNORECASE)
+# 边语法：--> / -> / -.-> / ==>（renderer 恒用箭头式；`-->|标签|` 变体由前缀覆盖）
+_MERMAID_EDGE = re.compile(r"-\.->|==>|-{1,2}>")
+
+
 def validate_syntax(kind: str, source: str) -> dict:
     """脚本语法健全性检查（本地确定性，不装外部二进制）：
-    mermaid/dot/tikz 结构配平；matplotlib 由 sandbox 渲染结果判定。"""
+    mermaid/dot/tikz 结构配平；matplotlib 由 sandbox 渲染结果判定。
+
+    Round4 修复：mermaid 旧式 `startswith("graph") and "->" in s or "-->" in s`
+    因 and 优先于 or，任何含 "-->" 的字符串都通过（无 graph 前缀也过）——评审
+    指出的优先级 bug；同时补 flowchart 前缀（mermaid 官方两种等价写法）与
+    无箭头连线 `--`/带标签边。"""
     if kind == "mermaid":
-        ok = source.strip().startswith("graph") and "->" in source or "-->" in source
-        return {"ok": bool(ok), "checker": "structural"}
+        s = source.strip()
+        ok = bool(_MERMAID_HEAD.match(s) and _MERMAID_EDGE.search(s))
+        return {"ok": ok, "checker": "structural"}
     if kind == "dot":
         bal = source.count("{") == source.count("}") and source.count('"') % 2 == 0
         ok = source.strip().startswith("digraph") and bal

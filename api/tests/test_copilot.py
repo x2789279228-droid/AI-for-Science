@@ -174,7 +174,10 @@ def test_diagram_renders_four_formats():
     mermaid = diagram.render_mermaid(spec)
     dot = diagram.render_dot(spec)
     tikz = diagram.render_tikz(spec)
-    assert "graph TD" in mermaid and "n1 -->|query| n3".replace("n1 -->|query| n3", "n3 -->|query| n1") in mermaid or "-->" in mermaid
+    # Round4 修复镜像 bug：旧断言 `A and B or "-->" in m` 因优先级恒真（与被修的
+    # validate_syntax 同款缺陷）——改为对每条 spec 边的确定性检查
+    assert mermaid.startswith("graph TD")
+    assert "n3 -->|query| n1" in mermaid and "n1 -->|docs| n2" in mermaid
     assert dot.startswith("digraph") and dot.count('"') % 2 == 0
     assert "\\begin{tikzpicture}" in tikz and tikz.count("\\node[") == 3
     assert diagram.validate_syntax("mermaid", mermaid)["ok"]
@@ -182,6 +185,17 @@ def test_diagram_renders_four_formats():
     assert diagram.validate_syntax("tikz", tikz)["ok"]
     # 节点/边与 spec 严格一致
     assert mermaid.count("[") >= 3 and "Retriever" in mermaid and "Generator" in mermaid
+
+
+def test_validate_syntax_mermaid_precedence_fixed():
+    """Round4：mermaid 校验优先级 bug 回归——无 graph/flowchart 头的裸边必须拒绝。"""
+    v = diagram.validate_syntax
+    assert v("mermaid", "graph TD\nA --> B")["ok"]
+    assert v("mermaid", "flowchart LR\nA --> B")["ok"]          # flowchart 前缀此前被拒
+    assert v("mermaid", "flowchart LR\nA -.-> B")["ok"]
+    assert not v("mermaid", "随便一段话 --> 含边字符")["ok"]      # 旧 bug：含 --> 即通过
+    assert not v("mermaid", "graph TD\n没有边")["ok"]
+    assert not v("mermaid", "")["ok"]
 
 
 def test_diagram_generate_with_stub_llm(monkeypatch):
@@ -259,3 +273,44 @@ def test_scatter3d_true_3d_spec():
     except ValueError:
         raised = True
     assert raised, "少于 3 个数值维必须 400"
+
+
+# ---------- Round4：CSV 硬化（100k 截断 / GBK / 空值异常值） ----------
+
+def test_parse_csv_100k_row_truncation():
+    """10 万行护栏：>100k 行截断到上限且如实上报 truncated。"""
+    rows = ["x,y"] + [f"{i},{i * 1.5:.1f}" for i in range(100_005)]
+    raw = ("\n".join(rows)).encode()
+    out = csv_viz.parse_csv(raw, "big100k.csv")
+    assert out["row_count"] == 100_000, "应截到 _MAX_ROWS"
+    assert out["truncated"] == 5, "截断数如实上报"
+    assert out["rows"][0] == ["0", "0.0"] and out["rows"][-1] == ["99999", "149998.5"]
+
+
+def test_parse_csv_gbk_real_bytes():
+    """GBK 真实字节文件（中文表头）——解码回退链此前零测试。"""
+    text = "模型,准确率\nBERT,0.84\nGPT,0.89\n"
+    out = csv_viz.parse_csv(text.encode("gbk"), "cn_gbk.csv")
+    assert out["columns"][0]["name"] == "模型"
+    assert out["columns"][1]["dtype"] == "number"
+    assert out["rows"] == [["BERT", "0.84"], ["GPT", "0.89"]]
+
+
+def test_parse_csv_nan_and_empty_cells():
+    """空值/NaN 列：不炸、类型推断如实（NaN 列不误判 number）。"""
+    text = "name,score\nA,0.9\nB,\nC,NaN\nD,0.7\n"
+    out = csv_viz.parse_csv(text.encode(), "nan.csv")
+    assert out["row_count"] == 4
+    dtypes = {c["name"]: c["dtype"] for c in out["columns"]}
+    assert dtypes["name"] == "string"
+    # score 列 4 值中 2 个非数字（空/NaN）→ 非数字占比 50% ≥20% → string
+    assert dtypes["score"] == "string"
+
+
+def test_store_dataset_100k_rows_valid_json():
+    """10 万行真实落库：存储 JSON 合法（行预算截断路径回归，50k 测试的补位）。"""
+    cols = [{"name": "x", "dtype": "number"}, {"name": "y", "dtype": "number"}]
+    rows = [[str(i), f"{i}.5"] for i in range(100_000)]
+    js, kept = csv_viz._serialize_rows_bounded(rows, cols)
+    data = json.loads(js)          # 必须可解析（旧字节切片会产生烂 JSON）
+    assert len(data) == kept and kept <= 100_000
