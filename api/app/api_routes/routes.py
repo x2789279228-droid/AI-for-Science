@@ -367,6 +367,43 @@ def get_docir(paper_id: str, page: int | None = None, outline: bool = False):
     return data
 
 
+@router.get("/papers/{paper_id}/search")
+def search_paper(paper_id: str, q: str, top_k: int = 10):
+    """模块三 D：全文检索（FTS5 chunk 级，CJK bigram 可命中中文）。
+
+    - q 过滤后 <2 字符 → 400；无命中 → 空列表（不 404）；
+    - 服务端截 snippet（首个命中词 ±60 字符窗口，纯文本不嵌 HTML——前端 <mark> 自渲染，
+      天然防注入）；
+    - block_ids 供前端跨页块级跳转（data-bid scrollIntoView）。
+    """
+    from ..rag import indexing
+
+    if _resolve_paper_data(paper_id) is None:
+        raise HTTPException(404, "未解析或不存在")
+    query = (q or "").strip()
+    if len(query) < 2:
+        raise HTTPException(400, "查询过短（≥2 字符）")
+    hits = indexing.fts_search([paper_id], query, top_k=max(1, min(top_k, 50)))
+    terms = [t for t in "".join(ch if ch.isalnum() else " "
+             for ch in indexing.cjk_bigram(query)).split() if t]
+    results = []
+    for h in hits:
+        text = h["text"] or ""
+        low = text.lower()
+        pos = min((p for p in (low.find(t.lower()) for t in terms) if p >= 0),
+                  default=-1)
+        start = max(0, pos - 60) if pos >= 0 else 0
+        snippet = text[start:start + 140]
+        results.append({
+            "chunk_id": h["chunk_id"], "page": h["page"],
+            "section_path": h["section_path"] or "",
+            "snippet": ("…" if start > 0 else "") + snippet
+                       + ("…" if start + 140 < len(text) else ""),
+            "score": h["score"], "block_ids": h["block_ids"],
+        })
+    return {"results": results, "total": len(results)}
+
+
 # ---------- jobs ----------
 
 @router.get("/jobs/{job_id}")

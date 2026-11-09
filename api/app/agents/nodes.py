@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import json
 import queue as queue_mod
+import re
 import time
 
 from langgraph.types import Send
 
+from .. import db
 from ..llm import client as llm
 from ..llm import prompts
+from ..log import logger
 from ..rag import indexing
 from ..rag.answering import (
     NO_EVIDENCE,
@@ -35,6 +38,7 @@ from ..rag.answering import (
     hit_summary,
     llm_claims,
     near_evidence_block,
+    refine_support_blocks,
     validate_citations,
 )
 from ..rag.verify import verify_claims
@@ -191,6 +195,13 @@ def planner_node(state: AgentState, config=None) -> dict:
     aspects = intent.get("aspects") or [question]
     retries = state.get("retries", 0)
 
+    # 对比模式检索面下限（P0 修订）：aspects<2 会让对比表退化成单行——
+    # 补一个"两文差异"检索面（不引入固定维度表，仅保证对比检索面数量 ≥2）
+    if intent.get("type") == "qa_compare":
+        aspects = [a for a in aspects if (a or "").strip()]
+        if len(aspects) < 2:
+            aspects.append("key methodological differences between the two papers")
+
     # 默认规则计划
     steps = _rule_steps(question, paper_ids, aspects)
     mode = "compare" if intent.get("type") == "qa_compare" else \
@@ -250,11 +261,38 @@ def fan_out(state: AgentState):
             for s in steps]
 
 
+_CITE_INTENT = re.compile(r"\[\s*\d{1,3}\s*\]|参考文献|引用信息|引用编号|references", re.IGNORECASE)
+
+
+def _citation_reference_hits(paper_id: str) -> list[dict]:
+    """引用意图伪命中（细粒度 P0）：[n]/参考文献 类问题对正文 chunk 检索是跨语言+
+    编号双盲区——references 表结构化数据直接构造证据条目；page 取含 [n] 的块页码。"""
+    out: list[dict] = []
+    try:
+        ref_rows = db.query('SELECT idx, title, raw FROM "references" WHERE paper_id=? '
+                            "ORDER BY idx LIMIT 40", (paper_id,))
+        for r in ref_rows:
+            idx = r["idx"]
+            crow = db.query("SELECT page FROM chunks WHERE paper_id=? AND text LIKE ? "
+                            "ORDER BY seq LIMIT 1", (paper_id, f"%[{idx}]%"))
+            out.append({
+                "chunk_id": f"{paper_id}_ref{idx}", "paper_id": paper_id,
+                "text": f"[{idx}] {(r['title'] or '').strip()}. {(r['raw'] or '')[:200]}",
+                "page": (crow[0]["page"] if crow else 0),
+                "bbox": [], "section_path": "References", "block_ids": [],
+                "kind": "reference", "score": 0.0,
+            })
+    except Exception as e:  # noqa: BLE001 —— 伪命中失败不影响主检索
+        logger.warning(f"引用伪命中失败 {paper_id[:10]}: {type(e).__name__}: {e}", module="retrieve")
+    return out
+
+
 def retrieve_task_node(payload: dict, config=None) -> dict:
     step: Step = payload["step"]
     retries = payload.get("retries", 0)
     top_k = 10 + retries * 6  # 重检索时放宽召回
     step_id = step.get("step_id", "")
+    question = payload.get("question", "")
     t_call = time.time()
     _emit_event(config, "tool_call", {"step_id": step_id, "tool": "kb_search",
                                       "args": {"paper_id": step["paper_id"],
@@ -269,6 +307,11 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
         guardrails.append("retrieval_degraded:bm25_only")
         failures.append({"node": "retrieve_task", "kind": "tool_failure",
                          "detail": f"hybrid_search:{type(e).__name__}:{e}"[:120]})
+    # 引用意图（细粒度 P0）：[n]/参考文献 类问题 → references 表伪命中补入
+    # （中文引用问句对英文参考文献正文是 BM25/dense 双盲区——结构化表是唯一可靠来源）
+    if _CITE_INTENT.search(question or "") or _CITE_INTENT.search(step.get("query", "")):
+        search["hits"] = list(search["hits"]) + _citation_reference_hits(step["paper_id"])
+        search["channels"] = sorted(set(search.get("channels", []) + ["references"]))
     tagged = [{**h, "aspect": step["aspect"], "query": step["query"]} for h in search["hits"]]
     stat = {"paper_id": step["paper_id"], "query": step["query"], "aspect": step["aspect"],
             "hits": len(tagged), "channels": search["channels"],
@@ -294,13 +337,39 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
 def fuse_node(state: AgentState, config=None) -> dict:
     results = state.get("raw_hits", [])
     guardrails: list[str] = []
+    # compare 判定用 plan.mode——fuse 在 Executor 子图内，其 state schema（ExecutorState）
+    # 不含 intent（父图字段被子图 schema 过滤），读 intent 恒 None → compare 保底永不触发
+    is_compare = (state.get("plan", {}) or {}).get("mode") == "compare" \
+        or (state.get("intent", {}) or {}).get("type") == "qa_compare"
     if results:
         # 每个 (aspect, paper) 分支是一路检索，跨分支 RRF 融合去重
         groups: dict[tuple[str, str], list[dict]] = {}
         for h in results:
             groups.setdefault((h.get("aspect", ""), h.get("paper_id", "")), []).append(h)
+
+        def _group_best(lst: list[dict]) -> dict:
+            return max(lst, key=lambda h: (h.get("rrf") or h.get("score") or 0))
+
+        # compare 保底（P0 修订）：纯 RRF 全局 top-8 会被强势 (aspect,paper) 组挤占，
+        # 弱势面整组出局 → 对比表退化为单行。compare 模式下每组最优优先入包（组轮转），
+        # 剩余名额再按全局序补齐——保证"每面×每篇"至少 1 条进 Evidence Pack；
+        # chunk_id 去重贯穿（Evidence 契约：chunk 不重复）。
+        group_best = [_group_best(lst) for lst in groups.values()]
+        rest = [h for h in [x for lst in groups.values() for x in lst]
+                if not any(h.get("chunk_id") == g.get("chunk_id") for g in group_best)]
+        rest.sort(key=lambda h: h.get("rrf") or h.get("score") or 0, reverse=True)
+        floor = group_best if is_compare else []
         fused = indexing.rrf_fuse(*[(f"b{i}", lst) for i, lst in enumerate(groups.values())],
                                   top_k=20)
+        if is_compare:
+            seen_cids = {g.get("chunk_id") for g in floor}
+            merged = list(floor)
+            for h in fused:
+                if h.get("chunk_id") not in seen_cids:
+                    merged.append(h)
+                    seen_cids.add(h.get("chunk_id"))
+            fused = merged[:20]
+            rest = [h for h in rest if h.get("chunk_id") not in seen_cids]
         # 四层防御①最后一环：bge-reranker 全局精排（每问 1 次调用），失败降级回融合排序
         fused_final: list[dict] | None = None
         if indexing.rerank_available():
@@ -315,6 +384,13 @@ def fuse_node(state: AgentState, config=None) -> dict:
         else:
             fused = fused[:8]
             rerank_note = "rerank 降级/未配置 → 融合排序截断"
+        if is_compare:
+            # rerank/截断后仍保证每组最优在场（按 chunk_id 去重补位，Evidence 不重复）
+            missing = [g for g in floor
+                       if not any(h.get("chunk_id") == g.get("chunk_id") for h in fused)]
+            if missing:
+                fused = (fused[:max(0, 8 - len(missing))] + missing)[:8]
+                rerank_note += " · compare 组保底补位"
     else:
         fused = []
         rerank_note = ""
@@ -507,6 +583,31 @@ def recover_node(state: AgentState, config=None) -> dict:
 
 # ---------------- Responder ----------------
 
+def _inject_compare_eids(state: AgentState, hits: list[dict]) -> tuple[dict, int]:
+    """compare_table 格级 E# 注入（P0 修订）：align 与 responder 共享同一
+    evidence 列表，chunk_id → E# 直接映射。返回 (注入后的表, 冲突行数)。"""
+    table = state.get("compare_table") or {}
+    chunk2eid = {h.get("chunk_id"): f"E{i}" for i, h in enumerate(hits, 1)}
+    for row in table.get("rows", []):
+        for cell in row.get("cells", []):
+            cid = cell.get("chunk_id")
+            if cid and cid in chunk2eid:
+                cell["eid"] = chunk2eid[cid]
+    n_conf = sum(1 for row in table.get("rows", []) if row.get("conflict"))
+    return table, n_conf
+
+
+def _compare_covered_papers(claims: list[dict], eid_map: dict[int, dict]) -> set[str]:
+    """叙述 claims 的 supports 覆盖到的 paper_id 集合（单侧对称 guardrail 用）。"""
+    covered: set[str] = set()
+    for c in claims:
+        for s in c.get("support", []):
+            e = str(s.get("eid", ""))
+            if e[1:].isdigit() and int(e[1:]) in eid_map:
+                covered.add(eid_map[int(e[1:])].get("paper_id"))
+    return covered
+
+
 def responder_node(state: AgentState, config=None) -> dict:
     q = _queue(config)
     question = state["question"]
@@ -593,12 +694,20 @@ def responder_node(state: AgentState, config=None) -> dict:
     # 降级路径（策略②）：recover 标记 degraded → 抽取式证据模式
     if state.get("degraded"):
         answer, claims = extractive_answer(question, hits)
+        try:
+            refine_support_blocks(claims, hits)
+        except Exception:  # noqa: BLE001, S110 —— 锚点精化失败不阻断
+            pass
         return finish(answer, claims, "extractive",
                       f"工具失败降级 → 抽取式 · {len(claims)} 条论断")
 
     if not llm.available():
         answer, claims = extractive_answer(question, hits)
         guardrails.append("llm_unavailable_fallback")
+        try:
+            refine_support_blocks(claims, hits)
+        except Exception:  # noqa: BLE001, S110 —— 锚点精化失败不阻断
+            pass
         return finish(answer, claims, "extractive",
                       f"抽取式降级 · {len(claims)} 条论断")
 
@@ -698,6 +807,13 @@ def responder_node(state: AgentState, config=None) -> dict:
     claims, verify_guards = verify_claims(claims, eid_map_claims)
     guardrails += verify_guards
 
+    # 细粒度锚点（P0）：support 的 quote 定位回原句 DocIR 块（block_id/block_bbox）；
+    # 失败不阻断——support 保持 chunk 级 E# 锚点（诚实回退）
+    try:
+        refine_support_blocks(claims, hits)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"support 块级锚点精化失败: {type(e).__name__}: {e}", module="responder")
+
     def verify_note() -> str:
         n_check = sum(1 for c in claims if c.get("status") == "needs_check")
         n_unsup = sum(1 for c in claims if c.get("status") == "unsupported")
@@ -709,6 +825,16 @@ def responder_node(state: AgentState, config=None) -> dict:
         return note
 
     if is_compare:
+        # 格级 E#（P0 修订）：单元格落到 Evidence Pack 后即可点击直通原文
+        table, n_conf = _inject_compare_eids(state, hits)
+        if n_conf:
+            guardrails.append(f"compare_conflict:{n_conf}")
+        # 单侧对称 guardrail：叙述 supports 必须覆盖全部选文（防一篇占满另一篇被脑补）
+        planned = [p for p in state.get("paper_ids", []) if p]
+        covered = _compare_covered_papers(claims, eid_map) & set(planned)
+        if planned and len(covered) < len(planned):
+            guardrails.append(f"compare_one_sided:{len(covered)}/{len(planned)}")
+        state["compare_table"] = table   # 带 eid/conflict 的表随 finish 透传
         return finish(answer, claims, "generative",
                       f"对比合成 · {len(claims)} 条论断{verify_note()} · 维度表已下发")
     if agent == "writer":

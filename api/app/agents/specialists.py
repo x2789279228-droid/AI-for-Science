@@ -109,6 +109,10 @@ def align_node(state: AgentState, config=None) -> dict:
 
     found_cells = sum(1 for r in table["rows"] for c in r["cells"] if c.get("found"))
     total_cells = max(1, len(table["rows"]) * max(1, len(paper_ids)))
+    # 覆盖 guardrail（P0 修订）：命中率 <50% 从"只进 trace 卡"升级为显式告警——
+    # 缺额过半的对比表继续走合成会放大脑补风险
+    if table["rows"] and found_cells / total_cells < 0.5:
+        guardrails.append(f"compare_coverage_low:{found_cells}/{total_cells}")
     card = trace_card("align", "维度对齐",
                       f"{len(table['rows'])} 维 × {len(paper_ids)} 篇 · 命中 {found_cells}/{total_cells} 格",
                       {"rows": len(table["rows"]), "found": found_cells, "total": total_cells})

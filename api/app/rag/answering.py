@@ -325,3 +325,71 @@ def hit_summary(hits: list[dict], limit: int = 8) -> list[dict]:
         item["page"] = h.get("page", 0) + 1  # 0 基 → 1 基
         out.append(item)
     return out
+
+
+# ---------- support 级原句块锚点（细粒度 P0：chunk 级 → 原句块级） ----------
+
+def refine_support_blocks(claims: list[dict], evidence: list[dict]) -> int:
+    """把每个 support 的 quote 定位回其引用 chunk 内的具体 DocIR 块（两轮）。
+
+    - 第一轮：quote 归一化后完整包含于候选块文本 → 精确锚点（block_id/block_bbox）；
+    - 第二轮：difflib 覆盖率最高块 ≥0.6 → 估算锚点（block_estimated=True，前端同款红框）；
+    - claim 的 L2 quote_status=unverified（引文为转述/拼凑）→ **跳过定位**——假引文
+      不给块级锚点（诚实回退 chunk 级 E# 锚点）；
+    - quote 过短（<12 归一字符）不定位（噪声比信号大）。返回定位数。
+    """
+    from .verify import _norm as _norm_txt  # 局部导入：避免 rag 内环
+    from .verify import quote_coverage
+    from .version_diff import load_docir_for
+
+    ev_by_chunk = {h.get("chunk_id"): h for h in evidence if h.get("chunk_id")}
+    index_cache: dict[str, tuple[dict, dict[int, list[str]]]] = {}
+
+    def _index(pid: str) -> tuple[dict, dict[int, list[str]]]:
+        if pid not in index_cache:
+            data = load_docir_for(pid) or {}
+            by_id: dict[str, tuple[str, list]] = {}
+            by_page: dict[int, list[str]] = {}
+            for b in data.get("blocks", []):
+                bid = b.get("id", "")
+                if not bid:
+                    continue
+                by_id[bid] = (_norm_txt(b.get("text", "")), b.get("bbox") or [])
+                by_page.setdefault(int(b.get("page", 0)), []).append(bid)
+            index_cache[pid] = (by_id, by_page)
+        return index_cache[pid]
+
+    located = 0
+    for c in claims:
+        for s in c.get("support", []):
+            if s.get("block_id"):
+                continue   # 幂等：已定位跳过
+            if c.get("quote_status") == "unverified":
+                continue   # 假引文不给块锚点（诚实回退 chunk 级）
+            qn = _norm_txt(s.get("quote", "") or "")
+            chunk = ev_by_chunk.get(s.get("chunk_id"))
+            if not chunk or len(qn) < 12:
+                continue
+            by_id, by_page = _index(chunk.get("paper_id", ""))
+            cand_ids = list(chunk.get("block_ids") or []) \
+                or by_page.get(int(chunk.get("page", 0) or 0), [])
+            exact: tuple[str, list] | None = None
+            best_bid, best_cov = None, 0.0
+            for bid in cand_ids:
+                nt, bbox = by_id.get(bid, ("", []))
+                if not nt:
+                    continue
+                if qn in nt and exact is None:
+                    exact = (bid, bbox)
+                cov = quote_coverage(s.get("quote", ""), nt)
+                if cov > best_cov:
+                    best_bid, best_cov = bid, cov
+            if exact is not None and len(exact[1]) == 4:
+                s["block_id"], s["block_bbox"] = exact
+                located += 1
+            elif best_bid and best_cov >= 0.6 and len(by_id[best_bid][1]) == 4:
+                s["block_id"] = best_bid
+                s["block_bbox"] = by_id[best_bid][1]
+                s["block_estimated"] = True   # 估算锚点：前端同款红框，口径诚实区分
+                located += 1
+    return located
