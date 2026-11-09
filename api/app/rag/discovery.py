@@ -330,6 +330,33 @@ def parse_reference_list(text: str) -> dict:
     return {"kind": "plain", "items": items}
 
 
+def s2_metadata_batch(arxiv_ids: list[str], *, batch_size: int = 20) -> dict[str, dict]:
+    """arXiv id 批量查 S2 元数据（citation_count/venue/abstract）——推荐懒补用。
+
+    返回 {arxiv_id: {...}}；任一批失败即停（调用方按已有部分结果回填，缺者保持
+    NULL 如实降级）。与 resolve_reference_items 同通道同字段，仅供内部轻量调用。
+    """
+    out: dict[str, dict] = {}
+    for k in range(0, len(arxiv_ids), batch_size):
+        chunk = arxiv_ids[k:k + batch_size]
+        try:
+            resp = httpx.post("https://api.semanticscholar.org/graph/v1/paper/batch",
+                              params={"fields": _S2_FIELDS},
+                              json={"ids": [f"ARXIV:{a}" for a in chunk]},
+                              headers=_UA, timeout=40)
+            resp.raise_for_status()
+            for a, p in zip(chunk, resp.json()):
+                if p:
+                    e = _s2_entries({"data": [p]})[0]
+                    out[a] = {"citation_count": e.get("citation_count"),
+                              "venue": e.get("venue") or "",
+                              "abstract": e.get("abstract") or "",
+                              "year": e.get("year") or 0}
+        except Exception:  # noqa: BLE001 —— 限速/断网：已取到的部分生效，其余如实缺省
+            break
+    return out
+
+
 def resolve_reference_items(items: list[dict], *, batch_size: int = 20) -> list[dict]:
     """批量补全候选（S2 batch 优先；逐条 resolve 回退）。返回 PaperCandidate 列表，
     未解析条目如实标 resolved=False（不冒充）。"""

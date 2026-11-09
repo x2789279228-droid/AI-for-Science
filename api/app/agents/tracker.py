@@ -40,34 +40,42 @@ def _since_date(last_run: float) -> str:
 
 
 def _fetch_sickle(set_spec: str, from_date: str, limit: int) -> list[dict] | None:
-    """Sickle OAI-PMH 主通道。未安装/失败返回 None（调用方走 Atom 回退）。"""
+    """Sickle OAI-PMH 主通道。未安装/失败返回 None（调用方走 Atom 回退）。
+
+    Round4：子类目（cs.CL）不是合法 OAI set（实测 BadArgument: Set does not
+    exist）→ 自动降试顶层类目（cs）再收割一轮；两级都失败才交回 Atom 回退。
+    """
     try:
         from sickle import Sickle
     except ImportError:
         return None
-    try:
-        sickle = Sickle(_OAI_ENDPOINT, max_retries=1, timeout=30)
-        out: list[dict] = []
-        for rec in sickle.ListRecords(metadataPrefix="oai_dc", set=set_spec,
-                                      **{"from": from_date}):
-            header = rec.header
-            m = re.search(r"arXiv\.org[:/](.+)$", header.identifier)
-            if not m or header.deleted:
-                continue
-            meta = rec.metadata or {}
-            out.append({
-                "arxiv_id": m.group(1).split("v")[0],
-                "title": " ".join(meta.get("title", []) or [""]),
-                "authors": list(meta.get("creator", []) or [])[:8],
-                "published": (meta.get("date", [""]) or [""])[0][:10],
-            })
-            if len(out) >= limit:
-                break
-        return out
-    except Exception as e:  # noqa: BLE001 —— Sickle 失败 → Atom 回退（如实记日志）
-        logger.warning(f"tracking Sickle 通道失败 → Atom 回退: {type(e).__name__}: {e}",
-                       module="tracking")
-        return None
+    last_err = ""
+    for spec in (set_spec, set_spec.split(".")[0]):
+        try:
+            sickle = Sickle(_OAI_ENDPOINT, max_retries=1, timeout=30)
+            out: list[dict] = []
+            for rec in sickle.ListRecords(metadataPrefix="oai_dc", set=spec,
+                                          **{"from": from_date}):
+                header = rec.header
+                m = re.search(r"arXiv\.org[:/](.+)$", header.identifier)
+                if not m or header.deleted:
+                    continue
+                meta = rec.metadata or {}
+                out.append({
+                    "arxiv_id": m.group(1).split("v")[0],
+                    "title": " ".join(meta.get("title", []) or [""]),
+                    "authors": list(meta.get("creator", []) or [])[:8],
+                    "published": (meta.get("date", [""]) or [""])[0][:10],
+                    # arXiv OAI 的 dc:description 即摘要（推荐 local/keyword 分量语料）
+                    "abstract": " ".join((meta.get("description", []) or [""]))[:800],
+                })
+                if len(out) >= limit:
+                    break
+            return out
+        except Exception as e:  # noqa: BLE001 —— 单个 set 失败：换顶层 set 再试
+            last_err = f"{type(e).__name__}: {e}"[:160]
+    logger.warning(f"tracking Sickle 通道失败 → Atom 回退: {last_err}", module="tracking")
+    return None
 
 
 def _fetch_atom(query_type: str, value: str, from_date: str, limit: int) -> list[dict]:
@@ -90,6 +98,7 @@ def _fetch_atom(query_type: str, value: str, from_date: str, limit: int) -> list
             "title": " ".join((e.findtext("a:title", "", ns) or "").split()),
             "authors": [x.findtext("a:name", "", ns) for x in e.findall("a:author", ns)][:8],
             "published": (e.findtext("a:published", "", ns) or "")[:10],
+            "abstract": " ".join((e.findtext("a:summary", "", ns) or "").split())[:800],
         })
     return [o for o in out if o["published"] >= from_date] or out  # 日期过滤失败面=空时如实返回全部（首次订阅）
 
@@ -126,10 +135,16 @@ def refresh_subscription(sub: dict) -> dict:
         with db.tx() as c:
             cur = c.execute(
                 "INSERT OR IGNORE INTO tracked_items(id,sub_id,arxiv_id,title,published,"
-                "authors,status,added_at) VALUES(?,?,?,?,?,?,?,?)",
+                "authors,abstract,status,added_at) VALUES(?,?,?,?,?,?,?,?,?)",
                 (db.new_id("ti_"), sub["id"], it["arxiv_id"], it["title"][:300],
-                 it["published"], json.dumps(it["authors"], ensure_ascii=False), status, now))
+                 it["published"], json.dumps(it["authors"], ensure_ascii=False),
+                 (it.get("abstract") or "")[:800], status, now))
             added += cur.rowcount or 0
+            if not (cur.rowcount or 0) and it.get("abstract"):
+                # 去重跳过的旧条目：若早期入库无摘要则补齐（元数据闭环）
+                c.execute("UPDATE tracked_items SET abstract=? WHERE sub_id=? AND arxiv_id=?"
+                          " AND (abstract IS NULL OR abstract='')",
+                          (it["abstract"][:800], sub["id"], it["arxiv_id"]))
             skipped += 0 if (cur.rowcount or 0) else 1
     with db.tx() as c:
         c.execute("UPDATE tracking_subscriptions SET last_run=? WHERE id=?", (now, sub["id"]))

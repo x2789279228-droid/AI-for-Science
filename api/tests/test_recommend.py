@@ -18,6 +18,12 @@ from app import db
 from app.agents import recommend
 
 
+@pytest.fixture(autouse=True)
+def _no_s2(monkeypatch):
+    """密闭：S2 懒补默认打桩为空（真实调用在 live_probe/宿主验证；失败降级路径另测）。"""
+    monkeypatch.setattr("app.rag.discovery.s2_metadata_batch", lambda ids: {})
+
+
 @pytest.fixture(scope="module", autouse=True)
 def _setup():
     db.init_db()
@@ -121,3 +127,42 @@ def test_recommend_endpoints(monkeypatch):
     assert r3.status_code == 400
     r4 = client.get("/api/recommendations", headers={"X-User-Id": "x" * 200})
     assert r4.json()["user_id"] == "anonymous", "超长 user_id 护栏回退 anonymous"
+
+
+def test_enrich_tracked_real_metadata(monkeypatch):
+    """Round4：S2 懒补真实元数据 → citation 分量非 0.5 中性、理由含被引数、库回填。"""
+    monkeypatch.setattr("app.rag.discovery.s2_metadata_batch",
+                        lambda ids: {"2401.00001": {"citation_count": 800, "venue": "ICML",
+                                                    "abstract": "scaling laws for attention "
+                                                                "computation in transformers",
+                                                    "year": 2026}})
+    out = recommend.generate("u_enrich", 5, with_github=False)
+    top = out["recommendations"][0]
+    assert top["scores"]["citation"] > 0.5, "真实引用数应产生非中性 citation 分量"
+    assert "被引 800" in top["reason"]
+    # 回填入库：第二次生成只应为仍未补的条目（ti2）发起懒补，ti1 不再查询
+    calls: list[list[str]] = []
+
+    def counting(ids):
+        calls.append(list(ids))
+        return {}
+    monkeypatch.setattr("app.rag.discovery.s2_metadata_batch", counting)
+    recommend.generate("u_enrich", 5, with_github=False)
+    assert calls == [["2401.00002"]], f"已回填的 ti1 不应重复懒补（实际查询 {calls}）"
+    row = db.query("SELECT citation_count, venue FROM tracked_items WHERE id='ti1'")[0]
+    assert row["citation_count"] == 800 and row["venue"] == "ICML"
+
+
+def test_enrich_tracked_failure_degrades(monkeypatch):
+    """懒补失败（无网/限速）→ 不阻断推荐，citation 保持中性 0.5、理由不含引用数。"""
+    # 复位上一测试的回填，验证纯降级路径
+    with db.tx() as c:
+        c.execute("UPDATE tracked_items SET citation_count=NULL, venue='', abstract=''")
+
+    def boom(ids):
+        raise ConnectionError("offline")
+    monkeypatch.setattr("app.rag.discovery.s2_metadata_batch", boom)
+    out = recommend.generate("u_offline", 5, with_github=False)
+    assert out["recommendations"], "降级仍应给出推荐"
+    assert all(r["scores"]["citation"] == 0.5 for r in out["recommendations"])
+    assert all("被引" not in r["reason"] for r in out["recommendations"])

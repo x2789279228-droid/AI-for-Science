@@ -276,7 +276,23 @@ def init_db() -> None:
         _migrate_papers_module1(conn)
         _migrate_papers_dedup2(conn)
         _migrate_references_rich(conn)
+        _migrate_tracked_items_meta(conn)
         conn.commit()
+
+
+def _migrate_tracked_items_meta(conn: sqlite3.Connection) -> None:
+    """Round4：tracked_items 加 abstract/citation_count/venue——推荐五分量中
+    citation/keyword 此前对追踪候选恒为中性 0.5/标题词（评审指「假分」）；
+    abstract 随抓取带入（OAI dc:description / Atom summary），引用数/venue 由
+    推荐 S2 批量懒补回填。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(tracked_items)")]
+    if not cols:
+        return
+    for name, decl in {"abstract": "TEXT DEFAULT ''",
+                       "citation_count": "INTEGER",
+                       "venue": "TEXT DEFAULT ''"}.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE tracked_items ADD COLUMN {name} {decl}")
 
 
 def _migrate_references_rich(conn: sqlite3.Connection) -> None:

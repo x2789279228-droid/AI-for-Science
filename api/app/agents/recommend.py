@@ -114,20 +114,57 @@ def _score_candidate(cand: dict, kw: dict[str, float], *,
             "reason": " · ".join(reason_parts) or "来自你的追踪订阅"}
 
 
+def _enrich_tracked(rows: list[dict]) -> list[dict]:
+    """Round4：tracked_items 元数据懒补——citation/venue 缺失的新条目批量查一次 S2
+    并回填入库（此前 citation 分量恒 0.5 中性=「假分」）。失败/无网 → 保持 NULL，
+    打分走中性值且理由如实不含引用数。返回增强后的行列表（dict 化）。"""
+    missing = [r["arxiv_id"] for r in rows
+               if r["citation_count"] is None and r["arxiv_id"]][:20]
+    meta: dict[str, dict] = {}
+    if missing:
+        try:
+            from ..rag.discovery import s2_metadata_batch
+            meta = s2_metadata_batch(missing)
+        except Exception as e:  # noqa: BLE001 —— 无网/限速：懒补失败不阻断推荐
+            logger.warning(f"recommend S2 懒补失败（按缺省处理）: {type(e).__name__}: {e}",
+                           module="recommend")
+    out = []
+    backfill = []
+    for r in rows:
+        m = meta.get(r["arxiv_id"])
+        if m and m.get("citation_count") is not None:
+            r = {**r, "citation_count": m["citation_count"],
+                 "venue": m.get("venue") or r.get("venue") or "",
+                 "abstract": r.get("abstract") or (m.get("abstract") or ""),
+                 "year": r.get("year") or m.get("year") or 0}
+            backfill.append(r)
+        out.append(r)
+    if backfill:
+        with db.tx() as c:
+            for r in backfill:
+                c.execute("UPDATE tracked_items SET citation_count=?, venue=?, abstract=?"
+                          " WHERE id=?", (r["citation_count"], r["venue"],
+                                          r["abstract"][:800], r["id"]))
+    return out
+
+
 def generate(user_id: str, limit: int = 10, *, with_github: bool = True) -> dict:
     """生成推荐：候选=追踪新条目（未订阅→空，如实返回）。落 recommendations 表。"""
     kw = profile_keywords(user_id)
-    cands = db.query(
-        "SELECT arxiv_id, title, published FROM tracked_items WHERE status='new'"
-        " ORDER BY added_at DESC LIMIT 60")
-    if not cands:
+    cand_rows = db.query(
+        "SELECT id, arxiv_id, title, published, abstract, citation_count, venue"
+        " FROM tracked_items WHERE status='new' ORDER BY added_at DESC LIMIT 60")
+    if not cand_rows:
         return {"user_id": user_id, "recommendations": [],
                 "note": "暂无候选：先在「追踪订阅」添加订阅并刷新（推荐不凭空编造候选）"}
+    cands = _enrich_tracked([dict(r) for r in cand_rows])
 
     rows = []
     for c in cands:
         s = _score_candidate({"title": c["title"], "published": c["published"],
-                              "year": 0, "citation_count": None, "abstract": ""},
+                              "year": c.get("year") or 0,
+                              "citation_count": c["citation_count"],
+                              "abstract": c["abstract"] or ""},
                              kw, with_github=with_github)
         rows.append({"title": c["title"], "arxiv_id": c["arxiv_id"], **s})
     rows.sort(key=lambda x: -x["total"])
