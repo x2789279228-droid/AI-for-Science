@@ -27,6 +27,9 @@ interface Props {
   bbox?: number[];           // [x0, y0, x1, y1] 归一化坐标
   width?: number;            // 画布 CSS 宽度 px
   onMouseUp?: () => void;    // 取词翻译挂点（选区由父组件经 window.getSelection 读取）
+  /** Round4 反向联动：可点击的块热点（bbox 归一化），点击回调块 id（PDF→译文方向） */
+  blocks?: { id: string; bbox: number[] }[];
+  onBlockClick?: (bid: string) => void;
 }
 
 // ---- 模块级 doc 缓存（跨组件实例共享；EvidenceModal/阅读器同篇复用） ----
@@ -60,7 +63,8 @@ async function getDoc(paperId: string): Promise<PDFDocumentProxy> {
   return p;
 }
 
-export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseUp }: Props) {
+export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseUp,
+                                      blocks, onBlockClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const tokenRef = useRef(0);
@@ -160,6 +164,21 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseU
           animation: "bboxPulse 1.6s ease-in-out 3",
         }} />
       )}
+      {/* Round4 反向联动：块级透明热点（虚线极淡指示可点）→ onBlockClick(bid) */}
+      {ready && (blocks ?? []).filter((b) => b.bbox?.length === 4).map((b) => (
+        <div key={b.id} data-pdf-bid={b.id} onClick={() => onBlockClick?.(b.id)}
+          title="点击定位右侧译文块"
+          style={{
+            position: "absolute",
+            left: `${b.bbox[0] * 100}%`,
+            top: `${b.bbox[1] * 100}%`,
+            width: `${(b.bbox[2] - b.bbox[0]) * 100}%`,
+            height: `${(b.bbox[3] - b.bbox[1]) * 100}%`,
+            cursor: "pointer",
+            outline: "1px dashed rgba(37, 99, 235, 0.28)",
+            borderRadius: 2,
+          }} />
+      ))}
     </div>
   );
 }

@@ -1,10 +1,14 @@
 /**
- * 模块验收 E2E（Playwright，5 条关键用例）：
+ * 模块验收 E2E（Playwright，9 条关键用例）：
  * ① 阅读器双语对照滚动同步（拖左栏 → 右栏跟随）
  * ② [n] 引用标记 → References 面板跳转高亮（双向跳转正向链路）
  * ③ Copilot：CSV 上传 → 柱状图 canvas 渲染 + 图注展示
  * ④ Discover：多源搜索 SSE 完成（结果卡或错误提示如实出现）
  * ⑤ Graph：G6 canvas 渲染且节点 > 0
+ * ⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定
+ * ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮（Round4）
+ * ⑧ Discover 从库内导入参考文献：含金量徽章 + 可逆「隐藏凑数」过滤（Round4）
+ * ⑨ 双语滚动同步量化：块对齐误差 ≤1 块（Round4）
  */
 import { expect, test } from "@playwright/test";
 
@@ -147,4 +151,120 @@ test("⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定", async ({
     await expect(page.locator('div[style*="bboxPulse"]').first())
       .toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 30_000 });
+});
+
+/** Round4 ⑦⑧⑨：反向联动 / discover 含金量过滤 / 滚动同步块对齐量化 */
+
+async function thickPaperWithDensePage(): Promise<{ pid: string; pageNo: number; blocks: number }> {
+  const r = await fetch(`${API}/api/papers`);
+  const j = await r.json();
+  const thick = (j.papers ?? []).filter((p: { page_count?: number }) => (p.page_count ?? 0) > 50);
+  const dense = thick.length
+    ? thick.reduce((a: { page_count?: number }, b: { page_count?: number }) =>
+        (b.page_count ?? 0) > (a.page_count ?? 0) ? b : a)
+    : j.papers?.[0];
+  const pid = dense?.id ?? "";
+  if (!pid) return { pid: "", pageNo: 1, blocks: 0 };
+  let pageNo = 1, bestBlocks = 0;
+  for (const p of [10, 20, 40, 60, 80, 100, 130]) {
+    const resp = await fetch(`${API}/api/papers/${pid}/docir?page=${p - 1}`);
+    if (!resp.ok) continue;
+    const docir = await resp.json();
+    const n = (docir.blocks ?? []).length;
+    if (n > bestBlocks) { bestBlocks = n; pageNo = p; }
+  }
+  return { pid, pageNo, blocks: bestBlocks };
+}
+
+test("⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮", async ({ page }) => {
+  const { pid, pageNo } = await thickPaperWithDensePage();
+  test.skip(!pid, "库内无论文");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/reader/${pid}?page=${pageNo}`);
+  await page.getByRole("button", { name: "PDF↔译文" }).click();
+  await expect(page.getByText(/译文（第 \d+ 页/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("canvas").first()).toBeVisible();
+  // Round4：左栏 PDF 上的块级透明热点（data-pdf-bid）→ 点击后右栏对应译文块闪高亮
+  const hot = page.locator("[data-pdf-bid]").first();
+  test.skip(!(await hot.count()), "该页无块热点（无 bbox 块）");
+  const bid = await hot.getAttribute("data-pdf-bid");
+  await expect(async () => {
+    await hot.click({ force: true });
+    await expect(page.locator(`[data-bid="${bid}"].flash`)).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
+});
+
+test("⑧ Discover：从库内导入参考文献 + 含金量可逆过滤", async ({ page }) => {
+  const pid = await attentionPaperId();
+  test.skip(!pid, "库内无论文");
+  await page.goto("/discover");
+  const select = page.getByRole("combobox");
+  await expect(select).toBeVisible({ timeout: 15_000 });
+  await select.selectOption(pid);
+  // 导入完成：refsNote 提示 + 参考文献卡列表出现
+  await expect(page.getByText(/已导入 \d+ 条参考文献/)).toBeVisible({ timeout: 30_000 });
+  const cards = page.locator("div.card", { hasText: /实质|背景|凑数/ });
+  const total = await cards.count();
+  expect(total).toBeGreaterThan(0);
+  // 凑数条目存在时：隐藏 → 卡数减少 → 点击恢复 → 卡数还原（可逆）
+  const cheap = page.getByText("凑数", { exact: true });
+  const nCheap = await cheap.count();
+  test.skip(nCheap === 0, "该论文无「凑数」条目（引用句覆盖下无低权重引用）");
+  await page.getByText("隐藏凑数引用").click();
+  const hidden = await cards.count();
+  expect(hidden).toBeLessThan(total);
+  await page.getByText("已隐藏凑数（点击恢复）").click();
+  await expect(async () => {
+    expect(await cards.count()).toBe(total);
+  }).toPass({ timeout: 10_000 });
+});
+
+test("⑨ 双语滚动同步量化：块对齐误差 ≤1 块", async ({ page }) => {
+  const { pid, pageNo, blocks } = await thickPaperWithDensePage();
+  test.skip(!pid, "库内无论文");
+  test.skip(blocks < 12, `最密页仅 ${blocks} 块`);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/reader/${pid}?page=${pageNo}`);
+  await page.getByRole("button", { name: "双语对照" }).click();
+  await expect(page.getByText("译文（block 级对齐）")).toBeVisible({ timeout: 20_000 });
+  const left = page.locator("div.card", { has: page.getByRole("heading", { name: "原文" }) });
+  const right = page.locator("div.card", { has: page.getByText("译文（block 级对齐）") });
+  await page.waitForTimeout(600);
+  const canScroll = await left.evaluate((el) => el.scrollHeight > el.clientHeight + 40);
+  test.skip(!canScroll, "当前页不足一屏");
+  // 滚左栏到中部 → 等 IntersectionObserver 同步（防回环 debounce 120ms + smooth）
+  await left.evaluate((el) => { el.scrollTop = el.scrollHeight / 2; });
+  await page.waitForTimeout(1_500);
+  // 各栏首个「完整可见」块的序号（data-bid 顺序）差 ≤1 即对齐
+  const firstVisibleIdx = (el: HTMLElement) => {
+    const pane = el.getBoundingClientRect();
+    const items = Array.from(el.querySelectorAll<HTMLElement>("[data-bid]"));
+    for (let i = 0; i < items.length; i++) {
+      const b = items[i].getBoundingClientRect();
+      if (b.top >= pane.top && b.bottom <= pane.bottom) return i;
+    }
+    return -1;
+  };
+  const li = await left.evaluate(firstVisibleIdx);
+  const ri = await right.evaluate(firstVisibleIdx);
+  expect(li).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(li - ri)).toBeLessThanOrEqual(1);
+});
+
+test("⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/copilot");
+  await page.getByRole("button", { name: /拓扑图脚本/ }).click();
+  await page.locator("textarea").first().fill(
+    "RAG 系统：Query 改写器 → Retriever 从向量库取 top-k → Reranker 精排 → Generator 生成带引用回答");
+  await page.getByRole("button", { name: "生成四种脚本" }).click();
+  // Mermaid 客户端真渲染出 svg（MermaidPreview 组件）
+  await expect(page.locator("div.card svg").first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText("语法通过")).toBeVisible({ timeout: 10_000 });
+  // DOT / TikZ 源码卡 + 结构校验
+  await expect(page.getByText("Graphviz DOT")).toBeVisible();
+  await expect(page.getByText("TikZ (LaTeX)")).toBeVisible();
+  const dotSrc = page.locator("pre").filter({ hasText: /digraph/ });
+  await expect(dotSrc).toBeVisible();
+  await expect(page.locator("pre").filter({ hasText: /tikzpicture/ })).toBeVisible();
 });

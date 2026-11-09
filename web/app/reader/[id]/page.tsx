@@ -361,6 +361,9 @@ function ReaderInner() {
   // ---- 4.7 翻译 ----
   const [trans, setTrans] = useState<Record<string, TranslationEntry>>({});
   const [translating, setTranslating] = useState<{ done: number; total: number } | null>(null);
+  // Round4 模块三：翻译方向（英→中 默认 / 中→英）——中文论文按标题自动定向，可手动切换；
+  // 切换即清缓存重拉（复合缓存键 zh|academic / en|academic 两套独立缓存互不覆盖）
+  const [transLang, setTransLang] = useState<"zh" | "en">("zh");
 
   // ---- 4.7 [n] 双向跳转 ----
   const [highlightRef, setHighlightRef] = useState<number | null>(null);
@@ -418,10 +421,14 @@ function ReaderInner() {
 
   // 按需加载：首屏 outline（几 KB 秒开）+ 当前页正文
   useEffect(() => {
-    getPaper(id as string).then(setPaper);
+    getPaper(id as string).then((p) => {
+      setPaper(p);
+      // 中文论文（标题 CJK≥2）默认中→英方向；英文论文默认英→中
+      const cjk = ((p.title ?? "").match(/[\u4e00-\u9fff]/g) ?? []).length;
+      setTransLang((cur) => (cjk >= 2 && !localStorage.getItem("trans_lang_manual") ? "en" : cur));
+    });
     fetch(`${API}/api/papers/${id}/docir?outline=1`, { cache: "no-store" })
       .then((r) => r.json()).then(setOutline);
-    fetchTranslation(id as string).then(setTrans);
     fetch(`${API}/api/papers`, { cache: "no-store" }).then((r) => r.json()).then((d) => {
       const ids = new Set<string>();
       for (const p of d.papers ?? []) {
@@ -431,6 +438,12 @@ function ReaderInner() {
       setLibraryArxivIds(ids);
     }).catch(() => {});
   }, [id]);
+
+  // Round4：方向切换（或自动定向生效）→ 清空当前译文并拉取该方向缓存
+  useEffect(() => {
+    setTrans({});
+    fetchTranslation(id as string, transLang).then(setTrans).catch(() => {});
+  }, [id, transLang]);
 
   const fetchPage = useCallback((p: number) => {
     setPageLoading(true);
@@ -835,7 +848,7 @@ function ReaderInner() {
   };
   const translateOneBlock = (bid: string) => {
     if (translating) return;
-    streamTranslate(id as string, { block_ids: [bid] }, {
+    streamTranslate(id as string, { block_ids: [bid], lang: transLang }, {
       tDelta: (d) => {
         setTrans((prev) => ({ ...prev, [d.block_id]: { text: d.text, format_ok: d.format_ok } }));
         setTranslating({ done: d.done, total: d.total });
@@ -855,7 +868,7 @@ function ReaderInner() {
     setTranslatingAll(true);
     const ac = new AbortController();
     abortRef.current = ac;
-    streamTranslate(id as string, { include_extras: true }, {
+    streamTranslate(id as string, { include_extras: true, lang: transLang }, {
       tDelta: (d) => {
         setTrans((prev) => ({ ...prev, [d.block_id]: { text: d.text, format_ok: d.format_ok } }));
         setTranslating({ done: d.done, total: d.total });
@@ -878,7 +891,7 @@ function ReaderInner() {
   const exportServerPdf = async (layout: "overlay" | "bilingual") => {
     setExporting(true);
     try {
-      const r = await fetch(`${API}/api/papers/${id}/export?fmt=pdf&target_lang=zh&mode=academic&layout=${layout}`);
+      const r = await fetch(`${API}/api/papers/${id}/export?fmt=pdf&target_lang=${transLang}&mode=academic&layout=${layout}`);
       if (!r.ok) {
         const msg = await r.json().catch(() => ({ detail: r.statusText }));
         window.alert(`PDF 导出失败：${(msg as { detail?: string }).detail ?? r.status}`);
@@ -887,7 +900,7 @@ function ReaderInner() {
       const blob = await r.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `${id}.zh.${layout}.pdf`;
+      a.download = `${id}.${transLang}.${layout}.pdf`;
       a.click();
       URL.revokeObjectURL(a.href);
       const overflow = Number(r.headers.get("X-Export-Overflow") ?? "0");
@@ -920,9 +933,10 @@ function ReaderInner() {
       let content: string;
       let mime: string;
       let ext: string;
+      const pairLabel = transLang === "zh" ? "中英对照" : "英中对照";
       if (fmt === "md") {
         const lines: string[] = [`# ${title}`, "",
-          `> 中英对照导出（公式/代码保留英文 LaTeX；未译块仅原文）· ${stamp}`, ""];
+          `> ${pairLabel}导出（公式/代码保留英文 LaTeX；未译块仅原文）· ${stamp}`, ""];
         for (const b of allBlocks) {
           if (b.type === "heading") { lines.push(`## ${b.text}`, ""); continue; }
           if (b.type === "formula") { lines.push(`$$${b.latex ?? b.text}$$`, ""); continue; }
@@ -936,14 +950,14 @@ function ReaderInner() {
         }
         content = lines.join("\n");
         mime = "text/markdown;charset=utf-8";
-        ext = "zh-en.md";
+        ext = transLang === "zh" ? "zh-en.md" : "en-zh.md";
       } else {
         const parts: string[] = [
           "<!DOCTYPE html><html lang=\"zh\"><head><meta charset=\"utf-8\">",
-          `<title>${esc(title)} · 中英对照</title></head>`,
+          `<title>${esc(title)} · ${pairLabel}</title></head>`,
           "<body style=\"max-width:820px;margin:24px auto;font-family:system-ui,sans-serif;line-height:1.7;color:#222\">",
           `<h1>${esc(title)}</h1>`,
-          `<p style="color:#888;font-size:13px">中英对照导出 · 公式以 LaTeX 源码（$…$）保留英文 · ${stamp}</p>`,
+          `<p style="color:#888;font-size:13px">${pairLabel}导出 · 公式以 LaTeX 源码（$…$）保留英文 · ${stamp}</p>`,
         ];
         for (const b of allBlocks) {
           if (b.type === "heading") { parts.push(`<h2>${esc(b.text)}</h2>`); continue; }
@@ -962,7 +976,7 @@ function ReaderInner() {
         parts.push("</body></html>");
         content = parts.join("\n");
         mime = "text/html;charset=utf-8";
-        ext = "zh-en.html";
+        ext = transLang === "zh" ? "zh-en.html" : "en-zh.html";
       }
       const url = URL.createObjectURL(new Blob([content], { type: mime }));
       const a = document.createElement("a");
@@ -1010,7 +1024,7 @@ function ReaderInner() {
   const translatePage = () => {
     if (translating) return;
     setTranslating({ done: 0, total: 0 });
-    streamTranslate(id as string, { page: page - 1 }, {
+    streamTranslate(id as string, { page: page - 1, lang: transLang }, {
       tDelta: (d) => {
         setTrans((prev) => ({ ...prev, [d.block_id]: { text: d.text, format_ok: d.format_ok } }));
         setTranslating({ done: d.done, total: d.total });
@@ -1165,6 +1179,15 @@ function ReaderInner() {
                   <button key={m} className={`chip ${view === m ? "accent" : ""}`}
                     style={{ cursor: "pointer" }} onClick={() => setView(m)}>{label}</button>
                 ))}
+                {([["zh", "英→中"], ["en", "中→英"]] as ["zh" | "en", string][]).map(([l, label]) => (
+                  <button key={l} data-testid={`trans-lang-${l}`}
+                    className={`chip ${transLang === l ? "accent" : ""}`} style={{ cursor: "pointer" }}
+                    title="翻译方向（切换后拉取对应方向缓存；中文论文自动默认中→英）"
+                    onClick={() => {
+                      localStorage.setItem("trans_lang_manual", "1");
+                      setTransLang(l);
+                    }}>{label}</button>
+                ))}
                 {view !== "pdf" && (
                   <button className="chip" style={{ cursor: "pointer" }} onClick={translatePage}
                     title="翻译本页（block 级，公式/代码/引用标记占位符保护，缓存续译）— 快捷键 t">
@@ -1300,7 +1323,14 @@ function ReaderInner() {
                   <h2 style={{ margin: "0 0 8px" }}>原版 PDF（p{page}）{focusBbox ? " · 已锚定滚动块" : " · 右栏滚动自动锚定"}</h2>
                   <PdfAnchored paperId={id as string} page={page}
                     bbox={focusBbox?.length === 4 ? focusBbox : undefined}
-                    width={480} onMouseUp={onTextMouseUp} />
+                    width={480} onMouseUp={onTextMouseUp}
+                    blocks={blocks.map((b) => ({ id: b.id, bbox: b.bbox ?? [] }))}
+                    onBlockClick={(bid) => {
+                      // Round4 反向联动：点 PDF 块热点 → 右栏译文滚动定位 + 闪高亮
+                      pdfBiPaneRef.current?.querySelector(`[data-bid="${bid}"]`)
+                        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+                      flash(bid);
+                    }} />
                 </div>
                 <div className="card" ref={pdfBiPaneRef} onMouseUp={onTextMouseUp}
                   onScroll={trackSection}
