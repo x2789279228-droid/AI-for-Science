@@ -44,12 +44,25 @@ def parse_long_pdf(pdf_path: Path, probe: dict, decision: dict,
         pass
 
     docir: dict = {
-        "paper_id": pdf_path.stem,
+        "paper_id": paper_id or pdf_path.stem,
         "meta": {"title": pdf_path.stem, "authors": [], "arxiv_id": "", "pub_date": "",
                  "venue": "", "page_count": n, "file": pdf_path.name,
                  "parse_engine": decision["engine"]},
         "toc": toc, "blocks": [], "tables": [], "figures": [], "references": [],
     }
+    # 首页启发式（细粒度 P0）：标题/arXiv id/作者不再退化为上传 stem——
+    # 否则 arXiv API 元数据层对长文档永不触发（meta.arxiv_id 恒空的实证根因）
+    if doc.page_count:
+        try:
+            meta0 = pipeline._extract_meta(doc, [], pipeline._pymupdf_page_blocks(doc[0]))
+            if meta0.get("title"):
+                docir["meta"]["title"] = meta0["title"]
+            if meta0.get("arxiv_id"):
+                docir["meta"]["arxiv_id"] = meta0["arxiv_id"]
+            if meta0.get("authors"):
+                docir["meta"]["authors"] = meta0["authors"]
+        except Exception:  # noqa: BLE001, S110 —— 启发式失败保持 stem 兜底，不阻断
+            pass
     if toc and paper_id:
         _write(paper_id, docir)   # 大纲先行：上传后秒级可见标题树
     progress(0.06, f"大纲已出（{len(toc)} 条书签）· 开始解析 {n} 页"

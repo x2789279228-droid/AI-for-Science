@@ -177,14 +177,17 @@ def _run_parse(job_id: str, paper_id: str) -> None:
         if _hit_cancel(job_id, "切块索引"):
             return
 
-        # references 落库
+        # references 落库（Phase 0：补写 authors/year/venue/title_norm 四列）
         with db.tx() as c:
             c.execute('DELETE FROM "references" WHERE paper_id=?', (paper_id,))
             for r in docir.get("references", []):
-                c.execute('INSERT INTO "references"(id,paper_id,idx,raw,title,arxiv_id,doi)'
-                          " VALUES(?,?,?,?,?,?,?)",
+                c.execute('INSERT INTO "references"'
+                          '(id,paper_id,idx,raw,title,arxiv_id,doi,authors,year,venue,title_norm)'
+                          " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                           (db.new_id("r_"), paper_id, r["index"], r["raw"],
-                           r.get("title", ""), r.get("arxiv_id", ""), r.get("doi", "")))
+                           r.get("title", ""), r.get("arxiv_id", ""), r.get("doi", ""),
+                           r.get("authors", ""), r.get("year", 0),
+                           r.get("venue", ""), r.get("title_norm", "")))
 
         with db.tx() as c:
             # arxiv_id 存基础 id（剥离 vN）；版本号单独入 version 列（去重文案/版本演进用）
@@ -206,9 +209,12 @@ def _run_parse(job_id: str, paper_id: str) -> None:
             logger.warning(f"post_parse_dedup 失败（不阻塞 parse）: {type(e).__name__}: {e}",
                            module="dedup")
 
+        empty_note = ""
+        if docir["meta"].get("parse_empty"):
+            empty_note = " · ⚠ 解析产出为空（扫描页识别全部失败，内容缺失已如实标注）"
         db.update_job(job_id, status="done", progress=1.0,
                       message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}"
-                              f" · {docir['meta'].get('parse_engine', '')}{long_note}")
+                              f" · {docir['meta'].get('parse_engine', '')}{long_note}{empty_note}")
     except ParseCancelled:
         db.update_job(job_id, status="cancelled", message="解析已取消")
     except Exception as e:  # noqa: BLE001

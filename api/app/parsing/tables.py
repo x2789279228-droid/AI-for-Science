@@ -39,40 +39,60 @@ def table_to_md(rows: list[list[str | None]]) -> str:
 
 
 class _HtmlTableParser(HTMLParser):
-    """最小 HTML 表格收集器：thead/tbody 首行作表头，其余为数据行。"""
+    """HTML 表格收集器：矩阵填充式（细粒度 P2）——处理 colspan/rowspan。
+
+    rowspan 在后续行的对应列补占位值（重复原值，矩阵保持矩形）；
+    colspan 向右扩展（值重复）。占位追踪用 _taken 集合，与真实空单元格区分。
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.rows: list[list[str]] = []
-        self._row: list[str] | None = None
+        self.grid: list[list[str]] = []
+        self._taken: set[tuple[int, int]] = set()
+        self._row_idx = -1
         self._cell: list[str] = []
+        self._span: tuple[int, int] = (1, 1)
 
     def handle_starttag(self, tag: str, attrs) -> None:
         if tag == "tr":
-            self._flush_row()
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
+            self._row_idx += 1
+        elif tag in ("td", "th") and self._row_idx >= 0:
             self._cell = []
+            ad = dict(attrs or [])
+            self._span = (_int_clamp(ad.get("colspan")), _int_clamp(ad.get("rowspan")))
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in ("td", "th") and self._row is not None:
-            self._row.append(re.sub(r"\s+", " ", "".join(self._cell)).strip())
+        if tag in ("td", "th") and self._row_idx >= 0:
+            value = re.sub(r"\s+", " ", "".join(self._cell)).strip()
+            c = 0
+            while (self._row_idx, c) in self._taken:
+                c += 1
+            cs, rs = self._span
+            for rr in range(self._row_idx, self._row_idx + rs):
+                for cc in range(c, c + cs):
+                    while len(self.grid) <= rr:
+                        self.grid.append([])
+                    while len(self.grid[rr]) <= cc:
+                        self.grid[rr].append("")
+                    self.grid[rr][cc] = value
+                    self._taken.add((rr, cc))
             self._cell = []
-        elif tag == "tr":
-            self._flush_row()
 
     def handle_data(self, data: str) -> None:
-        if self._row is not None:
+        if self._row_idx >= 0:
             self._cell.append(data)
 
-    def _flush_row(self) -> None:
-        if self._row and any(self._row):
-            self.rows.append(self._row)
-        self._row = None
+
+def _int_clamp(v: str | None) -> int:
+    try:
+        return max(1, min(50, int(str(v or 1))))
+    except (TypeError, ValueError):
+        return 1
 
 
 def html_table_to_rows(html: str) -> tuple[list[str], list[list[str]]]:
-    """HTML <table> → (headers, rows)；无表结构返回 ([], [])。"""
+    """HTML <table> → (headers, rows)（colspan/rowspan 已展开为矩形矩阵）；
+    无表结构返回 ([], [])。"""
     if "<table" not in (html or "").lower():
         return [], []
     p = _HtmlTableParser()
@@ -81,6 +101,8 @@ def html_table_to_rows(html: str) -> tuple[list[str], list[list[str]]]:
         p.close()
     except Exception:  # noqa: BLE001 —— 非法 HTML 退回 markdown 管道解析
         return [], []
-    if len(p.rows) < 2:
+    if len(p.grid) < 2:
         return [], []
-    return p.rows[0], p.rows[1:]
+    width = max(len(r) for r in p.grid)
+    grid = [r + [""] * (width - len(r)) for r in p.grid]
+    return grid[0], grid[1:]

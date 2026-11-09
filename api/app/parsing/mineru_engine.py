@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -19,7 +20,14 @@ import fitz  # PyMuPDF
 
 from ..config import DOCIR_DIR, settings
 from ._types import CancelCheck, ParseCancelled, ProgressCb
-from .pipeline import _REF_HEAD, _mark_appendix, _parse_references, backfill_sections
+from .pipeline import (
+    _extract_meta,
+    _mark_appendix,
+    _merge_cross_page_tables,
+    _parse_references,
+    _pymupdf_page_blocks,
+    backfill_sections,
+)
 from .tables import html_table_to_rows, table_to_md
 
 
@@ -170,6 +178,8 @@ def middle_to_docir(middle: dict, pdf_path: str | Path, *,
                                "page": page_idx, "bbox": bbox, "section_path": ""})
                 pages_with_text.add(page_idx)
 
+    _merge_cross_page_tables(tables)
+
     for i, b in enumerate(blocks, 1):
         b["id"] = f"b{i}"
     for i, t in enumerate(tables, 1):
@@ -181,9 +191,16 @@ def middle_to_docir(middle: dict, pdf_path: str | Path, *,
     # 扫描件（无文本层）退化为标题块平铺 level=1
     toc: list[dict] = []
     arxiv_id = ""
+    meta0: dict = {}
     doc = fitz.open(pdf_path)
     try:
         has_text = sum(len(p.get_text("text").strip()) for p in doc) > 50 * doc.page_count
+        # 首页启发式（细粒度 P0）：标题/作者/arXiv id 的文本层兜底来源
+        if doc.page_count:
+            try:
+                meta0 = _extract_meta(doc, [], _pymupdf_page_blocks(doc[0]))
+            except Exception:  # noqa: BLE001 —— 启发式失败仅少兜底字段
+                meta0 = {}
         if has_text:
             # arXiv id 从 PDF 首页文本层直接取（MinerU 把侧边横幅归入 discarded_blocks）
             from .pipeline import _ARXIV_ID
@@ -233,29 +250,29 @@ def middle_to_docir(middle: dict, pdf_path: str | Path, *,
         blocks_by_page.setdefault(b["page"], []).append(b)
     backfill_sections(blocks, toc, blocks_by_page)
 
-    # References：References 类标题块之后的正文
-    ref_parts: list[str] = []
-    in_ref = False
-    for b in blocks:
-        if b["type"] == "heading" and _REF_HEAD.match(b["text"].strip()):
-            in_ref = True
-            continue
-        if in_ref and b["type"] == "paragraph":
-            ref_parts.append(b["text"])
+    # References：_find_refs_start 定位（GPT-3 实证：MinerU 会把标题与首条目粘成单块
+    # "References\n[ABC+16]Author…"，heading 精确匹配永远不中）→ _ref_block_texts 收集
+    # （Appendix 边界截断 + 空行拼接：author-year 风格块边界=条目边界）
+    from .pipeline import _find_refs_start, _ref_block_texts
+    ri = _find_refs_start(blocks)
+    ref_parts: list[str] = _ref_block_texts(blocks, ri) if ri >= 0 else []
 
-    title = next((b["text"] for b in blocks if b["type"] == "heading"), "") or pdf_path.stem
+    title = next((b["text"] for b in blocks if b["type"] == "heading"), "") \
+        or meta0.get("title", "") or pdf_path.stem
     docir: dict[str, Any] = {
         "paper_id": pdf_path.stem,
-        "meta": {"title": title, "authors": [], "arxiv_id": arxiv_id,
-                 "pub_date": "", "venue": "", "page_count": len(pages), "file": pdf_path.name,
-                 "bbox_transform": transform},
+        "meta": {"title": title,
+                 "authors": meta0.get("authors", []),
+                 "arxiv_id": arxiv_id or (meta0.get("arxiv_id") or ""),
+                 "pub_date": "", "venue": "", "page_count": len(pages),
+                 "file": pdf_path.name, "bbox_transform": transform},
         "toc": toc,
         "blocks": blocks,
         "tables": tables,
         "figures": figures,
-        "references": _parse_references("\n".join(ref_parts)) if ref_parts else [],
+        "references": _parse_references("\n\n".join(ref_parts)) if ref_parts else [],
     }
-    _mark_appendix(toc, docir["meta"])
+    _mark_appendix(toc, docir["meta"], blocks=blocks)
     return docir
 
 
@@ -337,9 +354,11 @@ def _table_entry(blk: dict, page_idx: int, bbox: list[float], seq: int) -> dict 
     if not md:
         return None
     caption = "；".join(_subblock_texts(blk, "table_caption"))[:200]
+    mnum = re.search(r"(?:table|表)\s*(\d+)", caption, re.IGNORECASE)
     return {"page": page_idx, "bbox": bbox, "markdown": md, "html": html[:8000],
             **({"headers": headers, "rows": rows} if headers else {}),
-            **({"title": caption} if caption else {})}
+            **({"title": caption} if caption else {}),
+            **({"number": int(mnum.group(1))} if mnum else {})}
 
 
 def _figure_entry(blk: dict, page_idx: int, bbox: list[float], seq: int,
