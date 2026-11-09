@@ -18,6 +18,8 @@ Base URL：`http://localhost:8100`（`API_PORT` 可改）
 | POST | `/api/papers/{id}/version-diff` | DiffLens `{base_id}`：启动差异任务；已有缓存返回 `cached=true` |
 | GET | `/api/papers/{id}/version-diff?base_id=` | 差异结果缓存（sections 对齐/段落 diff/数值变化/LLM 要点） |
 | GET | `/api/papers/{id}/docir?page=N` | DocIR JSON（blocks/toc/tables/figures/references）；字段口径见下方「DocIR 细粒度字段」 |
+| GET | `/api/papers/{id}/pdf` | 原始 PDF 文件流（阅读器 PDF.js 渲染 + bbox 高亮的取件源；容器内宿主路径缺失时按 uploads/{paper_id}.pdf 幂等回退） |
+| GET | `/api/papers/{id}/figure/{figure_id}` | 图注关联裁图（MinerU 解析产物 image_path；路径校验必须落在解析输出目录内） |
 | GET | `/api/papers/{id}/search?q=&top_k=10` | 全文检索（FTS5 chunk 级，CJK bigram）：`{results:[{chunk_id,page,section_path,snippet,score,block_ids}]}`——snippet 为首个命中词 ±60 字符窗口纯文本（前端 `<mark>` 自渲染，防注入）；`block_ids[0]` 供跨页块级跳转；q<2 → 400，未解析 → 404，无命中空列表 |
 | GET | `/api/families` | 族视图（union-find 传递闭包）：`[{family_id, canonical_id/canonical_title/canonical_version, pending_alerts, versions:[{id,title,version,status,page_count,pending_alerts}]}]`；versions 按版本号升序，archived 成员保留（前端折叠展示）；族边=确定性同源（arXiv 基/DOI）∪ 人工已决策对，pending 分数对不入边（防错配经闭包传播） |
 
@@ -100,21 +102,42 @@ score = Σ w_k·f_k / Σ w_k ，  w = {vector .30, title .20, author .10, minhas
 ```http
 POST /api/chat
 Content-Type: application/json
-{"question": "...", "paper_ids": ["p_xxx"]}   # paper_ids 缺省 = 全库
+{"question": "...", "paper_ids": ["p_xxx"], "agent": "auto", "conversation_id": ""}
+# paper_ids 缺省 = 全库 active（>8 篇截断为前 8 并发 guardrail:paper_cap 事件）
+# agent: auto|reader|compare|graph|writer|viz（UI 强制指定 Agent）
 ```
 
-事件流：
+事件流（协议 v1.1，向后兼容；`trace` 起为节点卡时间线，`plan/tool_call/tool_result/evidence/verifier` 为 Trace 增量）：
 
 ```
-event: retrieval   → {"channels": ["bm25"(,"dense")], "hits": [...]}        检索通道与命中
+event: trace*      → {"node": "...", "status": "live|done", ...}              节点卡片（live）
+event: plan        → {"steps": [...]}                                         Planner 检索面规划
+event: tool_call / tool_result → {...}                                        工具调用时间线
+event: retrieval   → {"channels": ["bm25"(,"dense")], "hits": [...]}          检索通道与命中
+event: evidence    → {...}                                                    Evidence Pack [E#] 编号下发
 event: delta       → {"text": "增量token"}                                    仅生成式模式
-event: final       → {"answer", "claims":[{text,status,support[]}],           溯源结果
-                      "mode": "generative"|"extractive", "guardrails": [...]}
+event: verifier    → {"claims": [...]}                                        L1-L4 校验过程
+event: artifact    → {"type": "compare_table"|"chart_spec"|"citation_graph"|"outline", ...}
+                                                                              Agent 专属产物
+event: guardrail   → {"message", "kind"}                                      护栏事件（选文超 8 篇/单侧覆盖等）
+event: final       → {"answer", "claims":[{text,status,support[],anchors[]}],  溯源结果（ClaimTrace 三态
+                      "mode": "generative"|"extractive", "guardrails": [...],   supported/needs_check/unsupported；
+                      "trace": [...], "anchors": {...}}                         anchors: E#→{page(1基),bbox,block_ids}}
 event: done        → {}
 ```
 
-- 引用格式 `[^p页-§章节]`；引用后验校验失败会剔除无效锚点并记 guardrail
+- 引用格式 **`[E#]`**（Evidence Pack 显式编号，多论文自动分配 P1/P2 代号）；引用后验校验失败会剔除无效锚点并记 guardrail
 - `mode=extractive`：无可用 LLM 时降级为原文摘录（逐句仍挂锚点）
+- 断点续跑：图级异常标记 thread failed，`POST /api/chat/{thread_id}/resume` 从 checkpoint 续跑（SSE 同协议）
+
+## 会话线程 / Trace 回放
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/threads?conversation_id=` | 会话线程列表（chat_threads 账本，status: running/done/failed） |
+| GET | `/api/threads/{thread_id}` | 线程详情（question/answer/error/resume_attempts） |
+| POST | `/api/chat/{thread_id}/resume` | 断点续跑：从最近 checkpoint 续跑（SSE 事件流同 /api/chat） |
+| GET | `/api/qa/{trace_id}` | 回放一次问答的完整事件流（trace_id = thread_id；trace_events 落盘，含断点续跑并入的事件） |
 
 ## 透明度 / 健康
 
@@ -134,8 +157,11 @@ event: done        → {}
 
 ## 检索 / 追踪 / 推荐（模块四）
 
+- `POST /api/discover` — 方向一句话 SSE 自动闭环：LLM 抽英文检索词 → arXiv 检索 →（`auto:true` 时）自动下载 top1 → 等解析 → hybrid_search 出证据；事件 `status/discover_results/final/error/done`
 - `POST /api/discover/search` — 多源检索 SSE。入口四选一：`{query}`（arXiv+S2+OpenAlex 去重）/ `{title|doi|arxiv_id}`（精确解析）/ `{references_text}`（BibTeX/RIS/纯文本 → S2 batch 补全）
-- `POST /api/discover/download` — `{arxiv_id}` 或 `{pdf_url}` 二选一下载入库
+- `POST /api/discover/download` — `{arxiv_id}` 或 `{pdf_url}` 二选一下载入库（`%PDF-` 魔数校验，arxiv 主源 + export 备源）
+- `GET /api/discover/repro?repo=` — GitHub 复现性懒加载（stars 档位/活跃度/许可证 → 复现分）
+- `GET /api/sandbox/figure/{name}` — matplotlib 沙箱产物（文件名白名单防路径穿越）
 - `GET /api/papers/{id}/ref-quality` — 参考文献含金量（实质/背景/凑数 + 引用句明细；无引用句条目不出现=中性态）
 - `GET|POST /api/tracking/subscriptions`、`DELETE /api/tracking/subscriptions/{id}` — 订阅 CRUD（keyword/author/category）
 - `POST /api/tracking/refresh` — 手动刷新（Sickle OAI 主通道/Atom 回退；返回通道与新增/去重计数）
@@ -155,6 +181,6 @@ event: done        → {}
 - `POST /api/copilot/writing` — `{idea, paper_ids, sections?}` 无幻觉论文框架 SSE（References 白名单后验；guardrails 审计；结果落 writing_drafts）
 - `POST /api/copilot/datasets`（multipart file）— CSV 上传（≤5MB/10 万行/编码嗅探/公式注入清洗/类型推断）
 - `GET /api/copilot/datasets`、`GET /api/copilot/datasets/{id}` — 列表与预览（前 50 行）
-- `POST /api/copilot/chart` — `{dataset_id, chart_type: table|line|bar|radar, x?, y?, title?, with_caption?}` 四类图 spec + Figure Caption（数字可回溯）
+- `POST /api/copilot/chart` — `{dataset_id, chart_type: table|line|bar|radar|scatter3d, x?, y?..., title?, with_caption?}` 五类图 spec（scatter3d 真 3D 散点：≥3 数值维 + 第 4 维 visualMap，echarts-gl 渲染）+ Figure Caption（数字可回溯）
 - `POST /api/copilot/diagram` — `{description}` DiagramSpec→Mermaid/DOT/TikZ 源码 + matplotlib PNG + 各格式语法校验
 - `POST /api/copilot/translate` — `{text}` 或 `{paper_id, scope}` 中→英学术翻译

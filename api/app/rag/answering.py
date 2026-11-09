@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from itertools import pairwise
 from typing import Any
 
 from ..llm import client as llm
@@ -329,6 +330,13 @@ def hit_summary(hits: list[dict], limit: int = 8) -> list[dict]:
 
 # ---------- support 级原句块锚点（细粒度 P0：chunk 级 → 原句块级） ----------
 
+def _union_bbox(a: list, b: list) -> list:
+    """两个 4 元 bbox 的并集矩形（跨块锚点用）。"""
+    if len(a) != 4 or len(b) != 4:
+        return []
+    return [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+
+
 def refine_support_blocks(claims: list[dict], evidence: list[dict]) -> int:
     """把每个 support 的 quote 定位回其引用 chunk 内的具体 DocIR 块（两轮）。
 
@@ -384,8 +392,27 @@ def refine_support_blocks(claims: list[dict], evidence: list[dict]) -> int:
                 cov = quote_coverage(s.get("quote", ""), nt)
                 if cov > best_cov:
                     best_bid, best_cov = bid, cov
+            # 第二轮：相邻块拼接——引用句跨段落/公式边界时单块必失配（round4 实证
+            # anchor_precision 损失的主因之一）；拼接命中比模糊覆盖更精确，先于估算轮
+            span: tuple[str, list, str, list] | None = None
+            if exact is None:
+                page_seq = [b for b in by_page.get(int(chunk.get("page", 0) or 0), [])
+                            if b in by_id]
+                for a_, b_ in pairwise(page_seq):
+                    na, ba = by_id[a_]
+                    nb, bb = by_id[b_]
+                    if not na or not nb:
+                        continue
+                    if qn in (na + nb):   # 归一文本无空白，直接拼接（跨块引用句是连续串）
+                        span = (a_, ba, b_, bb)
+                        break
             if exact is not None and len(exact[1]) == 4:
                 s["block_id"], s["block_bbox"] = exact
+                located += 1
+            elif span is not None and len(span[1]) == 4 and len(span[3]) == 4:
+                s["block_id"], s["block_bbox"] = span[0], _union_bbox(span[1], span[3])
+                s["block_ids"] = [span[0], span[2]]
+                s["block_span"] = True      # 跨块锚点：bbox=两块并集，诚实标注
                 located += 1
             elif best_bid and best_cov >= 0.6 and len(by_id[best_bid][1]) == 4:
                 s["block_id"] = best_bid

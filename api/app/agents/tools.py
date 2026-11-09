@@ -89,6 +89,8 @@ def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
                     "page": (h.get("page") or 0) + 1,  # SSE 对外 1 基人读页码
                     "section_path": h.get("section_path", ""),
                     "quote": (h.get("text") or "")[:200],
+                    "block_ids": h.get("block_ids") or [],  # 证据溯源到 DocIR 块（金标 cell 校验用）
+                    "bbox": h.get("bbox") or [],
                     "score": h.get("rrf") or h.get("score") or 0,
                 }),
             })

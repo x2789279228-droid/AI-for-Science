@@ -9,6 +9,7 @@ Dense 后端三选一（EMBEDDING_BACKEND）：
 from __future__ import annotations
 
 import json
+import re
 import struct
 import time
 from typing import Any
@@ -253,6 +254,33 @@ def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 3
     return out or None
 
 
+# ---------- 表块加权（标识符类问题） ----------
+
+# 超参/维度类标识符（d_model、h_ff、d_ff 这类「名字_数字」式 token）
+_IDENT_TOKEN = re.compile(r"[A-Za-z]+_[A-Za-z0-9]+")
+
+
+def _boost_table_hits(hits: list[dict]) -> list[dict]:
+    """标识符类问题 → 已命中的表格块加权（×2.5）后重排。
+
+    数值参数主要住在表里（Table 1/3 的 d_model=512 一行）；RRF 均值化会稀释
+    BM25 的表格强命中，导致「d_model=512」这类题 top-5 检索缺失（round3 实证：
+    正文块 model/dimension 双词命中 BM25 ~7.3 分压过表格块 ~3.8 分）。
+    只对已在结果内的 kind=table 命中加权（不引入表外块），非标识符问题零影响。
+    """
+    out: list[dict] = []
+    for h in hits:
+        if h.get("kind") == "table":
+            key = "rrf" if h.get("rrf") is not None else "score"
+            h = {**h, key: round(float(h[key] or 0.0) * 2.5, 6), "table_boosted": True}
+        out.append(h)
+
+    def _s(h: dict) -> float:
+        return float(h.get("rrf") or h.get("score") or 0.0)
+
+    return sorted(out, key=lambda h: -_s(h))
+
+
 # ---------- RRF 融合 ----------
 
 def rrf_fuse(*channel_lists: tuple[str, list[dict]], k: int = 60, top_k: int = 20) -> list[dict]:
@@ -278,4 +306,6 @@ def hybrid_search(paper_ids: list[str], q: str, top_k: int = 20) -> dict:
     dense = dense_search(paper_ids, q, top_k) if settings.dense_enabled else []
     channels = ["bm25"] + (["dense"] if dense else [])
     hits = rrf_fuse(("bm25", bm25), ("dense", dense), top_k=top_k) if dense else bm25
+    if _IDENT_TOKEN.search(q or ""):
+        hits = _boost_table_hits(hits)[:top_k]
     return {"hits": hits, "channels": channels, "bm25_count": len(bm25), "dense_count": len(dense)}
