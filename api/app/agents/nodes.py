@@ -273,13 +273,19 @@ def _citation_reference_hits(paper_id: str) -> list[dict]:
                             "ORDER BY idx LIMIT 40", (paper_id,))
         for r in ref_rows:
             idx = r["idx"]
-            crow = db.query("SELECT page FROM chunks WHERE paper_id=? AND text LIKE ? "
-                            "ORDER BY seq LIMIT 1", (paper_id, f"%[{idx}]%"))
+            crow = db.query("SELECT page, block_ids FROM chunks WHERE paper_id=? "
+                            "AND text LIKE ? ORDER BY seq LIMIT 1",
+                            (paper_id, f"%[{idx}]%"))
+            # Round6：伪命中回填其锚定 chunk 的 block_ids/bbox——旧空列表使该类
+            # cell 的溯源校验无锚（round5 cell_quote 残余主因之一）
+            import json as _json
+            _bids = _json.loads(crow[0]["block_ids"] or "[]") if crow else []
             out.append({
                 "chunk_id": f"{paper_id}_ref{idx}", "paper_id": paper_id,
                 "text": f"[{idx}] {(r['title'] or '').strip()}. {(r['raw'] or '')[:200]}",
                 "page": (crow[0]["page"] if crow else 0),
-                "bbox": [], "section_path": "References", "block_ids": [],
+                "bbox": [], "section_path": "References",
+                "block_ids": _bids,
                 "kind": "reference", "score": 0.0,
             })
     except Exception as e:  # noqa: BLE001 —— 伪命中失败不影响主检索

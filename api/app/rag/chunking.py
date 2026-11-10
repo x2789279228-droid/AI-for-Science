@@ -26,13 +26,14 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
         sections[sp].append(blk)
 
     chunks: list[dict] = []
+    last_real_id = ""   # Round6：上一 flush 的最后真实块 id（重叠尾巴的锚）
     for sp in order:
         sec_blocks = sections[sp]
         buf: list[dict] = []
         buf_len = 0
 
         def flush(section: str = sp) -> None:
-            nonlocal buf, buf_len
+            nonlocal buf, buf_len, last_real_id
             if not buf:
                 return
             text = "\n".join(b["text"] for b in buf).strip()
@@ -47,6 +48,10 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
                     "block_ids": list(dict.fromkeys(b["id"] for b in buf if b.get("id"))),
                     "kind": "detail",
                 })
+                # Round6：记最后真实块 id——下一块的重叠尾巴文本出自它。取上一
+                # chunk 的 block_ids[-1] 会漏锚（其 ids 可能为空，如标题后首块）
+                last_real_id = next((b["id"] for b in reversed(buf) if b.get("id")),
+                                    last_real_id)
             buf, buf_len = [], 0
 
         for blk in sec_blocks:
@@ -56,14 +61,15 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
             # 超长段内切（句子边界）
             for piece in _split_long(text):
                 if buf_len + len(piece) > TARGET and buf_len > MIN_LEN:
+                    n_before = len(chunks)
                     flush()
-                    # 重叠：把上一块尾部 100 字符带入。Round5：挂上一块的真实 block id
-                    # （旧空 id 使重叠文本不属 block_ids 任何块——cell 级溯源覆盖
-                    # 系统性 ~0.5，eval 实证）；块 id 重复无害（溯源并集语义）
-                    if chunks:
+                    # 重叠：把上一块尾部 100 字符带入（挂 last_real_id——重叠文本
+                    # 出自该块）。Round6 守卫：仅当本次 flush **真正产出**才带重叠
+                    # （短文本被丢弃时 chunks[-1] 指向旧块，尾巴来源错位使该 chunk
+                    # 的块锚覆盖系统性 <0.85——Attention 5/73 实证）
+                    if len(chunks) > n_before:
                         tail = chunks[-1]["text"][-OVERLAP:]
-                        prev_ids = chunks[-1]["block_ids"]
-                        buf.append({"id": prev_ids[-1] if prev_ids else "",
+                        buf.append({"id": last_real_id,
                                     "text": tail, "page": chunks[-1]["page"],
                                     "bbox": chunks[-1]["bbox"]})
                         buf_len = len(tail)
@@ -92,11 +98,22 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
             continue
         sec_chunks = [c for c in chunks if c["section_path"] == t["title"]]
         if sec_chunks:
+            # Round6：概览块回填该章块 id 并集（cap 8）——概览 text 取自首块正文，
+            # 空 block_ids 使其命中时溯源无锚（round5 cell_quote 残余之一）
+            _ids: list[str] = []
+            for c0 in sec_chunks:
+                for b0 in c0["block_ids"]:
+                    if b0 not in _ids:
+                        _ids.append(b0)
+                    if len(_ids) >= 8:
+                        break
+                if len(_ids) >= 8:
+                    break
             chunks.append({"text": f"[章节概览] {t['title']}（pp.{sec_chunks[0]['page']}-{sec_chunks[-1]['page']}）："
                                    + sec_chunks[0]["text"][:300],
                            "page": t["page"], "pages": [t["page"]],
                            "bbox": sec_chunks[0]["bbox"], "section_path": t["title"],
-                           "block_ids": [], "kind": "summary"})
+                           "block_ids": _ids, "kind": "summary"})
     return chunks
 
 

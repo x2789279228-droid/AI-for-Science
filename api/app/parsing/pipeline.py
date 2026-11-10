@@ -245,16 +245,21 @@ def _authoryear_cuts(seg: str) -> list[int]:
     # 首轮无门实测 UDL 245→111、Attention/PreLN 副本 +25~+54 过切。
     # 其余守卫：头两词均首字母大写（人名串形态）；首词非 venue/句首停用词；60 字符内
     # 有作者逗号；与上一保留切点间距 ≥120（条目长度下限）。
-    if re.search(r"URL\s*https?://|CoRR,\s*abs/", seg) or re.search(
-            r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)\.\s+[A-Z][a-z]+,\s*[A-Z]\.", seg):
+    if (re.search(r"URL\s*https?://|CoRR,\s*abs/", seg)
+            or re.search(r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)\.\s+[A-Z][a-z]+,\s*[A-Z]\.", seg)
+            # Round6 第三门：链式年份密度（ACL 风格 "…In ACL, 4171-4186.（URL 少量或缺席）"
+            # Authors (year). 链——BART 实证 4 URL 只开 4 个 seg，34/49 欠切）
+            or len(re.findall(r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)\.", seg)) >= 2):
         # 形态签名门（满足其一）：URL/CoRR 列表式（Reformer），或 APA 书目式
         # "(2016b). Surname, I." —— UDL 教材书目（Round5：旧存储的 245 条实为
         # 序言散文假阳性，真 Bibliography 区域切分后仅 59 条即缺此头型）
         _HEAD_WORDS = {"the", "a", "an", "we", "our", "this", "these", "it", "for", "as",
                        "at", "to", "of", "on", "in", "see", "note", "table", "figure"}
         cand: list[int] = []
-        for m in re.finditer(r"(?:19|20)\d{2}[a-z]?[\).]?\.\s*"
-                             r"(?:(?:URL|https?://|doi:|arxiv)[:\s]?\S+\s*)?\s*", seg):
+        # 尾锚两种：年份句点（ICLR/CoRR）或页码段句点（ACL："... In ACL, 4171-4186.（URL…）"）
+        _TAIL = (r"(?:(?:19|20)\d{2}[a-z]?[\).]?\.|(?:pp?\.)?\s*\d{1,4}[-–]\d{1,4}\)?\.)\s*"
+                 r"(?:(?:URL|https?://|doi:|arxiv)[:\s]?\S+\s*)?\s*")
+        for m in re.finditer(_TAIL, seg):
             j = m.end()
             head = seg[j:j + 60]
             # 头型二选一：Given Family, Given …（Cap cap）或 Surname, I.（APA）

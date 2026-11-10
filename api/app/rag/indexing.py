@@ -103,6 +103,9 @@ def _embed_texts(texts: list[str]) -> list[list[float]] | None:
         for i in range(0, len(texts), 8):
             batch = texts[i:i + 8]
             ok = False
+            # Round6：429 专用长退避 2/6/15s——分钟级令牌桶窗口内短退避（旧 2/4/6s
+            # 合计 ~12s）三连撞墙，dense 整轮缺席致 zh 检索崩（round5 eval 0.4 实证）
+            _BACKOFF_429 = (2.0, 6.0, 15.0)
             for attempt in range(3):
                 try:
                     resp = httpx.post(
@@ -114,7 +117,7 @@ def _embed_texts(texts: list[str]) -> list[list[float]] | None:
                     if resp.status_code == 429:  # 限流：退避后重试
                         _EMBED_LAST_ERROR = f"api:429 rate_limited (batch {i // 8})"
                         logger.warning(f"embed 限流退避 batch {i // 8} attempt {attempt}: {_EMBED_LAST_ERROR}", module="embed")
-                        time.sleep(2.0 * (attempt + 1))
+                        time.sleep(_BACKOFF_429[min(attempt, len(_BACKOFF_429) - 1)])
                         continue
                     resp.raise_for_status()
                     data = sorted(resp.json()["data"], key=lambda d: d["index"])

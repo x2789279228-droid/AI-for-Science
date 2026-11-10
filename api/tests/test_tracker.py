@@ -71,6 +71,9 @@ def test_refresh_keyword_filter_dedup_watermark(monkeypatch):
 
 
 def test_refresh_marks_known_library_items(monkeypatch):
+    # Round6：Sickle 打桩隔离——真实 OAI 顶层 cs 偶尔秒回（网络态相关），
+    # 抢走 Atom mock 路径致 2401.00001 不入库（偶发红根因）
+    monkeypatch.setattr(tracker, "_fetch_sickle", lambda *a, **k: None)
     sub = _sub("cat-cl", "category", "cs.CL")
     with db.tx() as c:
         c.execute("DELETE FROM tracked_items WHERE sub_id=?", (sub["id"],))
