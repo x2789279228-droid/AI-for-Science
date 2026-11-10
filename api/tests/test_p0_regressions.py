@@ -433,7 +433,7 @@ def test_check_quotes_reextract_two_rounds(monkeypatch):
     monkeypatch.setattr(verify.llm, "available", lambda: True)
     monkeypatch.setattr(verify, "_re_extract_quotes",
                         lambda failed, m: rounds.pop(0) if rounds else {})
-    out, guardrails = verify.check_quotes(claims, eid_map)
+    out, _ = verify.check_quotes(claims, eid_map)
     assert out[0]["quote_status"] == "verified", "第 2 轮应处理残余失败"
 
 
