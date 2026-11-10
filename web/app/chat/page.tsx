@@ -743,7 +743,7 @@ function Claims({ claims, anchors, hits, onEvidence }: {
       </p>
       {claims.map((c, i) => (
         <div key={i}
-          className={`claim ${c.status === "unsupported" ? "unverified"
+          className={`claim ${c.status === "unsupported" || c.status === "absent" ? "unverified"
             : c.status === "needs_check" ? "needs-check" : ""}`}
           onClick={() => setOpen(open === i ? null : i)}>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline",
@@ -797,7 +797,7 @@ function Claims({ claims, anchors, hits, onEvidence }: {
               </div>
             );
           })}
-          {open === i && c.status === "unsupported" && (
+          {open === i && (c.status === "unsupported" || c.status === "absent") && (
             <div className="evidence"><i>检索结果中未找到支撑此论断的原文，请人工核对。</i></div>
           )}
         </div>

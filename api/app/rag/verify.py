@@ -182,6 +182,27 @@ def check_numbers(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[di
     return claims, guardrails
 
 
+# ---------- 诚实缺失声明识别 ----------
+
+# 「未检索到/未涉及」类声明是系统的诚实负向发现（对比场景的对侧无证据时的正确
+# 输出——missing_honest 门禁验证的正是它），judge 判 no 逻辑上没错（负向声明无
+# 正向证据可推），但把它计入幻觉率是口径错误：编造内容才是幻觉，如实说"没找到"
+# 不是。Round7：L4 判 no 后，命中缺失声明的 claim 改标 absent（不计 unsupported）。
+_ABSENCE_CLAIM = re.compile(
+    r"未检索到|未涉及|未提及|未找到|未提供|未报告|没有报告|未给出|not report|"
+    r"no reported|not mention|did not|doesn't report|未明确给出|无法找到|暂未")
+
+
+def _mark_absence_claims(claims: list[dict]) -> int:
+    """judge 判 no 且声明文本即缺失声明 → status=absent（诚实负向发现）。"""
+    n = 0
+    for c in claims:
+        if c.get("status") == "unsupported" and _ABSENCE_CLAIM.search(c.get("text", "")):
+            c["status"] = "absent"
+            n += 1
+    return n
+
+
 # ---------- L4 语义支持 ----------
 
 _SYSTEM_JUDGE = (
@@ -249,6 +270,9 @@ def judge_claims(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dic
             c.pop("unverified_numbers", None)  # 已判无支撑，数值黄标被覆盖
         elif verdict == "partial" and c.get("status") == "supported":
             c["semantic_status"] = "partial"   # 保留 supported，前端可提示部分支撑
+    n_absent = _mark_absence_claims(claims)
+    if n_absent:
+        guardrails.append(f"absence_claims:{n_absent}")
     return claims, guardrails
 
 

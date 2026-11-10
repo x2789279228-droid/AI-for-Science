@@ -445,3 +445,21 @@ def test_check_quotes_no_llm_stays_unverified(monkeypatch):
     out, guardrails = verify.check_quotes(claims, eid_map)
     assert out[0]["quote_status"] == "unverified"
     assert guardrails == ["quote_unverified:1"]
+
+
+# ---------- Round7：诚实缺失声明分类 ----------
+
+def test_absence_claims_not_unsupported():
+    """「未检索到/未涉及」类声明（系统的诚实负向发现）judge 判 no 后应标 absent
+    而非 unsupported——编造才是幻觉，如实说"没找到"不是。"""
+    from app.rag import verify
+    claims = [
+        {"text": "《BERT》未涉及 WMT 2014 翻译任务", "status": "unsupported",
+         "support": [{"eid": "E1", "quote": "q"}]},
+        {"text": "BERT 达到了 88.5 的 GLUE 分数", "status": "unsupported",
+         "support": [{"eid": "E1", "quote": "q"}]},
+    ]
+    n = verify._mark_absence_claims(claims)
+    assert n == 1
+    assert claims[0]["status"] == "absent"
+    assert claims[1]["status"] == "unsupported", "编造声明仍是 unsupported"

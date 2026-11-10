@@ -1,0 +1,1712 @@
+{
+  "time": "2026-11-10 14:14:23",
+  "paper_id": "p_a19a95dbf468",
+  "recall_at5": 0.9,
+  "strict_recall_at5": 0.9,
+  "mrr_at5": 0.83,
+  "recall_at5_detail": {
+    "How many GPUs were the base models trained on?": 1,
+    "How long did the big model train for?": 1,
+    "What BLEU score did the big model achieve on EN-DE?": 1,
+    "What attention mechanism computes in constant memory?": 1,
+    "Which optimizer was used?": 1,
+    "What learning rate schedule was applied?": 1,
+    "What is the dropout applied to the sum of embeddings?": 1,
+    "How many encoder and decoder layers?": 1,
+    "What is the model dimension d_model?": 0,
+    "Which regularization prevented overfitting?": 1
+  },
+  "zh_top8_hit": 1.0,
+  "zh_dense_retry": 0,
+  "zh_nonempty": 5,
+  "retrieval_detail": {
+    "en": [
+      {
+        "question": "How many GPUs were the base models trained on?",
+        "gold_keywords": [
+          "P100"
+        ],
+        "hit": true,
+        "strict_hit": false,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "score": 0.032787,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.032258,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          },
+          {
+            "chunk_id": "c_675dcf2d5565",
+            "page": 7,
+            "score": 0.031498,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (in"
+          },
+          {
+            "chunk_id": "c_59a4abd460cc",
+            "page": 6,
+            "score": 0.03101,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded using byte-pair encoding [3], "
+          },
+          {
+            "chunk_id": "c_6371c06edfe2",
+            "page": 7,
+            "score": 0.015873,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "maximum output length during\ninference to input length+ 5 0, but terminate early when possible [34].\nTable 2 summarizes our results and compares our translation"
+          }
+        ]
+      },
+      {
+        "question": "How long did the big model train for?",
+        "gold_keywords": [
+          "3.5"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_675dcf2d5565",
+            "page": 7,
+            "score": 0.032266,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (in"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.032002,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          },
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "score": 0.031778,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          },
+          {
+            "chunk_id": "c_9710fea11de1",
+            "page": 9,
+            "score": 0.03125,
+            "kind": "table",
+            "table_boosted": false,
+            "text": "[表格 t3]\n|  | dmodel N | dff | h | dk | du | Pdrop |  | train steps | PPL (dev) | BLEU (dev) | params ×106 |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| "
+          },
+          {
+            "chunk_id": "c_ca7eb2ddc50e",
+            "page": 7,
+            "score": 0.016129,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 6 Results（pp.6-6）：On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previ"
+          }
+        ]
+      },
+      {
+        "question": "What BLEU score did the big model achieve on EN-DE?",
+        "gold_keywords": [
+          "28.4"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_44f100f8d188",
+            "page": 8,
+            "score": 0.032522,
+            "kind": "table",
+            "table_boosted": false,
+            "text": "[表格 t2]\n| Model | BLEU | Training Cost (FLOPs) |\n|---|---|---|\n| EN-DE | EN-FR | EN-DE | EN-FR |\n| ByteNet [16] | 23.75 |  |  |  |\n| Deep-Att + PosUnk [35] |  |"
+          },
+          {
+            "chunk_id": "c_ca7eb2ddc50e",
+            "page": 7,
+            "score": 0.032522,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 6 Results（pp.6-6）：On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previ"
+          },
+          {
+            "chunk_id": "c_675dcf2d5565",
+            "page": 7,
+            "score": 0.031746,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (in"
+          },
+          {
+            "chunk_id": "c_5ec8f1270891",
+            "page": 1,
+            "score": 0.015625,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "rman translation task, improving over the existing best results, including\nensembles by over 2 BLEU.\nOn the WMT 2014 English-to-French translation task,\nour mod"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.015625,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          }
+        ]
+      },
+      {
+        "question": "What attention mechanism computes in constant memory?",
+        "gold_keywords": [
+          "length",
+          "constant"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 3,
+        "top5": [
+          {
+            "chunk_id": "c_700a661f2822",
+            "page": 3,
+            "score": 0.016393,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "o n } ( Q , K , V ) = \\mathrm { s o f t m a x } ( \\frac { Q K ^ { T } } { \\sqrt { d _ { k } } } ) V\nThe two most commonly used attention functions are additive "
+          },
+          {
+            "chunk_id": "c_872cf5d5ba5c",
+            "page": 1,
+            "score": 0.016393,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "mance in case of the latter. The fundamental\nconstraint of sequential computation, however, remains.\nAttention mechanisms have become an integral part of compel"
+          },
+          {
+            "chunk_id": "c_9b677d2cda29",
+            "page": 8,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "To evaluate the importance of different components of the Transformer, we varied our base model\nin different ways, measuring the change in performance on Englis"
+          },
+          {
+            "chunk_id": "c_ea501cf4b4b0",
+            "page": 10,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "ray Kavukcuoglu. Neural machine translation in linear time. arXiv preprint arXiv:1610.10099v2,\n2017.\n[17] Yoon Kim, Carl Denton, Luong Hoang, and Alexander M. R"
+          },
+          {
+            "chunk_id": "c_992f7c6dc1d0",
+            "page": 2,
+            "score": 0.015873,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 3 Model Architecture（pp.1-1）：Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-hea"
+          }
+        ]
+      },
+      {
+        "question": "Which optimizer was used?",
+        "gold_keywords": [
+          "Adam"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_055bb347a26a",
+            "page": 7,
+            "score": 0.032787,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of tra"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.032258,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          },
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "score": 0.031258,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          },
+          {
+            "chunk_id": "c_59a4abd460cc",
+            "page": 6,
+            "score": 0.03125,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded using byte-pair encoding [3], "
+          },
+          {
+            "chunk_id": "c_adf1bf92510c",
+            "page": 6,
+            "score": 0.015873,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 5 Training（pp.5-5）：We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded usin"
+          }
+        ]
+      },
+      {
+        "question": "What learning rate schedule was applied?",
+        "gold_keywords": [
+          "warmup"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_055bb347a26a",
+            "page": 7,
+            "score": 0.032787,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of tra"
+          },
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "score": 0.032002,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          },
+          {
+            "chunk_id": "c_315d2f0e6571",
+            "page": 7,
+            "score": 0.03125,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We employ three types of regularization during training:\nResidual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-l"
+          },
+          {
+            "chunk_id": "c_ade91222b8f5",
+            "page": 5,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully\nconnected feed-forward network, which is applied to each pos"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.015873,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          }
+        ]
+      },
+      {
+        "question": "What is the dropout applied to the sum of embeddings?",
+        "gold_keywords": [
+          "residual"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_315d2f0e6571",
+            "page": 7,
+            "score": 0.032787,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We employ three types of regularization during training:\nResidual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-l"
+          },
+          {
+            "chunk_id": "c_a5f02c040e2e",
+            "page": 7,
+            "score": 0.032002,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "tend dropout\n[30] to attention. We implement attention dropout by dropping out attention weights as,\n\\operatorname { A t t e n t i o n } ( Q , K , V ) = \\operat"
+          },
+          {
+            "chunk_id": "c_bb87296ed326",
+            "page": 5,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Similarly to other sequence transduction models, we use learned embeddings to convert the input\ntokens and output tokens to vectors of dimensiond _ { \\mathrm { "
+          },
+          {
+            "chunk_id": "c_287f16e14f7a",
+            "page": 5,
+            "score": 0.015873,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Since our model contains no recurrence and no convolution, in order for the model to make use of the\norder of the sequence, we must inject some information abou"
+          },
+          {
+            "chunk_id": "c_20b17e346bdd",
+            "page": 8,
+            "score": 0.015625,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "-head\nattention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.\nIn Table 3 rows (B), we observe that reducing the attention"
+          }
+        ]
+      },
+      {
+        "question": "How many encoder and decoder layers?",
+        "gold_keywords": [
+          "6",
+          "six"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_d64f7919a9ef",
+            "page": 2,
+            "score": 0.032522,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.\nDecoder: The decoder is also composed of a stack ofN = 6iden"
+          },
+          {
+            "chunk_id": "c_c9b17bde3e0e",
+            "page": 2,
+            "score": 0.016393,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the "
+          },
+          {
+            "chunk_id": "c_910a1851f1b3",
+            "page": 4,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "The Transformer uses multi-head attention in three different ways:\n• In the encoder-decoder attention layers, the queries come from the previous decoder layer,\n"
+          },
+          {
+            "chunk_id": "c_fbebcad05cd9",
+            "page": 4,
+            "score": 0.015873,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "the\ntypical encoder-decoder attention mechanisms in sequence-to-sequence models such as\n[34, 2, 9].\n• The encoder contains self-attention layers. In a self-atte"
+          },
+          {
+            "chunk_id": "c_992f7c6dc1d0",
+            "page": 2,
+            "score": 0.015873,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 3 Model Architecture（pp.1-1）：Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-hea"
+          }
+        ]
+      },
+      {
+        "question": "What is the model dimension d_model?",
+        "gold_keywords": [
+          "512"
+        ],
+        "hit": false,
+        "strict_hit": true,
+        "first_hit_rank": 0,
+        "top5": [
+          {
+            "chunk_id": "c_e7e3f227b986",
+            "page": 4,
+            "score": 0.032522,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "} ^ { V } ~ \\in\n\\mathbb { R } ^ { d _ { \\mathrm { m o d e l } } \\times d _ { \\boldsymbol { v } } }.\nIn this work we employh \\ : = \\ : 8parallel attention layers"
+          },
+          {
+            "chunk_id": "c_ec6e1baa75a6",
+            "page": 5,
+            "score": 0.032018,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": ", 2 i + 1 ) } = c o s ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\end{array}\nwhere pos is the position andiis the dimension. That is, eac"
+          },
+          {
+            "chunk_id": "c_bb87296ed326",
+            "page": 5,
+            "score": 0.031258,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Similarly to other sequence transduction models, we use learned embeddings to convert the input\ntokens and output tokens to vectors of dimensiond _ { \\mathrm { "
+          },
+          {
+            "chunk_id": "c_287f16e14f7a",
+            "page": 5,
+            "score": 0.03101,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Since our model contains no recurrence and no convolution, in order for the model to make use of the\norder of the sequence, we must inject some information abou"
+          },
+          {
+            "chunk_id": "c_d64f7919a9ef",
+            "page": 2,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.\nDecoder: The decoder is also composed of a stack ofN = 6iden"
+          }
+        ]
+      },
+      {
+        "question": "Which regularization prevented overfitting?",
+        "gold_keywords": [
+          "dropout"
+        ],
+        "hit": true,
+        "strict_hit": true,
+        "first_hit_rank": 1,
+        "top5": [
+          {
+            "chunk_id": "c_315d2f0e6571",
+            "page": 7,
+            "score": 0.032522,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We employ three types of regularization during training:\nResidual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-l"
+          },
+          {
+            "chunk_id": "c_df439de66b28",
+            "page": 10,
+            "score": 0.032018,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "Neural machine translation of rare words\nwith subword units. arXiv preprint arXiv:1508.07909, 2015.\n[29] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, And"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "score": 0.031258,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          },
+          {
+            "chunk_id": "c_055bb347a26a",
+            "page": 7,
+            "score": 0.016129,
+            "kind": "detail",
+            "table_boosted": false,
+            "text": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of tra"
+          },
+          {
+            "chunk_id": "c_adf1bf92510c",
+            "page": 6,
+            "score": 0.015873,
+            "kind": "summary",
+            "table_boosted": false,
+            "text": "[章节概览] 5 Training（pp.5-5）：We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded usin"
+          }
+        ]
+      }
+    ],
+    "zh": [
+      {
+        "question": "注意力机制是怎么计算的？",
+        "gold_keyword": "attention",
+        "hit": true,
+        "top8": [
+          {
+            "chunk_id": "c_700a661f2822",
+            "page": 3,
+            "text": "o n } ( Q , K , V ) = \\mathrm { s o f t m a x } ( \\frac { Q K ^ { T } } { \\sqrt { d _ { k } } } ) V\nThe two most commonly used attention functions are additive "
+          },
+          {
+            "chunk_id": "c_aa69e7a2b9c3",
+            "page": 3,
+            "text": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimensiond _ { k }, and values of dimensio"
+          },
+          {
+            "chunk_id": "c_eb7ff5b32dae",
+            "page": 2,
+            "text": "ures that the\npredictions for positionican depend only on the known outputs at positions less thani.\nAn attention function can be described as mapping a query a"
+          },
+          {
+            "chunk_id": "c_576f50a6f050",
+            "page": 4,
+            "text": "Instead of performing a single attention function withd _ { \\mathrm { m o d e l } }-dimensional keys, values and queries,\nwe found it beneficial to linearly pro"
+          },
+          {
+            "chunk_id": "c_910a1851f1b3",
+            "page": 4,
+            "text": "The Transformer uses multi-head attention in three different ways:\n• In the encoder-decoder attention layers, the queries come from the previous decoder layer,\n"
+          },
+          {
+            "chunk_id": "c_c256391574c8",
+            "page": 3,
+            "text": "fficient in practice, since it can be implemented using highly optimized\nmatrix multiplication code.\nWhile for small values ofd _ { k }the two mechanisms perfor"
+          },
+          {
+            "chunk_id": "c_ac51ed14f67d",
+            "page": 4,
+            "text": "resentation\nsubspaces at different positions. With a single attention head, averaging inhibits this.\n\\begin{array} { r l } & { \\mathrm { M u l t i H e a d } ( Q"
+          },
+          {
+            "chunk_id": "c_fbebcad05cd9",
+            "page": 4,
+            "text": "the\ntypical encoder-decoder attention mechanisms in sequence-to-sequence models such as\n[34, 2, 9].\n• The encoder contains self-attention layers. In a self-atte"
+          }
+        ]
+      },
+      {
+        "question": "训练用了多少块 GPU？",
+        "gold_keyword": "GPU",
+        "hit": true,
+        "top8": [
+          {
+            "chunk_id": "c_6371c06edfe2",
+            "page": 7,
+            "text": "maximum output length during\ninference to input length+ 5 0, but terminate early when possible [34].\nTable 2 summarizes our results and compares our translation"
+          },
+          {
+            "chunk_id": "c_c87a629b3c43",
+            "page": 1,
+            "text": "the art in\ntranslation quality after being trained for as little as twelve hours on eight P100 GPUs.\nThe goal of reducing sequential computation also forms the "
+          },
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          },
+          {
+            "chunk_id": "c_055bb347a26a",
+            "page": 7,
+            "text": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of tra"
+          },
+          {
+            "chunk_id": "c_adf1bf92510c",
+            "page": 6,
+            "text": "[章节概览] 5 Training（pp.5-5）：We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded usin"
+          },
+          {
+            "chunk_id": "c_59a4abd460cc",
+            "page": 6,
+            "text": "We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded using byte-pair encoding [3], "
+          },
+          {
+            "chunk_id": "c_675dcf2d5565",
+            "page": 7,
+            "text": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (in"
+          },
+          {
+            "chunk_id": "c_5ec8f1270891",
+            "page": 1,
+            "text": "rman translation task, improving over the existing best results, including\nensembles by over 2 BLEU.\nOn the WMT 2014 English-to-French translation task,\nour mod"
+          }
+        ]
+      },
+      {
+        "question": "模型在 WMT14 英德翻译上拿到了多少 BLEU？",
+        "gold_keyword": "BLEU",
+        "hit": true,
+        "top8": [
+          {
+            "chunk_id": "c_ca7eb2ddc50e",
+            "page": 7,
+            "text": "[章节概览] 6 Results（pp.6-6）：On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previ"
+          },
+          {
+            "chunk_id": "c_5ec8f1270891",
+            "page": 1,
+            "text": "rman translation task, improving over the existing best results, including\nensembles by over 2 BLEU.\nOn the WMT 2014 English-to-French translation task,\nour mod"
+          },
+          {
+            "chunk_id": "c_675dcf2d5565",
+            "page": 7,
+            "text": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (in"
+          },
+          {
+            "chunk_id": "c_44f100f8d188",
+            "page": 8,
+            "text": "[表格 t2]\n| Model | BLEU | Training Cost (FLOPs) |\n|---|---|---|\n| EN-DE | EN-FR | EN-DE | EN-FR |\n| ByteNet [16] | 23.75 |  |  |  |\n| Deep-Att + PosUnk [35] |  |"
+          },
+          {
+            "chunk_id": "c_c19962f8ff09",
+            "page": 1,
+            "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on comp"
+          },
+          {
+            "chunk_id": "c_adf1bf92510c",
+            "page": 6,
+            "text": "[章节概览] 5 Training（pp.5-5）：We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded usin"
+          },
+          {
+            "chunk_id": "c_20b17e346bdd",
+            "page": 8,
+            "text": "-head\nattention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.\nIn Table 3 rows (B), we observe that reducing the attention"
+          },
+          {
+            "chunk_id": "c_a5f02c040e2e",
+            "page": 7,
+            "text": "tend dropout\n[30] to attention. We implement attention dropout by dropping out attention weights as,\n\\operatorname { A t t e n t i o n } ( Q , K , V ) = \\operat"
+          }
+        ]
+      },
+      {
+        "question": "编码器和解码器各有几层？",
+        "gold_keyword": "encoder",
+        "hit": true,
+        "top8": [
+          {
+            "chunk_id": "c_992f7c6dc1d0",
+            "page": 2,
+            "text": "[章节概览] 3 Model Architecture（pp.1-1）：Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-hea"
+          },
+          {
+            "chunk_id": "c_c9b17bde3e0e",
+            "page": 2,
+            "text": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the "
+          },
+          {
+            "chunk_id": "c_d64f7919a9ef",
+            "page": 2,
+            "text": "as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.\nDecoder: The decoder is also composed of a stack ofN = 6iden"
+          },
+          {
+            "chunk_id": "c_ade91222b8f5",
+            "page": 5,
+            "text": "In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully\nconnected feed-forward network, which is applied to each pos"
+          },
+          {
+            "chunk_id": "c_910a1851f1b3",
+            "page": 4,
+            "text": "The Transformer uses multi-head attention in three different ways:\n• In the encoder-decoder attention layers, the queries come from the previous decoder layer,\n"
+          },
+          {
+            "chunk_id": "c_fbebcad05cd9",
+            "page": 4,
+            "text": "the\ntypical encoder-decoder attention mechanisms in sequence-to-sequence models such as\n[34, 2, 9].\n• The encoder contains self-attention layers. In a self-atte"
+          },
+          {
+            "chunk_id": "c_08b4c93f88a2",
+            "page": 1,
+            "text": "ransformer, motivate self-attention and\ndiscuss its advantages over models such as [15, 16] and [9].\nMost competitive neural sequence transduction models have a"
+          },
+          {
+            "chunk_id": "c_aea63054f627",
+            "page": 5,
+            "text": "In this section we compare various aspects of self-attention layers to the recurrent and convolu-\ntional layers commonly used for mapping one variable-length se"
+          }
+        ]
+      },
+      {
+        "question": "使用了什么优化器？",
+        "gold_keyword": "Adam",
+        "hit": true,
+        "top8": [
+          {
+            "chunk_id": "c_055bb347a26a",
+            "page": 7,
+            "text": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of tra"
+          },
+          {
+            "chunk_id": "c_84babc03f80d",
+            "page": 7,
+            "text": "(big) model trained for English-to-French used\ndropout rateP _ { d r o p } = 0 . 1, instead of 0.3.\nFor the base models, we used a single model obtained by aver"
+          },
+          {
+            "chunk_id": "c_28b0ae27d4ba",
+            "page": 1,
+            "text": "Ashish Vaswani∗\nGoogle Brain\navaswani@google.com\nNoam Shazeer∗\nGoogle Brain\nnoam@google.com\nNiki Parmar∗\nGoogle Research\nnikip@google.com\nJakob Uszkoreit∗\nGoogl"
+          },
+          {
+            "chunk_id": "c_315d2f0e6571",
+            "page": 7,
+            "text": "We employ three types of regularization during training:\nResidual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-l"
+          },
+          {
+            "chunk_id": "c_c19962f8ff09",
+            "page": 1,
+            "text": "edu\nŁukasz Kaiser∗\nGoogle Brain\nlukaszkaiser@google.com\nIllia Polosukhin∗\nillia.polosukhin@gmail.com\nThe dominant sequence transduction models are based on comp"
+          },
+          {
+            "chunk_id": "c_c9b17bde3e0e",
+            "page": 2,
+            "text": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the "
+          },
+          {
+            "chunk_id": "c_e7e3f227b986",
+            "page": 4,
+            "text": "} ^ { V } ~ \\in\n\\mathbb { R } ^ { d _ { \\mathrm { m o d e l } } \\times d _ { \\boldsymbol { v } } }.\nIn this work we employh \\ : = \\ : 8parallel attention layers"
+          },
+          {
+            "chunk_id": "c_da465caeaaa8",
+            "page": 7,
+            "text": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step t"
+          }
+        ]
+      }
+    ]
+  },
+  "refusal_accuracy": 1.0,
+  "generative": {
+    "claims": {
+      "total": 32,
+      "supported": 32,
+      "needs_check": 0,
+      "unsupported": 0
+    },
+    "supported_ratio": 1.0,
+    "hallucination_rate": 0.0,
+    "anchor_precision": 0.96,
+    "anchor_claims": 45,
+    "quote_unverified_rate": 0.06,
+    "anchor_detail_sample": [
+      {
+        "q": "How many GPUs were the base mo",
+        "block_id": "b73",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How long did the big model tra",
+        "block_id": "b73",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How long did the big model tra",
+        "block_id": "b73",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How long did the big model tra",
+        "block_id": "b87",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What BLEU score did the big mo",
+        "block_id": "b87",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What BLEU score did the big mo",
+        "block_id": "b87",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What BLEU score did the big mo",
+        "block_id": null,
+        "pass": false,
+        "reason": "no_block_anchor"
+      },
+      {
+        "q": "What BLEU score did the big mo",
+        "block_id": "b11",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "Which optimizer was used?",
+        "block_id": "b75",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "Which optimizer was used?",
+        "block_id": "b75",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "Which optimizer was used?",
+        "block_id": "b75",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "Which optimizer was used?",
+        "block_id": "b75",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What learning rate schedule wa",
+        "block_id": null,
+        "pass": false,
+        "reason": "no_block_anchor"
+      },
+      {
+        "q": "What learning rate schedule wa",
+        "block_id": "b77",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What learning rate schedule wa",
+        "block_id": "b77",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the dropout applied to",
+        "block_id": "b80",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How many encoder and decoder l",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How many encoder and decoder l",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "How many encoder and decoder l",
+        "block_id": "b27",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "What is the model dimension d_",
+        "block_id": "b26",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "注意力机制是怎么计算的？",
+        "block_id": "b30",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "注意力机制是怎么计算的？",
+        "block_id": "b32",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "注意力机制是怎么计算的？",
+        "block_id": "b32",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "注意力机制是怎么计算的？",
+        "block_id": "b33",
+        "block_span": false,
+        "pass": true
+      },
+      {
+        "q": "注意力机制是怎么计算的？",
+        "block_id": "b47",
+        "block_span": false,
+        "pass": true
+      }
+    ],
+    "best_anchors_ok": true,
+    "stream_usage": {
+      "model": "doubao-seed-2.1-lite",
+      "prompt_tokens": 1826,
+      "completion_tokens": 70,
+      "latency_ms": 1768
+    }
+  },
+  "generative_trace": {
+    "question": "How many GPUs were the base models trained on?",
+    "answer": "The base models were trained on one machine with 8 NVIDIA P100 GPUs [E1].",
+    "mode": "generative",
+    "claims": [
+      {
+        "text": "The base models were trained on one machine with 8 NVIDIA P100 GPUs.",
+        "status": "supported",
+        "support": [
+          {
+            "eid": "E1",
+            "page": 7,
+            "section_path": "5.2 Hardware and Schedule",
+            "chunk_id": "c_da465caeaaa8",
+            "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
+            "block_id": "b73",
+            "block_bbox": [
+              0.1732,
+              0.1907,
+              0.8252,
+              0.2614
+            ]
+          }
+        ],
+        "quote_coverages": [
+          1.0
+        ],
+        "quote_status": "verified",
+        "quote_coverage": 1.0
+      }
+    ],
+    "anchors": {
+      "E1": {
+        "page": 7,
+        "section_path": "5.2 Hardware and Schedule",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1732,
+          0.1907,
+          0.8252,
+          0.2614
+        ],
+        "chunk_id": "c_da465caeaaa8",
+        "block_ids": [
+          "b73"
+        ]
+      },
+      "E2": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_675dcf2d5565",
+        "block_ids": [
+          "b87",
+          "b88"
+        ]
+      },
+      "E3": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_6371c06edfe2",
+        "block_ids": [
+          "b89",
+          "b90"
+        ]
+      },
+      "E4": {
+        "page": 1,
+        "section_path": "_front",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1879,
+          0.2323,
+          0.3529,
+          0.2753
+        ],
+        "chunk_id": "c_5ec8f1270891",
+        "block_ids": [
+          "b11"
+        ]
+      },
+      "E5": {
+        "page": 1,
+        "section_path": "1 Introduction",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.7172,
+          0.8252,
+          0.7866
+        ],
+        "chunk_id": "c_872cf5d5ba5c",
+        "block_ids": [
+          "b15",
+          "b16",
+          "b17"
+        ]
+      },
+      "E6": {
+        "page": 7,
+        "section_path": "6 Results",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1748,
+          0.827,
+          0.8252,
+          0.9116
+        ],
+        "chunk_id": "c_84babc03f80d",
+        "block_ids": [
+          "b88",
+          "b89"
+        ]
+      },
+      "E7": {
+        "page": 8,
+        "section_path": "6.3 English Constituency Parsing",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.2092,
+          0.1174,
+          0.7892,
+          0.3081
+        ],
+        "chunk_id": "c_44f100f8d188",
+        "block_ids": [
+          "t2"
+        ]
+      },
+      "E8": {
+        "page": 10,
+        "section_path": "7 Conclusion",
+        "paper_id": "p_a19a95dbf468",
+        "paper_label": "",
+        "bbox": [
+          0.1765,
+          0.1212,
+          0.8235,
+          0.1616
+        ],
+        "chunk_id": "c_62a16ac8f6e0",
+        "block_ids": [
+          "b108",
+          "b109",
+          "b110"
+        ]
+      }
+    },
+    "guardrails": [],
+    "elapsed_s": 5.8,
+    "conversation_id": "gold_1f6a5c40",
+    "thread_id": "gold_1f6a5c40:1",
+    "model": "doubao-seed-2.1-lite",
+    "usage": {
+      "prompt_tokens": 1826,
+      "completion_tokens": 70,
+      "latency_ms": 1768
+    }
+  },
+  "replay_race": {
+    "rounds": 10,
+    "ok": 10,
+    "detail": [
+      {
+        "round": 1,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 2,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 3,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 4,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 5,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 6,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 7,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 8,
+        "status": 200,
+        "events": 37
+      },
+      {
+        "round": 9,
+        "status": 200,
+        "events": 34
+      },
+      {
+        "round": 10,
+        "status": 200,
+        "events": 75
+      }
+    ]
+  },
+  "translate": [
+    {
+      "page": 0,
+      "ok": true,
+      "elapsed_s": 0.0,
+      "cached_blocks": 27,
+      "within_60s": true
+    },
+    {
+      "page": 1,
+      "ok": true,
+      "elapsed_s": 0.0,
+      "cached_blocks": 27,
+      "within_60s": true
+    }
+  ],
+  "compare": {
+    "ok": false,
+    "questions": 3,
+    "rows": null,
+    "cells": 12,
+    "found": 11,
+    "coverage": 0.92,
+    "eid_coverage": 1.0,
+    "claims": 17,
+    "unsupported_ratio": 0.06,
+    "quote_unverified_rate": 0.0,
+    "gold_cell_acc": 0.67,
+    "missing_honest": 1.0,
+    "cell_quote_provenance": 0.82,
+    "fabrication": false,
+    "questions_detail": [
+      {
+        "question": "对比这两篇论文的预训练目标与上下文表示方式的核心差异",
+        "ok": true,
+        "rows": 2,
+        "cells": 4,
+        "found": 4,
+        "p_labels": true,
+        "one_sided": false,
+        "gold_eval": {
+          "gold_cells": [
+            {
+              "label": "P1",
+              "expect": "found",
+              "pass": true,
+              "row_matched": true,
+              "cell_found": true
+            },
+            {
+              "label": "P2",
+              "expect": "found",
+              "pass": true,
+              "row_matched": true,
+              "cell_found": true
+            }
+          ],
+          "gold_pass": 2,
+          "gold_total": 2,
+          "missing_total": 0,
+          "missing_pass": 0,
+          "fabrication": false
+        },
+        "answer_full": "P1（《Attention Is All You Need》）未检索到与预训练目标、上下文表示方式相关的明确论述，仅提及自注意力机制在句子表示维度下的计算特性[E6]。\nP2（《BERT》）的预训练目标包含掩码语言模型（MLM）与下一句预测两项任务，其中MLM通过随机掩码部分输入token、预测原始词表ID的方式，打破了传统预训练的单向性约束，使模型能够融合左右两侧上下文，预训练得到深度双向的Transformer表示[E2][E5][E7]。",
+        "answer_excerpt": "P1（《Attention Is All You Need》）未检索到与预训练目标、上下文表示方式相关的明确论述，仅提及自注意力机制在句子表示维度下的计算特性[E6]。\nP2（《BERT》）的预训练目标包含掩码语言模型（MLM）与下一句预测两项任务，其中MLM通过随机掩码部分输入token、预测原始词表ID的方式，打破了传统预训练的单向性约束，使模型能够融合左右两侧上下文，预训练得到深度双向的Transformer表示[E2][E5][E7]。",
+        "table_excerpt": [
+          {
+            "dimension": "对比这两篇论文的预训练目标与上下文表示方式的核心差异",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_ef570232491d",
+                "page": 7,
+                "section_path": "Why Self-Attention",
+                "quote": "[章节概览] Why Self-Attention（pp.6-6）：length n is smaller than the representation dimensionality d, which is most often the case with\nsentence representations used by state-of-the-art models in machine tr",
+                "block_ids": [
+                  "b99",
+                  "b100",
+                  "b101",
+                  "b102",
+                  "b103",
+                  "b104",
+                  "b105",
+                  "b106"
+                ],
+                "bbox": [
+                  0.1761,
+                  0.0937,
+                  0.8235,
+                  0.1754
+                ],
+                "score": 0.032002,
+                "eid": "E6"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": true,
+                "chunk_id": "c_f13da17ced3b",
+                "page": 1,
+                "section_path": "_front",
+                "quote": "tasks such\nas question answering, where it is crucial to incor-\nporate context from both directions.\nIn this paper, we improve the fine-tuning based\napproaches by proposing BERT: Bidirectional\nEncoder",
+                "block_ids": [
+                  "b9",
+                  "b10"
+                ],
+                "bbox": [
+                  0.1815,
+                  0.1522,
+                  0.8252,
+                  0.2033
+                ],
+                "score": 0.032266,
+                "eid": "E2"
+              }
+            ]
+          },
+          {
+            "dimension": "key methodological differences between the two papers",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_0f21212ee3b7",
+                "page": 1,
+                "section_path": "_front",
+                "quote": "applying it successfully to English constituency parsing both with\nlarge and limited training data.\n∗Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and ",
+                "block_ids": [
+                  "b16",
+                  "b17"
+                ],
+                "bbox": [
+                  0.2031,
+                  0.092,
+                  0.7972,
+                  0.1247
+                ],
+                "score": 0.031754,
+                "eid": "E3"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": true,
+                "chunk_id": "c_e1188128cc46",
+                "page": 14,
+                "section_path": "B\nDetailed Experimental Setup",
+                "quote": "The most comparable existing pre-training\nmethod to BERT is OpenAI GPT, which trains a\nleft-to-right Transformer LM on a large text cor-\npus. In fact, many of the design decisions in BERT\nwere intenti",
+                "block_ids": [
+                  "b188"
+                ],
+                "bbox": [
+                  0.1193,
+                  0.4126,
+                  0.4874,
+                  0.6029
+                ],
+                "score": 0.030536,
+                "eid": "E4"
+              }
+            ]
+          }
+        ],
+        "guardrails": [
+          "absence_claims:1"
+        ]
+      },
+      {
+        "question": "对比这两篇论文在 WMT 2014 英德翻译任务上的 BLEU 分数",
+        "ok": true,
+        "rows": 2,
+        "cells": 4,
+        "found": 3,
+        "p_labels": true,
+        "one_sided": true,
+        "gold_eval": {
+          "gold_cells": [
+            {
+              "label": "P1",
+              "expect": "found",
+              "pass": true,
+              "row_matched": true,
+              "cell_found": true
+            },
+            {
+              "label": "P2",
+              "expect": "missing",
+              "pass": true,
+              "cell_found": false,
+              "honest_phrase": true,
+              "fabrication": false
+            }
+          ],
+          "gold_pass": 2,
+          "gold_total": 2,
+          "missing_total": 1,
+          "missing_pass": 1,
+          "fabrication": false
+        },
+        "answer_full": "针对 WMT 2014 英德翻译任务的 BLEU 分数对比，两篇论文的相关信息如下：\n- P1（《Attention Is All You Need》）：其提出的 Transformer 大模型在该任务上取得了 28.4 BLEU 的成绩，较此前最优结果（包含集成模型）提升超过 2 BLEU，创下新的单模型最优纪录，训练耗时为 8 张 P100 GPU 运行 3.5 天[E5][E7]。\n- P2（《BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding》）：未检索到该论文涉及 WMT 2014 英德翻译任务 BLEU 分数的相关内容。",
+        "answer_excerpt": "针对 WMT 2014 英德翻译任务的 BLEU 分数对比，两篇论文的相关信息如下：\n- P1（《Attention Is All You Need》）：其提出的 Transformer 大模型在该任务上取得了 28.4 BLEU 的成绩，较此前最优结果（包含集成模型）提升超过 2 BLEU，创下新的单模型最优纪录，训练耗时为 8 张 P100 GPU 运行 3.5 天[E5][E7]。\n- P2（《BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding》）：未检索到该论文涉及 WMT 2014 英德翻译任务 BLEU 分数的相关内容。",
+        "table_excerpt": [
+          {
+            "dimension": "对比这两篇论文在 WMT 2014 英德翻译任务上的 BLEU 分数",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_a5015883e90f",
+                "page": 1,
+                "section_path": "_front",
+                "quote": "man translation task, improving over the existing best results, including\nensembles, by over 2 BLEU.\nOn the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-",
+                "block_ids": [
+                  "b16"
+                ],
+                "bbox": [
+                  0.2031,
+                  0.092,
+                  0.7972,
+                  0.1247
+                ],
+                "score": 0.032522,
+                "eid": "E1"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": false,
+                "reason": "weak_match"
+              }
+            ]
+          },
+          {
+            "dimension": "key methodological differences between the two papers",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_bfe8eb9f8117",
+                "page": 6,
+                "section_path": "Embeddings and Softmax",
+                "quote": "ation that can\nbe parallelized, as measured by the minimum number of sequential operations required.\nThe third is the path length between long-range dependencies in the network. Learning long-range\nde",
+                "block_ids": [
+                  "b95",
+                  "b96"
+                ],
+                "bbox": [
+                  0.176,
+                  0.09,
+                  0.8235,
+                  0.13
+                ],
+                "score": 0.032266,
+                "eid": "E3"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": true,
+                "chunk_id": "c_e1188128cc46",
+                "page": 14,
+                "section_path": "B\nDetailed Experimental Setup",
+                "quote": "The most comparable existing pre-training\nmethod to BERT is OpenAI GPT, which trains a\nleft-to-right Transformer LM on a large text cor-\npus. In fact, many of the design decisions in BERT\nwere intenti",
+                "block_ids": [
+                  "b188"
+                ],
+                "bbox": [
+                  0.1193,
+                  0.4126,
+                  0.4874,
+                  0.6029
+                ],
+                "score": 0.032787,
+                "eid": "E4"
+              }
+            ]
+          }
+        ],
+        "guardrails": [
+          "absence_claims:1",
+          "compare_one_sided:1/2"
+        ]
+      },
+      {
+        "question": "对比这两篇论文的模型层数与参数量",
+        "ok": false,
+        "rows": 2,
+        "cells": 4,
+        "found": 4,
+        "p_labels": true,
+        "one_sided": false,
+        "gold_eval": {
+          "gold_cells": [
+            {
+              "label": "P1",
+              "expect": "found",
+              "pass": false,
+              "row_matched": true,
+              "cell_found": true
+            },
+            {
+              "label": "P2",
+              "expect": "found",
+              "pass": false,
+              "row_matched": true,
+              "cell_found": true
+            }
+          ],
+          "gold_pass": 0,
+          "gold_total": 2,
+          "missing_total": 0,
+          "missing_pass": 0,
+          "fabrication": false
+        },
+        "answer_full": "针对“对比这两篇论文的模型层数与参数量”这一问题，两篇论文的相关信息如下：\n- P1（《Attention Is All You Need》）：仅提及Transformer整体架构采用堆叠自注意力与逐位置全连接层构成编码器、解码器堆栈[E1]，同时给出前馈网络的输入输出维度为dmodel=512、内层维度为dff=2048[E5]，未检索到关于模型层数、参数量的明确描述。\n- P2（《BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding》）：仅说明会训练层数、隐藏单元数、注意力头数各不相同的多个BERT模型以探究模型规模对微调任务准确率的影响[E2]，未检索到关于具体模型层数、参数量的明确描述。",
+        "answer_excerpt": "针对“对比这两篇论文的模型层数与参数量”这一问题，两篇论文的相关信息如下：\n- P1（《Attention Is All You Need》）：仅提及Transformer整体架构采用堆叠自注意力与逐位置全连接层构成编码器、解码器堆栈[E1]，同时给出前馈网络的输入输出维度为dmodel=512、内层维度为dff=2048[E5]，未检索到关于模型层数、参数量的明确描述。\n- P2（《BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding》）：仅说明会训练层数、隐藏单元数、注意力头数各不相同的多个BERT模型以探究模型规模对微调任务准确率的影响[E2]，未检索到关于具体模型层数、参数量的明确描述。",
+        "table_excerpt": [
+          {
+            "dimension": "对比这两篇论文的模型层数与参数量",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_8fe397d8cdb3",
+                "page": 3,
+                "section_path": "Model Architecture",
+                "quote": "[章节概览] Model Architecture（pp.2-2）：Figure 1: The Transformer - model architecture.\nThe Transformer follows this overall architecture using stacked self-attention and point-wise, fully\nconnected layers ",
+                "block_ids": [
+                  "b34",
+                  "b35",
+                  "b36",
+                  "b37",
+                  "b38",
+                  "b39",
+                  "b40",
+                  "b41"
+                ],
+                "bbox": [
+                  0.3432,
+                  0.511,
+                  0.6568,
+                  0.5236
+                ],
+                "score": 0.032018,
+                "eid": "E1"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": true,
+                "chunk_id": "c_f877a6c9c049",
+                "page": 8,
+                "section_path": "5.2\nEffect of Model Size",
+                "quote": "werful\nthan a deep bidirectional model, since it can use\nboth left and right context at every layer.\nIn this section, we explore the effect of model size\non fine-tuning task accuracy. We trained a num",
+                "block_ids": [
+                  "b84",
+                  "b86"
+                ],
+                "bbox": [
+                  0.1193,
+                  0.3662,
+                  0.4874,
+                  0.4459
+                ],
+                "score": 0.032787,
+                "eid": "E2"
+              }
+            ]
+          },
+          {
+            "dimension": "key methodological differences between the two papers",
+            "cells": [
+              {
+                "paper_id": "p_5e84333e8e1d",
+                "found": true,
+                "chunk_id": "c_bfe8eb9f8117",
+                "page": 6,
+                "section_path": "Embeddings and Softmax",
+                "quote": "ation that can\nbe parallelized, as measured by the minimum number of sequential operations required.\nThe third is the path length between long-range dependencies in the network. Learning long-range\nde",
+                "block_ids": [
+                  "b95",
+                  "b96"
+                ],
+                "bbox": [
+                  0.176,
+                  0.09,
+                  0.8235,
+                  0.13
+                ],
+                "score": 0.032266,
+                "eid": "E3"
+              },
+              {
+                "paper_id": "p_eb4a1c1f12c6",
+                "found": true,
+                "chunk_id": "c_e1188128cc46",
+                "page": 14,
+                "section_path": "B\nDetailed Experimental Setup",
+                "quote": "The most comparable existing pre-training\nmethod to BERT is OpenAI GPT, which trains a\nleft-to-right Transformer LM on a large text cor-\npus. In fact, many of the design decisions in BERT\nwere intenti",
+                "block_ids": [
+                  "b188"
+                ],
+                "bbox": [
+                  0.1193,
+                  0.4126,
+                  0.4874,
+                  0.6029
+                ],
+                "score": 0.032787,
+                "eid": "E4"
+              }
+            ]
+          }
+        ],
+        "guardrails": [
+          "absence_claims:2",
+          "number_not_in_evidence:1"
+        ]
+      }
+    ]
+  },
+  "rubric": {
+    "questions": [
+      {
+        "question": "这篇论文的作者和所属机构？",
+        "category": "作者/机构",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "这篇论文的作者及所属机构如下：\n1. Ashish Vaswani，所属机构为Google Brain，联系邮箱avaswani@google.com[E5]\n2. Noam Shazeer，所属机构为Google Brain，联系邮箱noam@google.com[E5]\n3. Niki Parmar，所属机构为Google Research，联系邮箱nikip@google.com[E5]\n4"
+      },
+      {
+        "question": "β1、β2 设置为多少？",
+        "category": "超参数",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "根据论文中优化器部分的描述，Adam 优化器的参数设置为：β₁ = 0.9，β₂ = 0.98[E1]。"
+      },
+      {
+        "question": "训练用了什么 GPU、多少块、多久？",
+        "category": "训练事实",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "训练所用的硬件与时长信息如下：\n1. GPU 型号：NVIDIA P100[E2]\n2. GPU 数量：8 块[E2]\n3. 训练时长：\n   - 基础模型：总训练步数为 100,000 步，耗时 12 小时[E2]\n   - 大模型：总训练步数为 300,000 步，耗时 3.5 天[E2]"
+      },
+      {
+        "question": "在 WMT 2014 EN-DE 上 BLEU 是多少？",
+        "category": "表格数值",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "在 WMT 2014 英语到德语（EN-DE）翻译任务上，不同 Transformer 模型的 BLEU 分数如下：\n1. Transformer (big) 模型：BLEU 分数为 28.4，该结果超过此前所有已报告的最优模型（包括集成模型）2.0 以上 BLEU，创下新的最优 BLEU 分数[E1][E2][E5][E8]。\n2. Transformer (base model)：BLEU 分"
+      },
+      {
+        "question": "多头注意力为什么比单头好？",
+        "category": "论证链",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "多头注意力相比单头注意力的优势在于：多头注意力允许模型在不同位置共同关注来自不同表示子空间的信息，而单注意力头的平均操作会抑制这种效果[E1]。同时，通过降低每个头的维度，多头注意力的总计算成本与全维度单头注意力相近，不会带来额外的计算开销[E4]。"
+      },
+      {
+        "question": "[11] 的完整引用信息？",
+        "category": "引用解析",
+        "mode": "single",
+        "pass": true,
+        "answer_excerpt": "【未找到依据】检索到的片段无法回答该问题。现有证据仅提及[11]的部分内容为“Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi, and Jürgen Schmidhuber. Gradient flow in recurrent nets: the difficulty of learning long-term dependencies, 2001."
+      },
+      {
+        "question": "对比这两篇论文：Attention 与 BERT 各自的预训练目标（训练任务）与上下文表示方向有何核心差异？",
+        "category": "对比（BERT）",
+        "mode": "compare",
+        "pass": false,
+        "answer_excerpt": "### 预训练目标（训练任务）与上下文表示方向核心差异\n- **P1（Attention Is All You Need）**：该论文未检索到预训练目标相关内容，其核心是提出完全基于注意力机制的Transformer架构，用于序列转导任务，在WMT 2014英德机器翻译任务上达到28.4 BLEU，较现有最优结果提升超2 BLEU [E6]；其自注意力机制可缩短网络中长距离依赖的前向/反向信号路径"
+      },
+      {
+        "question": "GPT-3 的 few-shot / in-context learning 指什么？",
+        "category": "语料（GPT-3）",
+        "mode": "gpt3",
+        "pass": false,
+        "answer_excerpt": "GPT-3 的 few-shot 也称为 in-context learning，指在模型的上下文窗口中放入尽可能多的演示样本（通常为10到100个），让模型在该条件下完成任务的学习设置[E2]。"
+      }
+    ],
+    "pass_count": 6,
+    "total": 8,
+    "pass_rate": 0.75
+  },
+  "gates": {
+    "recall_at5>=0.8": true,
+    "strict_recall_at5>=0.7": true,
+    "refusal>=0.9": true,
+    "zh_top8>=0.8": true,
+    "supported>=0.8": true,
+    "hallucination<=0.1": true,
+    "replay_10_10": true,
+    "anchor_precision>=0.85": true,
+    "anchor_claims>=15": true,
+    "gen_quote_unverified<=0.15": true,
+    "rubric8>=0.75": true,
+    "rubric8_total==8": true,
+    "compare_ok": false,
+    "compare_gold_cell_acc>=0.8": false,
+    "compare_missing_honest==1.0": true,
+    "compare_cell_quote>=0.8": true,
+    "compare_unsupported<=0.15": true
+  }
+}

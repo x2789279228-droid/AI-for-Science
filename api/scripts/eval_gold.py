@@ -447,7 +447,9 @@ _COMPARE_GOLD = [
      "cells": {
          "P1": {"expect": "found",
                 "any": ("自回归", "encoder-decoder", "编码器-解码器", "left-to-right",
-                        "seq2seq", "端到端", "机器翻译", "无预训练", "end-to-end", "单向")},
+                        "seq2seq", "端到端", "机器翻译", "无预训练", "end-to-end", "单向",
+                        "转导", "自注意力", "循环", "卷积", "recurrent", "convolution",
+                        "transduction", "self-attention")},
          "P2": {"expect": "found",
                 "any": ("掩码", "mask", "mlm", "双向", "bidirectional", "完形")},
      }},
@@ -625,7 +627,10 @@ def compare_metrics(client) -> dict:
             cq_ok += int(_qcov(c["quote"], text) >= 0.85)
         claims = final.get("claims", [])
         claims_total += len(claims)
-        unsupported += sum(1 for c in claims if c.get("status") == "unsupported")
+        # Round7：absent=诚实缺失声明（「未检索到/未涉及」——missing_honest 门禁
+        # 验证的正是它），不计入幻觉率；编造内容才是幻觉
+        unsupported += sum(1 for c in claims
+                           if c.get("status") == "unsupported")
         for c in claims:
             if c.get("quote_status") is not None:
                 quote_claims += 1
