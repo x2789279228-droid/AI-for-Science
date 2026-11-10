@@ -64,8 +64,9 @@ test("① 双语对照：左栏滚动 → 右栏跟随", async ({ page }) => {
   const canScroll = await left.evaluate((el: HTMLElement) => el.scrollHeight > el.clientHeight + 40);
   test.skip(!canScroll, "当前页内容不足一屏（滚动同步无从观测，换页/换论文重试）");
   const before = await right.evaluate((el: HTMLElement) => el.scrollTop);
-  await left.evaluate((el: HTMLElement) => { el.scrollTop = Math.min(600, el.scrollHeight / 2); });
-  await page.waitForTimeout(1000);
+  // Round6：滚到中线（旧固定 600px 在较短厚论文上越过 observer 中线带不触发同步）
+  await left.evaluate((el: HTMLElement) => { el.scrollTop = Math.floor(el.scrollHeight / 2); });
+  await page.waitForTimeout(1200);
   const after = await right.evaluate((el: HTMLElement) => el.scrollTop);
   expect(after).toBeGreaterThanOrEqual(0);
   if (before === 0) {

@@ -2,45 +2,36 @@
 Running 10 tests using 1 worker
 
 [1/10] e2e\acceptance.spec.ts:31:1 › ① 双语对照：左栏滚动 → 右栏跟随
-[2/10] e2e\acceptance.spec.ts:76:1 › ② [n] 引用标记 → References 跳转高亮
-[3/10] e2e\acceptance.spec.ts:88:1 › ③ Copilot：CSV → 柱状图 canvas + 图注
-[4/10] e2e\acceptance.spec.ts:103:1 › ④ Discover：多源搜索完成（结果或错误如实）
-[5/10] e2e\acceptance.spec.ts:119:1 › ⑤ Graph：G6 渲染节点 > 0
-[6/10] e2e\acceptance.spec.ts:125:1 › ⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定
-[7/10] e2e\acceptance.spec.ts:203:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮
-  1) e2e\acceptance.spec.ts:203:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮 ───────────────────────────────
+[2/10] e2e\acceptance.spec.ts:77:1 › ② [n] 引用标记 → References 跳转高亮
+[3/10] e2e\acceptance.spec.ts:89:1 › ③ Copilot：CSV → 柱状图 canvas + 图注
+[4/10] e2e\acceptance.spec.ts:104:1 › ④ Discover：多源搜索完成（结果或错误如实）
+[5/10] e2e\acceptance.spec.ts:120:1 › ⑤ Graph：G6 渲染节点 > 0
+[6/10] e2e\acceptance.spec.ts:126:1 › ⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定
+[7/10] e2e\acceptance.spec.ts:204:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮
+[8/10] e2e\acceptance.spec.ts:237:1 › ⑧ Discover：从库内导入参考文献 + 含金量可逆过滤
+[9/10] e2e\acceptance.spec.ts:276:1 › ⑨ 双语滚动同步量化：中线块锚定一致
+  1) e2e\acceptance.spec.ts:276:1 › ⑨ 双语滚动同步量化：中线块锚定一致 ─────────────────────────────────────────────
 
-    Error: expect(locator).toBeVisible() failed
+    Error: expect(received).toBeTruthy()
 
-    Locator: locator('[data-pdf-bid]').first()
-    Expected: visible
-    Timeout: 3000ms
-    Error: element(s) not found
-
-    Call log:
-      - Expect "toBeVisible" locator('[data-pdf-bid]').first() with timeout 3000ms
-      - waiting for locator('[data-pdf-bid]').first()
-
+    Received: false
 
     Call Log:
-    - Timeout 20000ms exceeded while waiting on the predicate
+    - Timeout 10000ms exceeded while waiting on the predicate
 
-      214 |     await expect(page.locator("[data-pdf-bid]").first())
-      215 |       .toBeVisible({ timeout: 3_000 });
-    > 216 |   }).toPass({ timeout: 20_000 });
+      326 |   await expect(async () => {
+      327 |     expect(await anchored()).toBeTruthy();
+    > 328 |   }).toPass({ timeout: 10_000 });
           |      ^
-      217 |   const hot = page.locator("[data-pdf-bid]").first();
-      218 |   const bid = await hot.getAttribute("data-pdf-bid");
-      219 |   // 断言持久效果：点热点 → 右栏滚动使目标块进入视口（flash 闪高亮仅 2.5s，
-        at D:\传智杯\scholar-agent\web\e2e\acceptance.spec.ts:216:6
+      329 | });
+      330 |
+      331 | test("⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）", async ({ page }) => {
+        at D:\传智杯\scholar-agent\web\e2e\acceptance.spec.ts:328:6
 
-    Error Context: test-results\acceptance-⑦-PDF↔译文反向联动：点-PDF-块热点-→-译文定位闪高亮\error-context.md
+    Error Context: test-results\acceptance-⑨-双语滚动同步量化：中线块锚定一致\error-context.md
 
 
-[8/10] e2e\acceptance.spec.ts:236:1 › ⑧ Discover：从库内导入参考文献 + 含金量可逆过滤
-[9/10] e2e\acceptance.spec.ts:275:1 › ⑨ 双语滚动同步量化：中线块锚定一致
-[10/10] e2e\acceptance.spec.ts:330:1 › ⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）
+[10/10] e2e\acceptance.spec.ts:331:1 › ⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）
   1 failed
-    e2e\acceptance.spec.ts:203:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮 ────────────────────────────────
-  3 skipped
-  6 passed (54.2s)
+    e2e\acceptance.spec.ts:276:1 › ⑨ 双语滚动同步量化：中线块锚定一致 ──────────────────────────────────────────────
+  9 passed (1.0m)
