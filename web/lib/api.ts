@@ -77,7 +77,7 @@ export interface Support {
 
 export interface Claim {
   text: string;
-  status: "supported" | "needs_check" | "unsupported";
+  status: "supported" | "needs_check" | "unsupported" | "absent";
   support: Support[];
   quote_status?: "verified" | "unverified";   // L2 引文子串校验结果
   quote_coverage?: number;
