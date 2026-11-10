@@ -1,0 +1,204 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 15:04:56.600[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:04:57.515[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:04:58.247[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:04:59.174[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:04:59.970[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:00.622[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:01.308[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:02.003[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:02.757[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:03.644[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:04.658[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:05.403[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:06.096[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:06.956[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:07.725[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:08.603[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 31ms[0m
+[32m2026-11-10 15:05:10.923[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:13.187[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:14.244[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:16.473[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:18.492[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:20.283[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:22.935[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:24.849[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:26.321[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:28.897[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:05:30.004[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:35.692[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:37.127[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:46.829[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:48.550[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:05:58.251[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:05:59.507[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:02.404[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:03.261[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:11.110[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:12.477[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:20.299[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:21.692[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:26.669[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:27.782[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:33.187[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:34.169[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:44.239[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:45.762[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:06:49.173[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:06:50.443[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:03.235[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:04.125[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:18.123[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:19.173[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:29.255[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:30.165[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:35.066[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:36.173[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:43.977[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:07:45.007[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:49.180[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_0940f04c:1 15ms[0m
+[32m2026-11-10 15:07:49.204[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:50.107[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:07:55.487[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_7c26668f:1 0ms[0m
+[32m2026-11-10 15:07:55.496[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:07:56.893[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:02.035[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_216fb91e:1 16ms[0m
+[32m2026-11-10 15:08:02.049[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:03.136[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:08.229[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_dedff2ee:1 16ms[0m
+[32m2026-11-10 15:08:08.231[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:09.232[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:13.936[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_ba96ff34:1 15ms[0m
+[32m2026-11-10 15:08:13.950[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:08:14.913[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:20.020[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_1b146cbd:1 15ms[0m
+[32m2026-11-10 15:08:20.033[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:21.750[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:26.108[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_e6fcfaf5:1 16ms[0m
+[32m2026-11-10 15:08:26.113[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:27.198[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:31.686[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_9e2b1cf7:1 15ms[0m
+[32m2026-11-10 15:08:31.695[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:08:32.603[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:37.548[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_bcf7dd2a:1 0ms[0m
+[32m2026-11-10 15:08:37.564[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:38.805[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:43.322[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/qa/gold_b26adad4:1 16ms[0m
+[32m2026-11-10 15:08:43.336[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_a19a95dbf468/translate 15ms[0m
+[32m2026-11-10 15:08:43.359[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_a19a95dbf468/translation 16ms[0m
+[32m2026-11-10 15:08:43.359[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/papers/p_a19a95dbf468/translate 0ms[0m
+[32m2026-11-10 15:08:43.393[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/papers/p_a19a95dbf468/translation 0ms[0m
+[32m2026-11-10 15:08:43.425[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:08:45.061[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:45.061[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:45.068[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:45.068[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:55.188[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 15:08:56.818[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:56.820[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:56.821[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:08:56.824[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:03.374[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:09:04.551[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:04.557[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:04.557[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:04.557[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:15.567[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:09:16.780[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:24.509[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 15:09:25.566[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:30.766[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:09:31.794[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:41.287[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:09:42.675[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:09:54.798[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 0ms[0m
+[32m2026-11-10 15:09:56.356[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:06.107[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:10:07.659[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:10.493[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 16ms[0m
+[32m2026-11-10 15:10:12.829[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:12.829[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:12.839[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:12.839[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 15:10:27.967[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/chat 15ms[0m
+[32m2026-11-10 15:10:29.870[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+评测对象：Attention Is All You Need (p_a19a95dbf468)（金标题组目标论文）
+  [R@5] ✓ r1 How many GPUs were the base models trained
+  [R@5] ✓+s r1 How long did the big model train for?
+  [R@5] ✓+s r1 What BLEU score did the big model achieve 
+  [R@5] ✓+s r3 What attention mechanism computes in const
+  [R@5] ✓+s r1 Which optimizer was used?
+  [R@5] ✓+s r1 What learning rate schedule was applied?
+  [R@5] ✓+s r1 What is the dropout applied to the sum of 
+  [R@5] ✓+s r1 How many encoder and decoder layers?
+  [R@5] ✗ r0 What is the model dimension d_model?
+  [R@5] ✓+s r1 Which regularization prevented overfitting
+  [ZH] ✓ 注意力机制是怎么计算的？
+  [ZH] ✓ 训练用了多少块 GPU？
+  [ZH] ✓ 模型在 WMT14 英德翻译上拿到了多少 BLEU？
+  [ZH] ✓ 编码器和解码器各有几层？
+  [ZH] ✓ 使用了什么优化器？
+  [REF] ✓ 今天天气怎么样？
+  [REF] ✓ 帮我写一首诗
+  [REF] ✓ 股票代码 AAPL 现在多少钱？
+  [REF] ✓ 推荐几家好吃的餐厅
+  [REF] ✓ 1+1 等于几？
+  [GEN] generative · claims=1 · 6.8s · How many GPUs were the base models train
+  [GEN] generative · claims=2 · 11.1s · How long did the big model train for?
+  [GEN] generative · claims=1 · 11.4s · What BLEU score did the big model achiev
+  [GEN] refusal · claims=0 · 4.2s · What attention mechanism computes in con
+  [GEN] generative · claims=4 · 8.7s · Which optimizer was used?
+  [GEN] generative · claims=4 · 9.2s · What learning rate schedule was applied?
+  [GEN] generative · claims=2 · 6.4s · What is the dropout applied to the sum o
+  [GEN] generative · claims=2 · 6.5s · How many encoder and decoder layers?
+  [GEN] generative · claims=5 · 11.1s · What is the model dimension d_model?
+  [GEN] refusal · claims=0 · 4.9s · Which regularization prevented overfitti
+  [GEN] generative · claims=9 · 14.1s · 注意力机制是怎么计算的？
+  [GEN] generative · claims=5 · 14.9s · 训练用了多少块 GPU？
+  [GEN] generative · claims=3 · 11.1s · 模型在 WMT14 英德翻译上拿到了多少 BLEU？
+  [GEN] generative · claims=2 · 5.8s · 编码器和解码器各有几层？
+  [GEN] generative · claims=6 · 8.9s · 使用了什么优化器？
+  [REPLAY 1/10] 200 · events=37
+  [REPLAY 2/10] 200 · events=37
+  [REPLAY 3/10] 200 · events=37
+  [REPLAY 4/10] 200 · events=37
+  [REPLAY 5/10] 200 · events=37
+  [REPLAY 6/10] 200 · events=34
+  [REPLAY 7/10] 200 · events=34
+  [REPLAY 8/10] 200 · events=37
+  [REPLAY 9/10] 200 · events=34
+  [REPLAY 10/10] 200 · events=34
+  [TRANS p0] {'done': 14, 'total': 14, 'cached': 14, 'failed': 0, 'format_bad': 0, 'stopped': False} · 0.0s · 缓存块 27
+  [TRANS p1] {'done': 13, 'total': 13, 'cached': 13, 'failed': 0, 'format_bad': 0, 'stopped': False} · 0.0s · 缓存块 27
+  [CMP] ✓ gold=2/2 rows=2 found=4/4 P1P2=True
+  [CMP] ✓ gold=2/2 rows=2 found=3/4 P1P2=True
+  [CMP] ✓ gold=2/2 rows=2 found=4/4 P1P2=True
+  [RUBRIC] ✓ [作者/机构] 这篇论文的作者和所属机构？
+  [RUBRIC] ✓ [超参数] β1、β2 设置为多少？
+  [RUBRIC] ✓ [训练事实] 训练用了什么 GPU、多少块、多久？
+  [RUBRIC] ✓ [表格数值] 在 WMT 2014 EN-DE 上 BLEU 是多少？
+  [RUBRIC] ✓ [论证链] 多头注意力为什么比单头好？
+  [RUBRIC] ✓ [引用解析] [11] 的完整引用信息？
+  [RUBRIC] ✗ [对比（BERT）] 对比这两篇论文：Attention 与 BERT 各自的预训练目标（训练
+  [RUBRIC] ✓ [语料（GPT-3）] GPT-3 的 few-shot / in-context learni
+
+== 金标门禁 ==
+  [PASS] recall_at5>=0.8
+  [PASS] strict_recall_at5>=0.7
+  [PASS] refusal>=0.9
+  [PASS] zh_top8>=0.8
+  [PASS] supported>=0.8
+  [PASS] hallucination<=0.1
+  [PASS] replay_10_10
+  [PASS] anchor_precision>=0.85
+  [PASS] anchor_claims>=15
+  [PASS] gen_quote_unverified<=0.15
+  [PASS] rubric8>=0.75
+  [PASS] rubric8_total==8
+  [FAIL] compare_ok
+  [PASS] compare_gold_cell_acc>=0.8
+  [PASS] compare_missing_honest==1.0
+  [FAIL] compare_cell_quote>=0.8
+  [FAIL] compare_unsupported<=0.15
+已写出：..\docs\acceptance\round8-20261110\eval_gold.json

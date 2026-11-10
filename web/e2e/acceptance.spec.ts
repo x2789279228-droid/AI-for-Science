@@ -66,8 +66,13 @@ test("① 双语对照：左栏滚动 → 右栏跟随", async ({ page }) => {
   const before = await right.evaluate((el: HTMLElement) => el.scrollTop);
   // Round6：滚到中线（旧固定 600px 在较短厚论文上越过 observer 中线带不触发同步）
   await left.evaluate((el: HTMLElement) => { el.scrollTop = Math.floor(el.scrollHeight / 2); });
-  await page.waitForTimeout(1200);
-  const after = await right.evaluate((el: HTMLElement) => el.scrollTop);
+  // Round8：等 observer 绑定+触发（UDL 新 docir 块密度变化后 observer 需更长稳定期）
+  let after = 0;
+  for (let t = 0; t < 6; t++) {
+    await page.waitForTimeout(600);
+    after = await right.evaluate((el: HTMLElement) => el.scrollTop);
+    if (after !== 0) break;
+  }
   expect(after).toBeGreaterThanOrEqual(0);
   if (before === 0) {
     expect(after).not.toBe(0);
@@ -117,10 +122,19 @@ test("④ Discover：多源搜索完成（结果或错误如实）", async ({ pa
   ).toBeVisible({ timeout: 200_000 });
 });
 
-test("⑤ Graph：G6 渲染节点 > 0", async ({ page }) => {
+test("⑤ Graph：G6 渲染节点 > 0 + 20 篇全量性能", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto("/graph");
-  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/节点 · \d+ 边/)).toBeVisible({ timeout: 15_000 });
+  const t0 = Date.now();
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 60_000 });
+  const nodeText = page.getByText(/节点 · \d+ 边/);
+  await expect(nodeText).toBeVisible({ timeout: 30_000 });
+  const elapsed = Date.now() - t0;
+  // Round8：20 篇全量渲染性能——canvas 首帧+节点计数可见 ≤60s（G6 大图优化基线）
+  expect(elapsed).toBeLessThan(60_000);
+  const nodes = await nodeText.textContent();
+  const n = parseInt((nodes ?? "").match(/\d+/)?.[0] ?? "0", 10);
+  expect(n).toBeGreaterThan(0);
 });
 
 test("⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定", async ({ page }) => {

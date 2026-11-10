@@ -306,6 +306,22 @@ def rrf_fuse(*channel_lists: tuple[str, list[dict]], k: int = 60, top_k: int = 2
 _TABLE_HINT_ZH = re.compile(r"层数|参数量|参数个数|模型大小|模型规模|隐藏层|维度|头数")
 
 
+def _table_only_search(paper_ids: list[str], top_k: int = 3) -> list[dict]:
+    """Round8：表块保位——直接查 kind=table 的 chunk（跳过 BM25/dense 正文竞争）。
+
+    超参/数值类查询（层数/参数量/d_model…）的关键数据住在 Table 1/3 里，但
+    「章节概览」summary 块与正文块在 RRF 融合中可整体挤掉表块（boost 只作用于
+    已入 top_k 的命中，表块根本不在列表内时无物可加权——Q3 gold 0.67 实证）。
+    中文超参词 BM25 对英文表格内容零命中，dense 不稳——直接按 kind 取表块。
+    """
+    ph = ",".join("?" * len(paper_ids))
+    rows = db.query(f"SELECT id AS chunk_id, paper_id, text, page, bbox_json, "
+                    f"section_path, block_ids, kind FROM chunks "
+                    f"WHERE paper_id IN ({ph}) AND kind='table' "
+                    f"ORDER BY page LIMIT ?", (*paper_ids, top_k))
+    return [_row_to_hit(r, score=0.5) for r in rows]
+
+
 def hybrid_search(paper_ids: list[str], q: str, top_k: int = 20) -> dict:
     """混合检索入口：BM25 +（可选）Dense → RRF。返回 hits + 诊断信息。"""
     bm25 = fts_search(paper_ids, q, top_k)
@@ -314,6 +330,18 @@ def hybrid_search(paper_ids: list[str], q: str, top_k: int = 20) -> dict:
     hits = rrf_fuse(("bm25", bm25), ("dense", dense), top_k=top_k) if dense else bm25
     # Round5：中文超参词（层数/参数量…）与 d_model 类标识符同触发表块加权——
     # 「模型层数与参数量」维度此前 dense 泛相似正文块压过 Table 1（eval 实证）
-    if _IDENT_TOKEN.search(q or "") or _TABLE_HINT_ZH.search(q or ""):
+    is_table_query = bool(_IDENT_TOKEN.search(q or "") or _TABLE_HINT_ZH.search(q or ""))
+    if is_table_query:
         hits = _boost_table_hits(hits)[:top_k]
+        # Round8 表块保位：若 top_k 内无 kind=table 命中（被 summary/正文块挤掉），
+        # 强制注入 BM25 最优表块——超参数值的唯一可靠来源是表格，不许丢失
+        if not any(h.get("kind") == "table" for h in hits):
+            rescued = _table_only_search(paper_ids, top_k=2)
+            if rescued:
+                seen = {h.get("chunk_id") for h in hits}
+                for r in rescued:
+                    r = {**r, "table_rescued": True}
+                    if r["chunk_id"] not in seen:
+                        hits = hits[:-1] + [r] if len(hits) >= top_k else hits + [r]
+                channels = sorted(set(channels + ["table_rescue"]))
     return {"hits": hits, "channels": channels, "bm25_count": len(bm25), "dense_count": len(dense)}

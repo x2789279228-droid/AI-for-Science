@@ -538,7 +538,9 @@ function ReaderInner() {
     bind(origPaneRef.current, o1);
     bind(zhPaneRef.current, o2);
     return () => { o1?.disconnect(); o2?.disconnect(); };
-  }, [view, page, markSync]);
+    // Round8：deps 加 pageData——observer 绑定的是 DOM 元素，异步 fetchPage 落块
+    // 后旧绑定对象已移除（UDL 新 docir 后 54 块密集页稳定复现 observer 零触发）
+  }, [view, page, pageData, markSync]);
 
   /** P0-3 PDF↔译文联动：右栏滚动 → 跨中线块驱动左侧 PDF bbox 锚定（同页内定位，
    *  PDF 侧无滚动条，联动=bbox 红框跟随；不写对侧 scrollTop → 无回环，无需 syncingRef）。 */

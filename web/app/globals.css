@@ -456,6 +456,7 @@ h1, h2, h3, p { margin: 0; }
   50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.05); }
 }
 .claim.needs-check { border-left-color: var(--warn); background: var(--warn-soft); }
+.claim.absent { border-left-color: var(--line); opacity: 0.75; background: var(--surface-2); }
 
 /* ---- 模块三：PDF 取词文本层（pdfjs TextLayer，透明可选中） ---- */
 .textLayer {

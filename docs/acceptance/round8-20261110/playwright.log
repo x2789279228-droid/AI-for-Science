@@ -1,0 +1,14 @@
+
+Running 10 tests using 1 worker
+
+[1/10] e2e\acceptance.spec.ts:31:1 › ① 双语对照：左栏滚动 → 右栏跟随
+[2/10] e2e\acceptance.spec.ts:82:1 › ② [n] 引用标记 → References 跳转高亮
+[3/10] e2e\acceptance.spec.ts:94:1 › ③ Copilot：CSV → 柱状图 canvas + 图注
+[4/10] e2e\acceptance.spec.ts:109:1 › ④ Discover：多源搜索完成（结果或错误如实）
+[5/10] e2e\acceptance.spec.ts:125:1 › ⑤ Graph：G6 渲染节点 > 0 + 20 篇全量性能
+[6/10] e2e\acceptance.spec.ts:140:1 › ⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定
+[7/10] e2e\acceptance.spec.ts:218:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮
+[8/10] e2e\acceptance.spec.ts:251:1 › ⑧ Discover：从库内导入参考文献 + 含金量可逆过滤
+[9/10] e2e\acceptance.spec.ts:290:1 › ⑨ 双语滚动同步量化：中线块锚定一致
+[10/10] e2e\acceptance.spec.ts:345:1 › ⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）
+  10 passed (45.2s)

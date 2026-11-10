@@ -743,7 +743,8 @@ function Claims({ claims, anchors, hits, onEvidence }: {
       </p>
       {claims.map((c, i) => (
         <div key={i}
-          className={`claim ${c.status === "unsupported" || c.status === "absent" ? "unverified"
+          className={`claim ${c.status === "unsupported" ? "unverified"
+            : c.status === "absent" ? "absent"
             : c.status === "needs_check" ? "needs-check" : ""}`}
           onClick={() => setOpen(open === i ? null : i)}>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline",
@@ -752,7 +753,9 @@ function Claims({ claims, anchors, hits, onEvidence }: {
               ? <span className="badge ok">已验证</span>
               : c.status === "needs_check"
                 ? <span className="badge warn" title="数值/引文未在证据中逐字命中，请人工核对">需核对</span>
-                : <span className="badge warn">⚠ 未验证</span>}
+                : c.status === "absent"
+                  ? <span className="badge" title="系统如实报告「未检索到/未涉及」——诚实负向发现，非编造">未涉及</span>
+                  : <span className="badge warn">⚠ 未验证</span>}
             {c.quote_status === "unverified" && (
               <span className="badge warn" title="引文与原文比对未达标（L2）">引文待核</span>
             )}
@@ -797,7 +800,10 @@ function Claims({ claims, anchors, hits, onEvidence }: {
               </div>
             );
           })}
-          {open === i && (c.status === "unsupported" || c.status === "absent") && (
+          {open === i && c.status === "absent" && (
+            <div className="evidence"><i>系统如实报告该论文未涉及此维度（诚实负向发现，非编造）。</i></div>
+          )}
+          {open === i && c.status === "unsupported" && (
             <div className="evidence"><i>检索结果中未找到支撑此论断的原文，请人工核对。</i></div>
           )}
         </div>

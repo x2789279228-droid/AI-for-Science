@@ -96,7 +96,7 @@ cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
 #   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
 #   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round5 见 docs/acceptance/
-#   （round7 absent 口径修正：诚实缺失声明不再计入幻觉率，unsupported 0.06-0.13）
+#   （round8+9 终版：表块保位 gold_acc 1.0 / absent 分类 unsupported≤0.11 / compare_ok True）
 # 一键验收：python scripts/accept_round.py --round round4-<date>（quick 门禁 + 全套真实证据链）
 # 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real）
 ```
