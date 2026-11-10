@@ -1,7 +1,7 @@
-"""Round4 模块三：PDF overlay/bilingual 导出视觉回归（宿主机跑，需真实 LLM 预热译文）。
+"""Round4/5 模块三：PDF overlay/bilingual 导出视觉回归（宿主机跑，需真实 LLM 预热译文）。
 
 对每篇样例论文：
-1. 预热前 3 页译文（POST /translate，真实 LLM；已有缓存自动跳过）
+1. 预热前 6 页译文（Round5：3→6，配合覆盖率头核实双语覆盖口径）（POST /translate，真实 LLM；已有缓存自动跳过）
 2. 导出 overlay 与 bilingual 两版 PDF（GET /export）
 3. PyMuPDF 断言（对照原 PDF）：
    - 页数：overlay ≥ 原页数（补遗页只增不减）；bilingual = 2×已译页 + 未译页
@@ -46,7 +46,7 @@ def _pick_papers(client, keywords: list[str]) -> list[str]:
     return out
 
 
-def _warm_pages(client, paper_id: str, pages: int = 3) -> dict:
+def _warm_pages(client, paper_id: str, pages: int = 6) -> dict:
     """预热译文（SSE 拉到 final；缓存命中也走一遍拿统计）。"""
     stats = {"warmed_pages": 0, "cached": 0, "failed": 0}
     for page in range(pages):
@@ -106,7 +106,7 @@ def check_paper(client, paper_id: str, outdir: Path) -> dict:
         src_bytes = src.read_bytes()
     origin = _doc_stats(src_bytes)
     result: dict = {"paper_id": paper_id, "origin": origin, "layouts": {}}
-    warm = _warm_pages(client, paper_id, pages=3)
+    warm = _warm_pages(client, paper_id, pages=6)
     result["warm"] = warm
     for layout in ("overlay", "bilingual"):
         r = client.get(f"/api/papers/{paper_id}/export"
@@ -119,14 +119,17 @@ def check_paper(client, paper_id: str, outdir: Path) -> dict:
         blob = r.content
         out = _doc_stats(blob)
         overflow = int(r.headers.get("X-Export-Overflow") or 0)
+        coverage = r.headers.get("X-Export-Coverage", "?")
         checks = {
             "pages_ge_origin": out["page_count"] >= origin["page_count"],
             "images_not_fewer": out["images"] >= origin["images"],
             "cjk_translated": out["cjk_chars"] > 0,
+            "appendix_has_content": out["cjk_chars"] > 0 and not (
+                overflow > 0 and out["cjk_chars"] < overflow * 20),  # 补遗页非空壳（粗阈值）
         }
         ok = all(checks.values())
         result["layouts"][layout] = {"ok": ok, **out, "overflow_blocks": overflow,
-                                     "checks": checks,
+                                     "coverage": coverage, "checks": checks,
                                      "drawing_delta": out["drawings"] - origin["drawings"]}
         print(f"  [{layout}] {'✓' if ok else '✗'} pages={out['page_count']}/{origin['page_count']}"
               f" img={out['images']}/{origin['images']} cjk={out['cjk_chars']} overflow={overflow}")

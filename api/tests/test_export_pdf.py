@@ -148,3 +148,49 @@ def test_export_endpoint(_clean_exports):
     assert r3.status_code in (400, 404)
     r4 = client.get(f"/api/papers/{PID}/export?fmt=docx")
     assert r4.status_code == 400
+
+
+# ---------- Round5：流式写入修复（visual-judge 抓到的两个真 bug 回归） ----------
+
+def test_wrap_lines_cjk_and_latin():
+    from app.export.pdf_export import _wrap_lines
+    lines = _wrap_lines("编码器使用注意力机制对序列建模", 100.0, 10.0)   # 100/10=10 字/行
+    assert all(len(l) <= 11 for l in lines) and "".join(lines) == "编码器使用注意力机制对序列建模"
+    lines2 = _wrap_lines("training took 3.5 days total", 100.0, 10.0)  # 0.55 折算
+    assert "".join(lines2) == "training took 3.5 days total" and len(lines2) >= 2
+
+
+def test_overflow_appendix_content_present(_clean_exports):
+    """补遗页必须含溢出译文正文（旧 insert_textbox 负值=整段未写，页 95% 空白）。"""
+    long_text = "这是无法放进原位的超长译文。" * 60      # ~1020 字 → 必然溢出小 bbox
+    with db.tx() as c:
+        c.execute("INSERT INTO translations(paper_id,block_id,lang,text,src_hash,format_ok,"
+                  "created_at) VALUES(?,?,?,?,?,?,?) "
+                  "ON CONFLICT(paper_id,block_id,lang) DO UPDATE SET text=excluded.text",
+                  (PID, "b3", "zh|academic", long_text, "h", 1, 0.0))
+    out = pdf_export.export_pdf(PID, target_lang="zh", mode="academic", layout="overlay")
+    assert out["overflow_blocks"], "小 bbox + 长译文必然溢出"
+    doc = fitz.open(out["path"])
+    tail_text = "".join(doc[p].get_text() for p in range(2, doc.page_count))
+    assert "超长译文" in tail_text and len(tail_text) > 400, "补遗页须有实际译文内容"
+    doc.close()
+
+
+def test_bilingual_long_block_not_dropped(_clean_exports):
+    """译文页长块必须完整渲染（旧定高 textbox 负值=整段静默丢失，摘要整段缺失）。"""
+    long_text = "摘要：本工作的核心贡献是提出一套完整的端到端机器翻译架构。" * 30
+    with db.tx() as c:
+        c.execute("INSERT INTO translations(paper_id,block_id,lang,text,src_hash,format_ok,"
+                  "created_at) VALUES(?,?,?,?,?,?,?) "
+                  "ON CONFLICT(paper_id,block_id,lang) DO UPDATE SET text=excluded.text",
+                  (PID, "b1", "zh|academic", long_text, "h", 1, 0.0))
+    out = pdf_export.export_pdf(PID, target_lang="zh", mode="academic", layout="bilingual")
+    doc = fitz.open(out["path"])
+    all_translation = "".join(doc[p].get_text() for p in range(1, doc.page_count, 2)
+                              if "译文页" in doc[p].get_text() or p == 1)
+    # 长块的起止内容都要出现（流式写入跨行/跨页不丢字）
+    assert "核心贡献" in all_translation and "机器翻译架构" in all_translation
+    assert out["replaced"] >= 2
+    # 覆盖率如实上报
+    assert out["translated_pages"] == 2 and out["source_pages"] == 2
+    doc.close()

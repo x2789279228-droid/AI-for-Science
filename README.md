@@ -89,13 +89,14 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 ## 测试
 
 ```bash
-cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（274 用例，HTTP 全 mock）
+cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（279 用例，HTTP 全 mock）
 cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚动同步 / [n]→References /
                                     #   CSV 出图+图注 / 多源搜索 / G6 / PDF↔译文 bbox 双向（⑦反向）/ 
                                     #   discover 含金量可逆过滤 / 滚动同步中线块锚定量化 / 拓扑四格式渲染
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
 #   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
-#   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round4 见 docs/acceptance/
+#   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round5 见 docs/acceptance/
+#   （round5 结构性指标跨轮稳定：quote_unverified≤0.05 / missing_honest=1.0 / anchor≥0.89）
 # 一键验收：python scripts/accept_round.py --round round4-<date>（quick 门禁 + 全套真实证据链）
 # 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real）
 ```

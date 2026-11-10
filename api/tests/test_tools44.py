@@ -210,3 +210,47 @@ def test_pdf_parse_already_parsed(monkeypatch):
                         lambda sql, *a: [{"docir_path": "x.json"}])
     out = tools._pdf_parse("p1", wait_s=0)
     assert out["ok"] and out["status"] == "already_parsed"
+
+
+# ---------- Round5：compare 弱命中诚实降级 ----------
+
+def test_aspect_terms_and_weak_match():
+    from app.agents.tools import _aspect_terms, _weak_match
+    # 拉丁/数字特征词提取；中文 token 不参与（跨语言无法字面命中）
+    assert _aspect_terms("WMT 2014 英德翻译任务上的 BLEU 分数") == ["WMT", "2014", "BLEU"]
+    assert _aspect_terms("预训练目标与上下文表示") == []
+    assert _aspect_terms("d_model 与层数对比") == ["d_model"]
+    # 弱命中：有特征词但证据全文一处不含 → True
+    assert _weak_match("word based only on its context. Unlike l", ["WMT", "2014", "BLEU"])
+    assert not _weak_match("28.4 BLEU on WMT 2014 En-De", ["WMT", "2014", "BLEU"])
+    assert not _weak_match("任意文本", []), "无特征词（中文维度）不判弱"
+
+
+def test_align_dimension_weak_match_downgrade():
+    from app.agents.tools import _align_dimension
+    ev = [
+        # Attention：含 BLEU 的真实证据（全文含特征词，quote 截断也不影响——判全文）
+        {"aspect": "WMT 2014 英德翻译任务上的 BLEU 分数", "paper_id": "att",
+         "text": "The big model achieves 28.4 BLEU on WMT 2014 English-to-German. " + "pad " * 60,
+         "chunk_id": "c1", "page": 0, "block_ids": ["b1"], "score": 1.0},
+        # BERT：dense 泛相似召回的无关块（全文不含 WMT/BLEU）→ 应诚实降级为缺失
+        {"aspect": "WMT 2014 英德翻译任务上的 BLEU 分数", "paper_id": "bert",
+         "text": "word based only on its context. Unlike left-to-right models, " + "pad " * 60,
+         "chunk_id": "c2", "page": 3, "block_ids": ["b9"], "score": 0.8},
+        # 中文维度无特征词 → 不降级（保持 found）
+        {"aspect": "预训练目标", "paper_id": "att",
+         "text": "encoder-decoder trained end to end", "chunk_id": "c3", "page": 1,
+         "block_ids": ["b2"], "score": 0.9},
+    ]
+    out = _align_dimension(ev, ["att", "bert"])
+    by_dim = {r["dimension"]: r for r in out["rows"]}
+    bleu = by_dim["WMT 2014 英德翻译任务上的 BLEU 分数"]
+    cells = {c["paper_id"]: c for c in bleu["cells"]}
+    assert cells["att"]["found"] is True and "quote" in cells["att"]
+    assert cells["bert"]["found"] is False
+    assert cells["bert"].get("reason") == "weak_match", "弱命中必须带可解释 reason"
+    pre = by_dim["预训练目标"]
+    pre_cells = {c["paper_id"]: c for c in pre["cells"]}
+    assert pre_cells["att"]["found"] is True, "中文维度无特征词：真实命中不降级"
+    assert pre_cells["bert"]["found"] is False
+    assert pre_cells["bert"].get("reason") is None, "无命中=普通缺失，不是 weak_match"

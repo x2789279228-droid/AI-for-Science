@@ -1,0 +1,9 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 09:35:09.669[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mGET /api/graph 7454ms[0m
+[32m2026-11-10 09:35:09.687[0m | [34m[1mDEBUG   [0m | [36mapp.main[0m:[36m_request_id_and_ratelimit[0m:[36m116[0m - [34m[1mPOST /api/graph/survey 0ms[0m
+建图对象：22 篇
+综述：5 节 · 42 claims · 0.1s
+nodes=23 edges=51 external=1438 roles={'cornerstone': 8, 'peripheral': 1, '': 14} · 7.5s
+== graph20 PASS ==
+已写出：..\docs\acceptance\round5-20261110\graph20.json

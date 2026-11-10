@@ -62,10 +62,33 @@ def _get_meta(paper_id: str) -> dict:
     return dict(rows[0]) if rows else {"id": paper_id, "title": paper_id}
 
 
+def _aspect_terms(aspect: str) -> list[str]:
+    """维度的可判别特征词：仅取拉丁/数字 token（字母开头 ≥3 字符，或纯数字）。
+
+    中文 token 不参与——中文维度词在英文正文不可能字面命中，不应因语言差异判弱；
+    拉丁 token（WMT/BLEU/d_model/2014）是跨语言可判别的锚，弱命中判定只看它们。"""
+    return re.findall(r"[A-Za-z][A-Za-z0-9_\-]{2,}|\d+(?:\.\d+)?", aspect or "")
+
+
+def _weak_match(hit_text: str, terms: list[str]) -> bool:
+    """弱命中：维度含可判别拉丁特征词，但证据**全文**一处都不含 → 该命中大概率是
+    dense 泛相似召回（非该维度的真实证据）。quote 只截 200 字符不够判，用全文判。
+    Round5：纯数字词（2014/512 裸年份页码）无区分度（参考文献块含同串即过门，
+    round5 eval 实证）——只保留含字母的词。"""
+    words = [w for w in terms if re.search(r"[A-Za-z]", w)]
+    if not words:
+        return False
+    t = (hit_text or "").lower()
+    return not any(w.lower() in t for w in words)
+
+
 def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     """维度对齐：按 (aspect, paper) 分组，每格取 RRF 最优命中 → 对比表结构。
 
     rows 与 aspects 一一对应；某篇某维度无命中时该格为空（合成阶段须如实呈现"未找到"）。
+    Round5 弱命中诚实降级：维度有可判别特征词（WMT/BLEU 等）而命中全文不含任一特征词
+    → 该格标 found=False + reason=weak_match（dense 泛相似不冒充该维度证据；round4 金标
+    实测 BERT 被填入无关引文导致「未报告」缺失格失守——本规则即其修复）。
     行级冲突启发（细粒度 P0 修订）：同一维度下 ≥2 篇的格子 quote 数字集合两两不相交
     → row["conflict"]=True（数值类冲突信号，合成侧已有"双侧并列禁裁决"prompt 条款）。
     """
@@ -78,13 +101,19 @@ def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     aspects = list(dict.fromkeys(h.get("aspect", "") for h in evidence))
     rows = []
     for a in aspects:
+        terms = _aspect_terms(a)
         cells = []
         for pid in paper_ids:
             h = best.get((a, pid))
+            found = h is not None
+            reason = ""
+            if found and _weak_match(h.get("text") or "", terms):
+                found, reason = False, "weak_match"
             cells.append({
                 "paper_id": pid,
-                "found": h is not None,
-                **({} if h is None else {
+                "found": found,
+                **({"reason": reason} if reason else {}),
+                **({} if not found or h is None else {
                     "chunk_id": h.get("chunk_id", ""),
                     "page": (h.get("page") or 0) + 1,  # SSE 对外 1 基人读页码
                     "section_path": h.get("section_path", ""),

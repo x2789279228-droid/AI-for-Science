@@ -1,0 +1,203 @@
+{
+  "question": "How many GPUs were the base models trained on?",
+  "answer": "The base models were trained on one machine equipped with 8 NVIDIA P100 GPUs[E1]. This is also corroborated by the statement that the model achieved state-of-the-art translation quality after being trained for twelve hours on eight P100 GPUs[E4].",
+  "mode": "generative",
+  "claims": [
+    {
+      "text": "The base models were trained on one machine equipped with 8 NVIDIA P100 GPUs.",
+      "status": "supported",
+      "support": [
+        {
+          "eid": "E1",
+          "page": 7,
+          "section_path": "5.2 Hardware and Schedule",
+          "chunk_id": "c_f6a98cbcab44",
+          "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs.",
+          "block_id": "b73",
+          "block_bbox": [
+            0.1732,
+            0.1907,
+            0.8252,
+            0.2614
+          ]
+        }
+      ],
+      "quote_coverages": [
+        1.0
+      ],
+      "quote_status": "verified",
+      "quote_coverage": 1.0
+    },
+    {
+      "text": "The model achieved state-of-the-art translation quality after being trained for twelve hours on eight P100 GPUs.",
+      "status": "supported",
+      "support": [
+        {
+          "eid": "E4",
+          "page": 1,
+          "section_path": "1 Introduction",
+          "chunk_id": "c_a5ae88850143",
+          "quote": "the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.",
+          "block_id": "b17",
+          "block_bbox": [
+            0.1748,
+            0.1881,
+            0.8252,
+            0.2437
+          ]
+        }
+      ],
+      "quote_coverages": [
+        1.0
+      ],
+      "quote_status": "verified",
+      "quote_coverage": 1.0
+    }
+  ],
+  "anchors": {
+    "E1": {
+      "page": 7,
+      "section_path": "5.2 Hardware and Schedule",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1732,
+        0.1907,
+        0.8252,
+        0.2614
+      ],
+      "chunk_id": "c_f6a98cbcab44",
+      "block_ids": [
+        "b73"
+      ]
+    },
+    "E2": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_4abfe4fb907a",
+      "block_ids": [
+        "b89",
+        "b90"
+      ]
+    },
+    "E3": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_bc1a5c101ca7",
+      "block_ids": [
+        "b87",
+        "b88"
+      ]
+    },
+    "E4": {
+      "page": 1,
+      "section_path": "1 Introduction",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.7172,
+        0.8252,
+        0.7866
+      ],
+      "chunk_id": "c_a5ae88850143",
+      "block_ids": [
+        "b17",
+        "b19"
+      ]
+    },
+    "E5": {
+      "page": 1,
+      "section_path": "_front",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1879,
+        0.2323,
+        0.3529,
+        0.2753
+      ],
+      "chunk_id": "c_c8303d658aec",
+      "block_ids": [
+        "b11"
+      ]
+    },
+    "E6": {
+      "page": 8,
+      "section_path": "6.2 Model Variations",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.5758,
+        0.8252,
+        0.6313
+      ],
+      "chunk_id": "c_3345c8080d75",
+      "block_ids": [
+        "b92",
+        "b93"
+      ]
+    },
+    "E7": {
+      "page": 8,
+      "section_path": "6.3 English Constituency Parsing",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.7828,
+        0.8252,
+        0.8384
+      ],
+      "chunk_id": "c_d7e42366724e",
+      "block_ids": [
+        "b98",
+        "b99",
+        "b100"
+      ]
+    },
+    "E8": {
+      "page": 8,
+      "section_path": "6.3 English Constituency Parsing",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.2092,
+        0.1174,
+        0.7892,
+        0.3081
+      ],
+      "chunk_id": "c_2bd8e73da387",
+      "block_ids": [
+        "t2"
+      ]
+    }
+  },
+  "guardrails": [],
+  "elapsed_s": 10.0,
+  "conversation_id": "gold_1a2d9793",
+  "thread_id": "gold_1a2d9793:1",
+  "model": "doubao-seed-2.1-lite",
+  "usage": {
+    "prompt_tokens": 1676,
+    "completion_tokens": 88,
+    "latency_ms": 2137
+  }
+}

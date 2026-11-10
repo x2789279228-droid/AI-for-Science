@@ -44,7 +44,7 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
                     "pages": pages,
                     "bbox": buf[0]["bbox"],
                     "section_path": section,
-                    "block_ids": [b["id"] for b in buf if b.get("id")],
+                    "block_ids": list(dict.fromkeys(b["id"] for b in buf if b.get("id"))),
                     "kind": "detail",
                 })
             buf, buf_len = [], 0
@@ -57,10 +57,14 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
             for piece in _split_long(text):
                 if buf_len + len(piece) > TARGET and buf_len > MIN_LEN:
                     flush()
-                    # 重叠：把上一块尾部 100 字符带入（伪块无 id，不污染 block_ids 溯源）
+                    # 重叠：把上一块尾部 100 字符带入。Round5：挂上一块的真实 block id
+                    # （旧空 id 使重叠文本不属 block_ids 任何块——cell 级溯源覆盖
+                    # 系统性 ~0.5，eval 实证）；块 id 重复无害（溯源并集语义）
                     if chunks:
                         tail = chunks[-1]["text"][-OVERLAP:]
-                        buf.append({"id": "", "text": tail, "page": chunks[-1]["page"],
+                        prev_ids = chunks[-1]["block_ids"]
+                        buf.append({"id": prev_ids[-1] if prev_ids else "",
+                                    "text": tail, "page": chunks[-1]["page"],
                                     "bbox": chunks[-1]["bbox"]})
                         buf_len = len(tail)
                 buf.append(blk if piece is text else {**blk, "text": piece})

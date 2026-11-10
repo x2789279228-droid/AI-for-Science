@@ -30,7 +30,10 @@ def export_paper(paper_id: str, fmt: str = "pdf", target_lang: str = "zh",
                                 filename=f"{paper_id}.{target_lang}.{layout}.pdf",
                                 headers={"X-Export-Pages": str(out["pages"]),
                                          "X-Export-Replaced": str(out["replaced"]),
-                                         "X-Export-Overflow": str(len(out["overflow_blocks"]))})
+                                         "X-Export-Overflow": str(len(out["overflow_blocks"])),
+                                         # 覆盖率如实上报（bilingual 版仅含已缓存译文的
+                                         # 原文页的译文页——Round5 visual-judge 发现的口径缺口）
+                                         "X-Export-Coverage": f"{out['translated_pages']}/{out['source_pages']}"})
         out = pdf_export.export_doc(paper_id, target_lang=target_lang, mode=mode, fmt=fmt,
                                     bilingual_view=(view == "bilingual"))
         media = "text/markdown" if fmt == "md" else "text/html"

@@ -112,6 +112,47 @@ def _fit_text(page: fitz.Page, rect: fitz.Rect, text: str, heading: bool) -> boo
     return False
 
 
+def _wrap_lines(text: str, width_pt: float, size: float) -> list[str]:
+    """按像素宽度近似断行：CJK 每字≈size pt、拉丁/数字≈0.55×size。"""
+    max_units = max(8.0, width_pt / size)
+    lines: list[str] = []
+    cur, units = "", 0.0
+    for ch in text:
+        if ch == "\n":
+            lines.append(cur)
+            cur, units = "", 0.0
+            continue
+        u = 1.0 if ord(ch) > 0x2E80 else 0.55
+        if units + u > max_units:
+            lines.append(cur)
+            cur, units = ch, u
+        else:
+            cur += ch
+            units += u
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _flow_insert(doc: fitz.Document, page: fitz.Page, idx: int, y: float,
+                 text: str, size: float, *, x0: float, x1: float,
+                 line_gap: float = 1.5, bottom: float = 52.0) -> tuple[fitz.Page, int, float]:
+    """流式逐行写入（insert_text 永不失败）：页底自动在 idx+1 处续新页。
+
+    Round5 修复：补遗页/译文页此前用 insert_textbox 定高矩形——其返回负值表示
+    **整段未写入**（不是"写入了且超出"），长译文静默丢失（visual-judge 实证：
+    补遗页 95% 空白、双语译文页摘要整段缺失）。"""
+    page_w, page_h = page.rect.width, page.rect.height
+    for ln in _wrap_lines(text, x1 - x0, size):
+        if y > page_h - bottom:
+            idx += 1
+            page = doc.new_page(pno=idx, width=page_w, height=page_h)
+            y = 60.0
+        page.insert_text(fitz.Point(x0, y), ln, fontsize=size, **_font_args())
+        y += size * line_gap
+    return page, idx, y
+
+
 def export_pdf(paper_id: str, *, target_lang: str = "zh", mode: str = "academic",
                layout: str = "overlay") -> dict:
     """生成译文 PDF。返回 {path, pages, replaced, overflow_blocks, skipped_note}。"""
@@ -124,7 +165,9 @@ def export_pdf(paper_id: str, *, target_lang: str = "zh", mode: str = "academic"
         raise LookupError("no_translations:请先翻译（target_lang/mode 与译文缓存一致）")
 
     pages_map = _translatable_pages(docir, translated)
+    src_page_count = 0
     doc = fitz.open(src)
+    src_page_count = doc.page_count
     overflow: list[dict] = []
     replaced = 0
 
@@ -152,34 +195,34 @@ def export_pdf(paper_id: str, *, target_lang: str = "zh", mode: str = "academic"
                     overflow.append({"block_id": b["id"], "page": pno})
         if overflow:
             tail = doc.new_page()
-            tail.insert_text(fitz.Point(72, 72), "译文补遗（原位放不下的块，未缩小到不可读）",
+            tail.insert_text(fitz.Point(72, 64), "译文补遗（原位放不下的块，未缩小到不可读）",
                              fontsize=14, **_font_args())
-            y = 100.0
+            page, idx, y = tail, doc.page_count - 1, 92.0
             for o in overflow:
                 text = translated.get(o["block_id"], {}).get("text", "")
-                rc = tail.insert_textbox(fitz.Rect(56, y, tail.rect.width - 56, y + 90),
-                                         f"[p{o['page'] + 1} · {o['block_id']}] {text}",
-                                         fontsize=8, **_font_args())
-                y += 92 + max(0.0, -rc)
-                if y > tail.rect.height - 60:
-                    tail = doc.new_page()
-                    y = 72.0
+                page, idx, y = _flow_insert(doc, page, idx, y,
+                                            f"[p{o['page'] + 1} · {o['block_id']}]",
+                                            8.5, x0=56, x1=page.rect.width - 56)
+                page, idx, y = _flow_insert(doc, page, idx, y, text,
+                                            8.5, x0=62, x1=page.rect.width - 56)
+                y += 8.0
     else:  # bilingual：原页后插译文页（按 DocIR 阅读序排版）
+        # 倒序插入（最后一页先处理）——后续插入不改变更早原页的索引；译文超一页时
+        # 在紧邻位置续页（旧实现定高 insert_textbox 负值=整段未写 + 页底 break 丢块）
         max_pno = max(pages_map) if pages_map else -1
-        for pno in range(max_pno + 1):
-            src_page = doc[pno * 2]      # 每轮在原页后插一页 → 原页 pno 恒在索引 2*pno
-            new = doc.new_page(pno=pno * 2 + 1, width=src_page.rect.width,
+        for pno in range(max_pno, -1, -1):
+            src_page = doc[pno]
+            ins = pno + 1
+            new = doc.new_page(pno=ins, width=src_page.rect.width,
                                height=src_page.rect.height)
             new.insert_text(fitz.Point(56, 52), f"— 译文页（第 {pno + 1} 页 · 机器翻译草稿）—",
                             fontsize=9, **_font_args())
-            y = 80.0
+            page, idx, y = new, ins, 80.0
             for b in sorted(pages_map.get(pno, []), key=lambda x: (x["bbox"][1], x["bbox"][0])):
-                rc = new.insert_textbox(fitz.Rect(56, y, new.rect.width - 56, y + 110),
-                                        b["text"], fontsize=9.5, **_font_args())
+                page, idx, y = _flow_insert(doc, page, idx, y, b["text"],
+                                            9.5, x0=56, x1=page.rect.width - 56)
+                y += 6.0
                 replaced += 1
-                y += 112 + max(0.0, -rc)
-                if y > new.rect.height - 60:
-                    break   # 单页译文页容量有限：其余块仍在原 PDF 内（如实计数 replaced）
 
     page_count = doc.page_count
     meta = doc.metadata or {}
@@ -200,8 +243,10 @@ def export_pdf(paper_id: str, *, target_lang: str = "zh", mode: str = "academic"
                    page_count, replaced, len(overflow), time.time()))
     logger.info(f"export_pdf {paper_id} → {out.name}（{replaced} 块替换 / {len(overflow)} 溢出）",
                 module="export")
+    # 覆盖率如实上报（bilingual 版仅含已缓存译文的原文页的译文页——诚实口径）
     return {"path": str(out), "pages": page_count, "replaced": replaced,
-            "overflow_blocks": overflow}
+            "overflow_blocks": overflow,
+            "translated_pages": len(pages_map), "source_pages": src_page_count}
 
 
 # ---------- MD / HTML 导出（译文单栏 / 双语对照） ----------

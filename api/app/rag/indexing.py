@@ -300,12 +300,17 @@ def rrf_fuse(*channel_lists: tuple[str, list[dict]], k: int = 60, top_k: int = 2
     return fused
 
 
+_TABLE_HINT_ZH = re.compile(r"层数|参数量|参数个数|模型大小|模型规模|隐藏层|维度|头数")
+
+
 def hybrid_search(paper_ids: list[str], q: str, top_k: int = 20) -> dict:
     """混合检索入口：BM25 +（可选）Dense → RRF。返回 hits + 诊断信息。"""
     bm25 = fts_search(paper_ids, q, top_k)
     dense = dense_search(paper_ids, q, top_k) if settings.dense_enabled else []
     channels = ["bm25"] + (["dense"] if dense else [])
     hits = rrf_fuse(("bm25", bm25), ("dense", dense), top_k=top_k) if dense else bm25
-    if _IDENT_TOKEN.search(q or ""):
+    # Round5：中文超参词（层数/参数量…）与 d_model 类标识符同触发表块加权——
+    # 「模型层数与参数量」维度此前 dense 泛相似正文块压过 Table 1（eval 实证）
+    if _IDENT_TOKEN.search(q or "") or _TABLE_HINT_ZH.search(q or ""):
         hits = _boost_table_hits(hits)[:top_k]
     return {"hits": hits, "channels": channels, "bm25_count": len(bm25), "dense_count": len(dense)}

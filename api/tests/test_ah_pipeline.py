@@ -156,11 +156,13 @@ def test_inject_compare_eids():
 
 
 def test_align_dimension_conflict_heuristic():
+    # Round5 注：p_b 证据须含维度特征词（BLEU）——否则被弱命中诚实降级为缺失格，
+    # 单侧 found 不再触发冲突启发（旧夹具的 GLUE 文本现在会被正确降级）
     hits = [
         {"aspect": "BLEU", "paper_id": "p_a", "chunk_id": "c1", "rrf": 0.9,
          "text": "our model achieves 28.4 BLEU on WMT14"},
         {"aspect": "BLEU", "paper_id": "p_b", "chunk_id": "c2", "rrf": 0.8,
-         "text": "the pretrained model reports 88.5 GLUE score"},
+         "text": "the pretrained model reports 88.5 on BLEU-style eval"},
         {"aspect": "Layers", "paper_id": "p_a", "chunk_id": "c3", "rrf": 0.9,
          "text": "both models use 6 layers"},
         {"aspect": "Layers", "paper_id": "p_b", "chunk_id": "c4", "rrf": 0.8,

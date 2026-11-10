@@ -1,0 +1,93 @@
+{
+  "time": "2026-11-10 09:35:45",
+  "survey_sample": {
+    "ok": true,
+    "sampled": 10,
+    "passed": 9,
+    "pass_rate": 0.9,
+    "claims": [
+      {
+        "section": "背景与问题",
+        "claim": "BERT实现了深度双向预训练。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE5→b2",
+        "supported": true
+      },
+      {
+        "section": "背景与问题",
+        "claim": "早期序列转导模型多基于编码器-解码器结构的循环或卷积神经网络。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE2→b11",
+        "supported": true
+      },
+      {
+        "section": "时间线与演进",
+        "claim": "XLNet兼顾双向上下文建模能力与自回归建模的优势",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE3→b4",
+        "supported": true
+      },
+      {
+        "section": "时间线与演进",
+        "claim": "BERT通过预训练深层双向文本表示，仅需少量微调即可适配多类自然语言处理任务",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE5→b2",
+        "supported": true
+      },
+      {
+        "section": "开放问题",
+        "claim": "RoBERTa研究中提及，不同位置编码方案的更详细对比尚未完成，留待未来工作开展。",
+        "status": "supported",
+        "quote_status": "verified",
+        "supported": false
+      },
+      {
+        "section": "背景与问题",
+        "claim": "后续预训练语言模型存在预训练与微调目标不匹配的问题。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE3→b4",
+        "supported": true
+      },
+      {
+        "section": "方法族（社区）",
+        "claim": "Transformer架构包含编码器自注意力、解码器掩码自注意力及编解码器注意力三类机制。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE1→b47",
+        "supported": true
+      },
+      {
+        "section": "背景与问题",
+        "claim": "早期序列转导模型训练并行度低、耗时久。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE2→b11",
+        "supported": true
+      },
+      {
+        "section": "方法族（社区）",
+        "claim": "Transformer架构采用纯注意力机制替代循环与卷积结构。",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE2→b11",
+        "supported": true
+      },
+      {
+        "section": "基石与边缘",
+        "claim": "XLNet结合自回归与自编码预训练优势，在多项任务上实现性能提升",
+        "status": "supported",
+        "quote_status": "verified",
+        "anchor": "EE3→b4",
+        "supported": true
+      }
+    ]
+  },
+  "future_checks": {
+    "rows": 8
+  }
+}

@@ -1,0 +1,19 @@
+D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+  warnings.warn(
+[32m2026-11-10 09:34:38.147[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 09:34:41.397[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 09:34:44.522[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 09:34:48.250[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 09:34:51.878[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+[32m2026-11-10 09:34:56.850[0m | [1mINFO    [0m | [36mapp.rag.indexing[0m:[36m_embed_texts[0m:[36m93[0m - [1membed 启动 mode=api n=1 model=doubao-embedding-vision[0m
+idea：面向低资源场景的高效注意力机制：线性复杂度变体与检索增强的对比研究
+论文：['p_5e84333e8e1d', 'p_eb4a1c1f12c6', 'p_9387136178c3']
+章节 6（实质 6）· References used 0/白名单 80 · body [R#] 0 · 21.6s
+  [PASS] body_refs_subset_references
+  [PASS] references_all_cited
+  [PASS] sections_complete
+  [PASS] substantive_sections
+  [PASS] guardrails_recorded
+
+== copilot_live PASS ==
+已写出：..\docs\acceptance\round5-20261110\copilot_live/（framework.md/json + MANUAL_REVIEW.md）

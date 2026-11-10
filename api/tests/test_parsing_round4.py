@@ -82,9 +82,11 @@ def test_quality_table_continuation():
 
 # ---------- data-real 语料 references 健康度回归（快照在本机才跑） ----------
 
-_BASELINE = {   # round3 已验基线（标题关键词 → refs 条数）：严格断言
+_BASELINE = {   # 已验基线（标题关键词 → refs 条数）：严格断言。
+    # Round5 勘误：UDL 旧基线 245 是 round3 假阳性（_find_refs_start 误选前置区域，
+    # 存储条目实为序言/正文散文碎片——由本轮「后记边界 + 重切对照」发现并回写真书目）
     "attention is all you need": 40, "scaling laws": 43, "bidirectional": 56,
-    "layer normalization": 101, "few-shot learners": 118, "understanding deep learning": 245,
+    "layer normalization": 101, "few-shot learners": 118, "understanding deep learning": 59,
 }
 
 

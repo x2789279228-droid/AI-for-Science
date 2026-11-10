@@ -43,14 +43,18 @@ def _fetch_sickle(set_spec: str, from_date: str, limit: int) -> list[dict] | Non
     """Sickle OAI-PMH 主通道。未安装/失败返回 None（调用方走 Atom 回退）。
 
     Round4：子类目（cs.CL）不是合法 OAI set（实测 BadArgument: Set does not
-    exist）→ 自动降试顶层类目（cs）再收割一轮；两级都失败才交回 Atom 回退。
-    """
+    exist）→ 自动降试顶层类目（cs）再收割一轮。
+    Round5：仅 BadArgument/illegal-set 类错误才降试（顶层巨类目收割本就超时，
+    超时/断连重试一遍只是双倍等待——测试实测 94s→183s）。"""
     try:
         from sickle import Sickle
     except ImportError:
         return None
     last_err = ""
-    for spec in (set_spec, set_spec.split(".")[0]):
+    specs = [set_spec]
+    if "." in set_spec:
+        specs.append(set_spec.split(".")[0])
+    for si, spec in enumerate(specs):
         try:
             sickle = Sickle(_OAI_ENDPOINT, max_retries=1, timeout=30)
             out: list[dict] = []
@@ -72,8 +76,14 @@ def _fetch_sickle(set_spec: str, from_date: str, limit: int) -> list[dict] | Non
                 if len(out) >= limit:
                     break
             return out
-        except Exception as e:  # noqa: BLE001 —— 单个 set 失败：换顶层 set 再试
+        except Exception as e:  # noqa: BLE001 —— 分类处理：非法 set 才降试顶层
             last_err = f"{type(e).__name__}: {e}"[:160]
+            msg = str(e).lower()
+            retryable = ("badargument" in msg or "illegal" in msg
+                         or "set does not exist" in msg or "no such set" in msg)
+            if si == 0 and len(specs) > 1 and retryable:
+                continue
+            break
     logger.warning(f"tracking Sickle 通道失败 → Atom 回退: {last_err}", module="tracking")
     return None
 

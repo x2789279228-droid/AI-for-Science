@@ -1,0 +1,103 @@
+{
+  "time": "2026-11-10 08:49:08",
+  "papers": [
+    {
+      "paper_id": "p_5e84333e8e1d",
+      "origin": {
+        "page_count": 15,
+        "images": 3,
+        "drawings": 2710,
+        "cjk_chars": 0
+      },
+      "layouts": {
+        "overlay": {
+          "ok": true,
+          "page_count": 18,
+          "images": 3,
+          "drawings": 2710,
+          "cjk_chars": 4102,
+          "overflow_blocks": 46,
+          "coverage": "6/15",
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true,
+            "appendix_has_content": true
+          },
+          "drawing_delta": 0
+        },
+        "bilingual": {
+          "ok": true,
+          "page_count": 23,
+          "images": 3,
+          "drawings": 2710,
+          "cjk_chars": 4095,
+          "overflow_blocks": 0,
+          "coverage": "6/15",
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true,
+            "appendix_has_content": true
+          },
+          "drawing_delta": 0
+        }
+      },
+      "warm": {
+        "warmed_pages": 6,
+        "cached": 41,
+        "failed": 0
+      }
+    },
+    {
+      "paper_id": "p_9387136178c3",
+      "origin": {
+        "page_count": 75,
+        "images": 83,
+        "drawings": 317,
+        "cjk_chars": 0
+      },
+      "layouts": {
+        "overlay": {
+          "ok": true,
+          "page_count": 76,
+          "images": 83,
+          "drawings": 317,
+          "cjk_chars": 3373,
+          "overflow_blocks": 1,
+          "coverage": "6/75",
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true,
+            "appendix_has_content": true
+          },
+          "drawing_delta": 0
+        },
+        "bilingual": {
+          "ok": true,
+          "page_count": 81,
+          "images": 83,
+          "drawings": 317,
+          "cjk_chars": 3398,
+          "overflow_blocks": 0,
+          "coverage": "6/75",
+          "checks": {
+            "pages_ge_origin": true,
+            "images_not_fewer": true,
+            "cjk_translated": true,
+            "appendix_has_content": true
+          },
+          "drawing_delta": 0
+        }
+      },
+      "warm": {
+        "warmed_pages": 6,
+        "cached": 32,
+        "failed": 0
+      }
+    }
+  ],
+  "ok": true,
+  "elapsed_s": 1122.8
+}

@@ -1,0 +1,223 @@
+{
+  "time": "2026-11-10 09:35:09",
+  "paper_count": 22,
+  "elapsed_s": 7.5,
+  "node_count": 23,
+  "edge_count": 51,
+  "external_count": 1438,
+  "communities": [
+    {
+      "id": 0,
+      "size": 6
+    },
+    {
+      "id": 1,
+      "size": 5
+    },
+    {
+      "id": 2,
+      "size": 4
+    },
+    {
+      "id": 3,
+      "size": 4
+    },
+    {
+      "id": 4,
+      "size": 1
+    },
+    {
+      "id": 5,
+      "size": 1
+    },
+    {
+      "id": 6,
+      "size": 1
+    },
+    {
+      "id": 7,
+      "size": 1
+    }
+  ],
+  "role_counts": {
+    "cornerstone": 8,
+    "peripheral": 1,
+    "": 14
+  },
+  "class_stat": {
+    "substantive": 107,
+    "background": 102,
+    "perfunctory": 456
+  },
+  "survey": {
+    "elapsed_s": 0.1,
+    "sections": 5,
+    "claims": 42,
+    "ok": true
+  },
+  "papers": [
+    {
+      "id": "p_a19a95dbf468",
+      "title": "Attention Is All You Need",
+      "role": "cornerstone",
+      "in_degree": 6,
+      "pagerank": 0.1997
+    },
+    {
+      "id": "p_cc1c5d1b12b0",
+      "title": "XLNet: Generalized Autoregressive Pretra",
+      "role": "cornerstone",
+      "in_degree": 7,
+      "pagerank": 0.1134
+    },
+    {
+      "id": "p_eb4a1c1f12c6",
+      "title": "BERT: Pre-training of Deep Bidirectional",
+      "role": "cornerstone",
+      "in_degree": 6,
+      "pagerank": 0.1029
+    },
+    {
+      "id": "p_62cbcc27247e",
+      "title": "RoBERTa: A Robustly Optimized BERT Pretr",
+      "role": "cornerstone",
+      "in_degree": 8,
+      "pagerank": 0.0742
+    },
+    {
+      "id": "p_cc0c091c450b",
+      "title": "ALBERT: A LITE BERT FOR SELF-SUPERVISED\n",
+      "role": "cornerstone",
+      "in_degree": 3,
+      "pagerank": 0.0501
+    },
+    {
+      "id": "p_726220983df7",
+      "title": "Exploring the Limits of Transfer Learnin",
+      "role": "cornerstone",
+      "in_degree": 4,
+      "pagerank": 0.0487
+    },
+    {
+      "id": "p_9387136178c3",
+      "title": "Language Models are Few-Shot Learners",
+      "role": "cornerstone",
+      "in_degree": 4,
+      "pagerank": 0.0413
+    },
+    {
+      "id": "p_f33df402c407",
+      "title": "REFORMER: THE EFFICIENT TRANSFORMER",
+      "role": "cornerstone",
+      "in_degree": 4,
+      "pagerank": 0.0393
+    },
+    {
+      "id": "p_ddce4827d16b",
+      "title": "On Layer Normalization in the Transforme",
+      "role": "",
+      "in_degree": 1,
+      "pagerank": 0.031
+    },
+    {
+      "id": "p_1027fe244980",
+      "title": "ELECTRA: PRE-TRAINING TEXT ENCODERS\nAS D",
+      "role": "",
+      "in_degree": 1,
+      "pagerank": 0.0296
+    },
+    {
+      "id": "p_00771102f400",
+      "title": "Longformer: The Long-Document Transforme",
+      "role": "",
+      "in_degree": 3,
+      "pagerank": 0.0276
+    },
+    {
+      "id": "p_fc5094c7c36b",
+      "title": "Megatron-LM: Training Multi-Billion Para",
+      "role": "",
+      "in_degree": 2,
+      "pagerank": 0.0249
+    },
+    {
+      "id": "p_07f89969ed4f",
+      "title": "BART: Denoising Sequence-to-Sequence Pre",
+      "role": "",
+      "in_degree": 1,
+      "pagerank": 0.0219
+    },
+    {
+      "id": "p_5b5eeecf4c8a",
+      "title": "Big Bird: Transformers for Longer Sequen",
+      "role": "",
+      "in_degree": 1,
+      "pagerank": 0.0216
+    },
+    {
+      "id": "p_5e84333e8e1d",
+      "title": "Attention Is All You Need",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_3326bce4c606",
+      "title": "smoke",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_5138b7b553e7",
+      "title": "Smoke Test Paper",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_2c98718315d1",
+      "title": "Scaling Laws for Neural Language Models",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_1264458b503d",
+      "title": "Understanding Deep Learning",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_e8177ae1ece9",
+      "title": "DEBERTA: DECODING-ENHANCED BERT WITH DIS",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_57eb7647effa",
+      "title": "AN IMAGE IS WORTH 16X16 WORDS:\nTRANSFORM",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_4b97031c9294",
+      "title": "LORA: LOW-RANK ADAPTATION OF LARGE LAN-\n",
+      "role": "peripheral",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    },
+    {
+      "id": "p_94db928f9476",
+      "title": "FlashAttention: Fast and Memory-Efficien",
+      "role": "",
+      "in_degree": 0,
+      "pagerank": 0.0193
+    }
+  ],
+  "threshold_calibrated": true,
+  "ok": true
+}

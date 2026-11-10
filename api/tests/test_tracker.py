@@ -51,7 +51,11 @@ def test_refresh_keyword_filter_dedup_watermark(monkeypatch):
     with db.tx() as c:
         c.execute("DELETE FROM tracked_items")
         c.execute("DELETE FROM tracking_subscriptions")
-    sub = _sub("图神经网络", "keyword", "tracking")
+    # last_run 显式固定回看窗口起点（fixture 日期硬编码 11-06~08；默认 now-3d 的
+    # 相对窗口会随日历漂移把 11-06 滤掉——2026-11-10 实际翻车）
+    import calendar
+    sub = _sub("图神经网络", "keyword", "tracking",
+               last_run=calendar.timegm((2026, 11, 1, 0, 0, 0)))
     _mock_atom(monkeypatch)
     r1 = tracker.refresh_subscription(sub)
     assert r1["channel"] == "atom" and r1["added"] == 2, "关键词过滤只留标题命中 tracking 的两条"

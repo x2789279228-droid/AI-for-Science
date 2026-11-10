@@ -47,7 +47,7 @@ def test_strict_hit_variant_sets():
 def test_rubric_is_true_eight():
     assert len(eg._RUBRIC_8) == 8
     modes = {s.get("mode", "single") for s in eg._RUBRIC_8}
-    assert modes == {"single", "compare_q1", "gpt3"}
+    assert modes == {"single", "compare", "gpt3"}
     assert all(callable(s["check"]) for s in eg._RUBRIC_8)
     # #7 断言双篇标签 + 双向/掩码要点；#8 断言 few-shot + 免微调要点
     q7 = eg._RUBRIC_8[6]["check"]

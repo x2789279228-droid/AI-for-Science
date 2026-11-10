@@ -391,3 +391,57 @@ def test_day3_rule_fanout_per_aspect():
     assert {s["aspect"] for s in steps} == {"a", "b", "c"}    # 每面保底
     capped, trunc = _cap_steps([{"paper_id": "p", "query": "x", "aspect": "a"}])
     assert trunc is False and len(capped) == 1               # 不超限时原样返回
+
+
+# ---------- Round5：L2 逐 support 重抽 ----------
+
+def test_check_quotes_reextract_per_support(monkeypatch):
+    """多支持 claim 的**每条**不合格引文都要被重抽（旧实现只修最差一条 → claim 永远
+    unverified）；替换仅在变好时生效；重抽键=论断|E#。"""
+    from app.rag import verify
+
+    eid_map = {1: {"text": "alpha evidence sentence one"}, 2: {"text": "beta evidence sentence two"}}
+    claims = [{"text": "claim-A", "status": "supported", "support": [
+        {"eid": "E1", "quote": "totally wrong quote A1"},
+        {"eid": "E2", "quote": "totally wrong quote A2"}]}]
+    calls = {"n": 0}
+
+    def fake_reextract(failed, eid_map_):
+        calls["n"] += 1
+        return {"claim-A|E1": "alpha evidence",            # 命中率 1.0
+                "claim-A|E2": "beta evidence sentence two"}  # 命中率 1.0
+
+    monkeypatch.setattr(verify.llm, "available", lambda: True)
+    monkeypatch.setattr(verify, "_re_extract_quotes", fake_reextract)
+    out, guardrails = verify.check_quotes(claims, eid_map)
+    c = out[0]
+    assert c["quote_status"] == "verified", "两条 support 都修好才 verified（旧实现只修最差一条）"
+    assert c["support"][0]["quote"] == "alpha evidence"
+    assert c["support"][1]["quote"] == "beta evidence sentence two"
+    assert calls["n"] == 1 and "quote_unverified" not in guardrails
+
+
+def test_check_quotes_reextract_two_rounds(monkeypatch):
+    """第 1 轮只修好一条 → 仍 unverified → 第 2 轮处理残余（round4 只跑 1 轮的补位）。"""
+    from app.rag import verify
+
+    eid_map = {1: {"text": "alpha evidence sentence one"}, 2: {"text": "beta evidence sentence two"}}
+    claims = [{"text": "claim-B", "status": "supported", "support": [
+        {"eid": "E1", "quote": "wrong B1"}, {"eid": "E2", "quote": "wrong B2"}]}]
+    rounds = [{"claim-B|E1": "alpha evidence"},           # 第 1 轮：只回 E1
+              {"claim-B|E2": "beta evidence sentence two"}]  # 第 2 轮：回 E2
+    monkeypatch.setattr(verify.llm, "available", lambda: True)
+    monkeypatch.setattr(verify, "_re_extract_quotes",
+                        lambda failed, m: rounds.pop(0) if rounds else {})
+    out, guardrails = verify.check_quotes(claims, eid_map)
+    assert out[0]["quote_status"] == "verified", "第 2 轮应处理残余失败"
+
+
+def test_check_quotes_no_llm_stays_unverified(monkeypatch):
+    from app.rag import verify
+    monkeypatch.setattr(verify.llm, "available", lambda: False)
+    eid_map = {1: {"text": "alpha evidence"}}
+    claims = [{"text": "c", "status": "supported", "support": [{"eid": "E1", "quote": "bad"}]}]
+    out, guardrails = verify.check_quotes(claims, eid_map)
+    assert out[0]["quote_status"] == "unverified"
+    assert guardrails == ["quote_unverified:1"]

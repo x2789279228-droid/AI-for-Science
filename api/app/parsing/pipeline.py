@@ -40,6 +40,7 @@ _REF_ANOMALY_RATIO = 4.0  # 单条长度 > max(4×中位, 400字) → anomaly（
 _ARXIV_ID = re.compile(r"arxiv[:\s]*(\d{4}\.\d{4,5})(v\d+)?", re.IGNORECASE)
 _DOI = re.compile(r"10\.\d{4,9}/[\w.\-/:]+", re.IGNORECASE)
 _APPENDIX_HEAD = re.compile(r"^(?:[a-zA-Z]\s+)?(appendices|appendix|附录|附錄)\b", re.IGNORECASE)
+_BACKMATTER_HEAD = re.compile(r"^(index|notation|glossary|acknowledg|author index|subject index)", re.IGNORECASE)
 _TABLE_CAPTION = re.compile(r"(?:table|表)\s*(\d+)", re.IGNORECASE)
 
 
@@ -235,6 +236,43 @@ def _authoryear_cuts(seg: str) -> list[int]:
             continue
         if ", " in seg[j:j + 70] and "." in seg[j:j + 120]:
             cuts.add(j)
+    # Round5 第四通道：**年份在尾**的 author-year 形态（ICLR/CoRR 列表式，Reformer
+    # 实证）——条目以 "标题. venue, (19|20)xx. URL http…." 结束，下一条以
+    # "First Last, First Last, …" 大写人名串开头。上一通道要求人名后跟年份，此形态
+    # 年份在条目尾必漏切（Reformer 24/≈50）。
+    # 形态签名门：段内含 "URL http"/"CoRR, abs/" 才启用（该样式每条 arXiv 条目带
+    # URL 行）——教材/会议风格（UDL 短条目、数字编号论文的无编号残段）不含此签名，
+    # 首轮无门实测 UDL 245→111、Attention/PreLN 副本 +25~+54 过切。
+    # 其余守卫：头两词均首字母大写（人名串形态）；首词非 venue/句首停用词；60 字符内
+    # 有作者逗号；与上一保留切点间距 ≥120（条目长度下限）。
+    if re.search(r"URL\s*https?://|CoRR,\s*abs/", seg) or re.search(
+            r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)\.\s+[A-Z][a-z]+,\s*[A-Z]\.", seg):
+        # 形态签名门（满足其一）：URL/CoRR 列表式（Reformer），或 APA 书目式
+        # "(2016b). Surname, I." —— UDL 教材书目（Round5：旧存储的 245 条实为
+        # 序言散文假阳性，真 Bibliography 区域切分后仅 59 条即缺此头型）
+        _HEAD_WORDS = {"the", "a", "an", "we", "our", "this", "these", "it", "for", "as",
+                       "at", "to", "of", "on", "in", "see", "note", "table", "figure"}
+        cand: list[int] = []
+        for m in re.finditer(r"(?:19|20)\d{2}[a-z]?[\).]?\.\s*"
+                             r"(?:(?:URL|https?://|doi:|arxiv)[:\s]?\S+\s*)?\s*", seg):
+            j = m.end()
+            head = seg[j:j + 60]
+            # 头型二选一：Given Family, Given …（Cap cap）或 Surname, I.（APA）
+            if not (re.match(r"[A-Z][a-z][\w\-'’]*\s+[A-Z][a-z][\w\-'’]*", head)
+                    or re.match(r"[A-Z][a-z][\w\-'’]+,\s*[A-Z]\.\s", head)):
+                continue
+            first = re.split(r"[\s,]+", head)[0].lower()
+            if first in _VENUE_OPENERS or first in _HEAD_WORDS:
+                continue
+            if ", " not in head:
+                continue
+            cand.append(j)
+        last_kept = -10_000
+        for j in sorted(cand):
+            if j - last_kept < 120:
+                continue
+            cuts.add(j)
+            last_kept = j
     return sorted(c for c in cuts if c > 0)
 
 
@@ -294,10 +332,11 @@ def _ref_block_texts(blocks: list[dict], start: int) -> list[str]:
     防附录正文混入条目；③ 跳过空块（页眉脚残片）。"""
     out: list[str] = []
     for b in blocks[start + 1:]:
-        if b.get("type") == "heading" and _APPENDIX_HEAD.match((b.get("text") or "").strip()):
+        t = (b.get("text") or "").strip()
+        if b.get("type") == "heading" and (_APPENDIX_HEAD.match(t) or _BACKMATTER_HEAD.match(t)):
             break
-        if (b.get("text") or "").strip():
-            out.append(b["text"])
+        if t:
+            out.append(t)
     return out
 
 

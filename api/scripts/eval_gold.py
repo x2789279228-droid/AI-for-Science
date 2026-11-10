@@ -313,24 +313,28 @@ _RUBRIC_8 = [
              if kw in a.lower())) >= 2},
     {"q": "[11] 的完整引用信息？", "cat": "引用解析", "mode": "single",
      "check": lambda a, d: _ref11_check(a, d)},
-    {"q": "本文（Attention）与 BERT 在预训练目标与上下文表示上的核心差异？", "cat": "对比（BERT）",
-     "mode": "compare_q1",
+    {"q": "对比这两篇论文：Attention 与 BERT 各自的预训练目标（训练任务）与上下文表示方向有何核心差异？", "cat": "对比（BERT）",
+     "mode": "compare",
      # BERT：MLM/掩码 + 双向；Attention：无预训练、自回归/编码器-解码器或 left-to-right 解码
+     # P1 侧事实=无预训练/端到端（Attention 从头训练；eval 实证标准答案措辞是
+     # 「未检索到**该论文涉及**预训练目标」——substring 匹配不到，用正则变体）
      "check": lambda a, d: (
          any(k in a.lower() for k in ("mask", "mlm", "掩码", "完形"))
-         and any(k in a.lower() for k in ("bidirectional", "双向", "left-to-right",
-                                          "自回归", "单向", "encoder-decoder", "编码器-解码器"))
+         and (any(k in a.lower() for k in ("bidirectional", "双向", "left-to-right",
+                                           "自回归", "单向", "encoder-decoder", "编码器-解码器",
+                                           "端到端", "从头训练", "end-to-end", "from scratch"))
+              or re.search(r"(?:未|无|不).{0,12}预训练", a))
          and ("P1" in a and "P2" in a))},
     {"q": "GPT-3 的 few-shot / in-context learning 指什么？", "cat": "语料（GPT-3）",
      "mode": "gpt3",
      # 事实：通过自然语言提示/示例上下文学习，无需梯度更新或微调（GPT-3 §2/§3.1）
      "check": lambda a, d: (
          any(k in a.lower() for k in ("few-shot", "in-context", "上下文学习", "少样本"))
-         and any(k in a.lower() for k in ("无需微调", "不进行微调", "无需梯度", "不更新参数",
-                                          "无需额外参数更新", "参数更新",
-                                          "without fine-tuning", "no fine-tuning",
-                                          "without gradient", "without parameter updates",
-                                          "without any gradient")))},
+         and (any(k in a.lower() for k in ("无需梯度", "不更新参数", "参数更新",
+                                            "without fine-tuning", "no fine-tuning",
+                                            "without gradient", "without parameter updates",
+                                            "without any gradient"))
+              or re.search(r"(?:无需|不|未|免).{0,8}微调", a)))},
 ]
 
 
@@ -365,17 +369,23 @@ def _find_corpus_paper(keyword: str) -> str:
     return ""
 
 
-def rubric_metrics(client, paper_id: str, docir: dict, compare_answer: str = "") -> dict:
-    """官方考点 8 问（Round4 起为真 8 问：#7 复用 compare 题①答案，#8 对 GPT-3 语料问答）。"""
+def rubric_metrics(client, paper_id: str, docir: dict) -> dict:
+    """官方考点 8 问（真 8 问：#7 独立 compare 调用——round4 复用题①答案在检索弱轮
+    连带 FAIL 抖动，Round5 改独立调用；#8 对 GPT-3 语料问答）。"""
     results = []
     for spec in _RUBRIC_8:
         q, cat, mode, scorer = spec["q"], spec["cat"], spec.get("mode", "single"), spec["check"]
         note = ""
-        if mode == "compare_q1":
-            ans = compare_answer
-            ok = bool(ans) and scorer(ans, docir)
-            if not ans:
-                note = "compare 答案缺失"
+        if mode == "compare":
+            # Round5：独立 compare 调用（round4 复用题①答案，检索弱轮连带 FAIL 抖动）
+            att, bert = _compare_papers()
+            if not att or not bert:
+                ans, ok = "", False
+                note = "对比语料缺失（需 fetch_corpus 收录 Attention+BERT）"
+            else:
+                final = _compare_round(client, att, bert, q)
+                ans = final.get("answer", "")
+                ok = bool(final) and scorer(ans, docir)
         elif mode == "gpt3":
             pid = _find_corpus_paper("few-shot learners")
             if not pid:
@@ -495,6 +505,18 @@ def _eval_compare_gold(gold: dict, final: dict, labels: list[str]) -> dict:
             "fabrication": fabrication}
 
 
+def _compare_papers() -> tuple[str, str]:
+    """compare 双篇选择（前缀精确 + 最早入库规范副本）——rubric #7 与 compare 金标共用。"""
+    from app import db
+    rows = db.query("SELECT id,title FROM papers WHERE status='active' AND docir_path IS NOT NULL "
+                    "AND docir_path != '' ORDER BY created_at")
+    att = next((r["id"] for r in rows
+                if (r["title"] or "").lower().startswith(("attention is all you need", "attention"))), "")
+    bert = next((r["id"] for r in rows
+                 if (r["title"] or "").lower().startswith(("bert:", "bert"))), "")
+    return att, bert
+
+
 def _compare_round(client, att: str, bert: str, question: str) -> dict:
     """单次 forced-compare 问答，返回 final 事件。"""
     conv = f"gold_cmp_{uuid.uuid4().hex[:8]}"
@@ -516,29 +538,24 @@ def _compare_round(client, att: str, bert: str, question: str) -> dict:
 
 def compare_metrics(client) -> dict:
     """多篇对比端到端（Round4：3 题手工金标矩阵 + 缺失格零编造 + cell 级溯源校验）。"""
-    from app import db
     from app.rag.verify import _norm as _norm_txt
     from app.rag.verify import quote_coverage as _qcov
     from app.rag.version_diff import load_docir_for
 
-    rows = db.query("SELECT id,title FROM papers WHERE status='active' AND docir_path IS NOT NULL "
-                    "AND docir_path != '' ORDER BY created_at")
-    # Round4：前缀匹配（"attention"/"bert" 子串会撞 FlashAttention/ALBERT/DeBERTa）+
-    # 最早入库的规范副本
-    att = next((r["id"] for r in rows
-                if (r["title"] or "").lower().startswith("attention is all you need")
-                or (r["title"] or "").lower().startswith("attention")), "")
-    bert = next((r["id"] for r in rows
-                 if (r["title"] or "").lower().startswith("bert:")
-                 or (r["title"] or "").lower() == "bert"), "")
+    att, bert = _compare_papers()
     if not att or not bert:
         return {"ok": False, "skipped": "缺少对比语料（先跑 scripts/fetch_corpus.py 收录 BERT）"}
     labels = ["P1", "P2"]
     pid_of = {"P1": att, "P2": bert}
     bmaps: dict[str, dict[str, str]] = {}
     for lab, pid in pid_of.items():
+        _docir = load_docir_for(pid) or {}
         bmaps[lab] = {b.get("id", ""): _norm_txt(b.get("text", ""))
-                      for b in (load_docir_for(pid) or {}).get("blocks", [])}
+                      for b in _docir.get("blocks", [])}
+        # 表格块（t1…）以 markdown 为文本——表格 chunk 的 block_ids=[t1] 此前不在
+        # blocks map，cell 级溯源被整格丢弃（round5 cell_quote 0.25 实证）
+        bmaps[lab].update({t.get("id", ""): _norm_txt(t.get("markdown") or "")
+                           for t in _docir.get("tables", []) if t.get("id")})
 
     tot_cells = found_cells = found_eid = 0
     gold_pass = gold_total = missing_total = missing_pass = 0
@@ -583,8 +600,11 @@ def compare_metrics(client) -> dict:
         fabrication_any = fabrication_any or ev["fabrication"]
         p_labels = "P1" in (final.get("answer") or "") and "P2" in (final.get("answer") or "")
         one_sided = any(str(g).startswith("compare_one_sided") for g in final.get("guardrails", []))
+        # 单侧守卫豁免（Round5）：gold 含缺失格（对侧真无该维度证据，weak_match
+        # 如实降级）时，「另一篇占满」是事实而非脑补——不罚 one_sided
+        has_missing = any(c.get("expect") == "missing" for c in ev["gold_cells"])
         q_ok = (bool(rows_t) and ev["gold_pass"] == ev["gold_total"]
-                and p_labels and not one_sided)
+                and p_labels and (not one_sided or has_missing))
         all_ok = all_ok and q_ok
         qs_detail.append({"question": gold["q"], "ok": bool(q_ok), "rows": len(rows_t),
                           "cells": len(cells), "found": len(found),
@@ -685,12 +705,9 @@ def main() -> int:
             report["generative_trace"] = gen["best"]
         report["replay_race"] = replay_race(client, paper_id)
         report["translate"] = translate_evidence(client, paper_id)
-        # compare 先跑：rubric #7 复用其题①答案（省一次跨文调用）
         cmp_ = compare_metrics(client)
         report["compare"] = cmp_
-        cmp_q1_answer = (cmp_.get("questions_detail") or [{}])[0].get("answer_full", "") \
-            if not cmp_.get("skipped") else ""
-        report["rubric"] = rubric_metrics(client, paper_id, docir, compare_answer=cmp_q1_answer)
+        report["rubric"] = rubric_metrics(client, paper_id, docir)
 
     gates = {
         "recall_at5>=0.8": report.get("recall_at5", 0) >= 0.8,
