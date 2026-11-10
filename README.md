@@ -103,11 +103,11 @@ cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚
 
 ### 语料（data-real 快照 20 篇同领域，references 健康）
 
-基线六篇：Attention(40) · BERT(56) · **GPT-3(118)** · PreLN(101) · ScalingLaws(43) · UDL(245)；
+基线六篇：Attention(40) · BERT(56) · **GPT-3(118)** · PreLN(101) · ScalingLaws(43) · UDL(**991**，541 页 MinerU 全书重解析+跑页头簇首定位)；
 Round4 扩充十四篇 transformer 家族：RoBERTa · ALBERT · ELECTRA · XLNet · BART · Longformer ·
 BigBird · Reformer · DeBERTa · ViT · LoRA · FlashAttention · Megatron-LM · T5。
-边界如实：Reformer(24)/BART(34) 条 refs（author-year 切分保守=宁少勿脏）、ELECTRA anomaly 11/59。
-勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；GPT 系原文以 GPT-3 论文代表
+边界如实：Reformer(24)/BART(34) 条 refs（解析层块内无边界标记，BART 待重解析）、ELECTRA anomaly 11/59、UDL anomaly 41/991=4%。
+勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；UDL 旧 "245 条" 为序言散文假阳性（round6 已重解析为真书目）；GPT 系原文以 GPT-3 论文代表
 （GPT-2 原文无 arXiv 版，OpenAI 技术报告 PDF 不在 arXiv 通道——如实注明）。
 
 ## 快速开始

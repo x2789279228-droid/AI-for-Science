@@ -34,4 +34,4 @@ Running 10 tests using 1 worker
 [10/10] e2e\acceptance.spec.ts:331:1 › ⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG）
   1 failed
     e2e\acceptance.spec.ts:276:1 › ⑨ 双语滚动同步量化：中线块锚定一致 ──────────────────────────────────────────────
-  9 passed (1.0m)
+  9 passed (53.5s)

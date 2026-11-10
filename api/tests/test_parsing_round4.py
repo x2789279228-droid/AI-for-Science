@@ -83,10 +83,10 @@ def test_quality_table_continuation():
 # ---------- data-real 语料 references 健康度回归（快照在本机才跑） ----------
 
 _BASELINE = {   # 已验基线（标题关键词 → refs 条数）：严格断言。
-    # Round5 勘误：UDL 旧基线 245 是 round3 假阳性（_find_refs_start 误选前置区域，
-    # 存储条目实为序言/正文散文碎片——由本轮「后记边界 + 重切对照」发现并回写真书目）
+    # Round5 勘误：UDL 245 为假阳性（序言散文）；Round6 真值：541 页 MinerU 全书
+    # 重解析 + 跑页头簇首定位（p476 真目首）→ 991 条全 titled；基线取 950（±5% 容差）
     "attention is all you need": 40, "scaling laws": 43, "bidirectional": 56,
-    "layer normalization": 101, "few-shot learners": 118, "understanding deep learning": 59,
+    "layer normalization": 101, "few-shot learners": 118, "understanding deep learning": 950,
 }
 
 
@@ -95,9 +95,9 @@ def test_data_real_refs_health():
     """分层回归：round3 六篇基线严格（条数 ≥95%/全 titled/anomaly<10%）；
     round4 新增 14 篇防退化下限（refs ≥15、titled ≥80%、anomaly <25%）。
 
-    Round4 实测边界（如实记录，不放宽基线口径）：Reformer 24 条、BART 34 条
-    （NeurIPS/ACL author-year 风格切分偏保守=宁少勿脏）、ELECTRA anomaly 11/59
-    （长条目占比偏高）——均为新语料如实呈现，留待后续切分调优，不在本回归硬卡。
+    实测边界（如实记录，不放宽基线口径）：Reformer 24 条、BART 34 条（解析层块内
+    无边界标记的数据缺口，非切分问题）、ELECTRA anomaly 11/59；UDL anomaly 41/991
+    （书目跑页头残片，4%<10% 门内）。
     快照 raw 截断到 500 字符，mega-block 断言口径 ≤520（快照格式不变式）。
     """
     files = sorted(REAL_DOCIR.glob("*.json"))

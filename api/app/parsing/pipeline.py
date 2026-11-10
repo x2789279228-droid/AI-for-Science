@@ -610,7 +610,21 @@ def _find_refs_start(blocks: list[dict]) -> int:
         nxt = [blocks[j].get("text", "") for j in range(i + 1, min(i + 4, len(blocks)))]
         if sum(1 for t in nxt if _REF_ITEM_LINE.match(t.strip())) >= 2:
             best = i
-    return best if best >= 0 else cands[-1]
+    if best >= 0:
+        return best
+    if len(cands) == 1:
+        return cands[0]
+    # Round6：多候选且密度校验全不中——书目跑页头形态（MinerU 给书目每页发
+    # "Bibliography|页码" 标题块；UDL 541 页书实测 13 候选）。取最大簇首个
+    # （连续跑页头=书末真目起始）；旧 cands[-1] 从书目中段起割漏首段
+    clusters = [[cands[0]]]
+    for i in cands[1:]:
+        if i - clusters[-1][-1] <= 300:
+            clusters[-1].append(i)
+        else:
+            clusters.append([i])
+    biggest = max(clusters, key=len)
+    return biggest[0] if len(biggest) > 1 else cands[-1]
 
 
 def _merge_cross_page_tables(tables: list[dict]) -> None:
