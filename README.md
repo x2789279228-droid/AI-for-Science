@@ -86,13 +86,26 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 | **后台任务** | 解析走线程队列 + 进度条，541 页超长文档不阻塞 |
 | **透明度中心** | `/api/audit/prompts`：每次 LLM 调用的 token/耗时/guardrail 事件全落库 |
 
+## 前端改造方案 v1.0（2026-11-11 落地）
+
+> 方案全文：`docs/前端改造方案.md`；视觉验收截图：`docs/acceptance/round1/screenshots/`（7 张，1440×900）。
+
+- **C1 品牌层收敛**：经典浅蓝=唯一工作皮肤，RISO 降级品牌层（intro/印章/`?theme=riso` 截图通道）；印章语义（证/基）tokens；字体语义三轨（--font-display-cn/en/--font-data）+ `--text-h1=26px`；排期徽章全下线；ClaimTrace 四态色收敛
+- **C2 研究工作台**：首页 = 数据带（22 篇/50 库内边/2371 外部引用/LLM 状态）+ 最近问答卡（`GET /api/qa/recent` 唯一后端新增）+ 图谱只读缩略卡 + 文献库分区
+- **C3 Chat 演示入口**：空态演示问题卡（按选中论文动态，点击即发送）；claim「证」章 Stamp；E# mono 脉冲；回答 15px/68ch
+- **C4 图谱舞台化**：画布 ≥560px（实测 664）；标签词典零截断；社区 Hull 凸包（双降级路径）；基石「基」章 badges；图例；统计 popover；详情抽屉 340px+去问答
+- **C5/C6 一致性**：阅读器五视图分段控件+⋯菜单；EmptyState 空态规范；Ideas 栏头色块；Discover 示例词点击即搜；/judge 评审导览（8 步路线+工程证据）；Placeholder/排期徽章全下线
+- **门禁**：tsc 绿 · e2e 14/14（10 旧+4 新）· build 绿 · pytest 286（2 个 tracker 环境性失败为预存,与本轮无关）
+- **已知边界**：双语同步指示线（§6.2）、统一 Tooltip（§8.1）、快捷键 cheatsheet（§8.3）为可选项未实施；节点标签 canvas 文本不可 DOM 断言（⑬ 由视觉截图人工核）
+
 ## 测试
 
 ```bash
-cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（283 用例，HTTP 全 mock）
+cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（286 用例，HTTP 全 mock；含 qa/recent 轻接口 3 例）
 cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚动同步 / [n]→References /
                                     #   CSV 出图+图注 / 多源搜索 / G6 / PDF↔译文 bbox 双向（⑦反向）/ 
                                     #   discover 含金量可逆过滤 / 滚动同步中线块锚定量化 / 拓扑四格式渲染
+                                    #   + 前端改造 v1.0 新增 ④:首页工作台 / Chat 空态演示卡 / 图谱舞台 / 评审导览（14 用例）
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
 #   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
 #   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round5 见 docs/acceptance/

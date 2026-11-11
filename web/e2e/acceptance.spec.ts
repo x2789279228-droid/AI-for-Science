@@ -359,3 +359,65 @@ test("⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码
   await expect(dotSrc).toBeVisible();
   await expect(page.locator("pre").filter({ hasText: /tikzpicture/ })).toBeVisible();
 });
+
+/** ================= 前端改造方案 v1.0 新增用例(⑪-⑭,CI 安全:不依赖 LLM/外网) ================= */
+
+test("⑪ 首页工作台渲染：数据带+最近问答卡+图谱速览 canvas", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+  await expect(page.getByTestId("wb-stats")).toBeVisible({ timeout: 30_000 });
+  // 数据带含论文计数(「篇文献」)
+  await expect(page.getByTestId("wb-stats")).toContainText("篇文献");
+  // 最近问答卡:有数据行或空态引导,二者必居其一
+  const qa = page.getByTestId("wb-qa");
+  await expect(qa).toBeVisible();
+  await expect(async () => {
+    const hasRows = await page.locator(".wb-qa-row").count();
+    const hasEmpty = await qa.locator(".wb-empty").count();
+    expect(hasRows + hasEmpty).toBeGreaterThan(0);
+  }).toPass({ timeout: 20_000 });
+  // 图谱速览 canvas(G6 只读缩略)
+  await expect(page.locator('[data-testid="wb-graph"] canvas').first())
+    .toBeVisible({ timeout: 30_000 });
+});
+
+test("⑫ Chat 空态演示卡：点击即提问（拦截后端，仅断言请求发出）", async ({ page }) => {
+  let chatRequested = false;
+  await page.route("**/api/chat**", async (route) => {
+    chatRequested = true;
+    await route.abort();
+  });
+  await page.goto("/chat");
+  const first = page.getByTestId("demo-q-0");
+  await expect(first).toBeVisible({ timeout: 20_000 });
+  await first.click();
+  // 断言请求已发出(fetch 已走):输入框被清空(问题被发送)
+  const input = page.locator(".dock input");
+  await expect(async () => {
+    expect(chatRequested).toBeTruthy();
+    expect(await input.inputValue()).toBe("");
+  }).toPass({ timeout: 15_000 });
+});
+
+test("⑬ 图谱舞台：画布高度 ≥560px + 统计 popover 可见 + 无渲染失败", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/graph");
+  const card = page.locator(".graph-canvas-card");
+  await expect(card.locator("canvas").first()).toBeVisible({ timeout: 60_000 });
+  const height = await card.evaluate((el) => el.getBoundingClientRect().height);
+  expect(height).toBeGreaterThanOrEqual(560);
+  await expect(page.getByTestId("graph-info-pop")).toBeVisible();
+  // 注:节点标签在 canvas 内,DOM 不可断言文本——零截断由视觉截图人工核(§9.3)
+  const errCount = await page.getByText("G6 渲染失败").count();
+  expect(errCount).toBe(0);
+});
+
+test("⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章", async ({ page }) => {
+  await page.goto("/judge");
+  await expect(page.getByRole("heading", { name: /评审导览/ })).toBeVisible({ timeout: 20_000 });
+  const steps = await page.locator(".judge-step").count();
+  expect(steps).toBe(8);
+  const body = await page.evaluate(() => document.body.textContent ?? "");
+  expect(body).not.toContain("D11");
+  expect(body).not.toContain("排期");
+});
