@@ -7,6 +7,7 @@ import {
   Outline, Paper, TLEvent, TraceCard, listPapers, resumeChat, streamChat,
 } from "@/lib/api";
 import { ChevronRight, Spark } from "@/components/icons";
+import { useIsland } from "@/lib/island";
 import TracePanel from "@/components/chat/TracePanel";
 import PdfAnchored from "@/components/PdfAnchored";
 
@@ -107,6 +108,7 @@ export default function ChatPage() {
   const [showTrace, setShowTrace] = useState(true);   // 右侧 Trace 时间线开关
   const [agent, setAgent] = useState("auto");          // UI 强制指定 Agent（auto=自动路由）
   const [evidence, setEvidence] = useState<EvidenceLoc | null>(null);  // 引用点击 → 原文浮层
+  const island = useIsland();
   const msgsRef = useRef<HTMLDivElement>(null);
   const convRef = useRef<string>("");
 
@@ -149,6 +151,8 @@ export default function ChatPage() {
     const t0 = performance.now();
     const turn: Turn = { question: q, answer: "", trace: [], retrieval: null, final: null, tl: [] };
     setTurns((t) => [...t, turn]);
+    island.emit({ key: "qa", kind: "progress", title: "溯源问答执行中",
+      detail: "Router → Planner → Executor → Verifier → Responder", indeterminate: true });
     try {
       await streamChat(q, Array.from(selected), {
         guardrail: (d) => setCapHint(String(d.message ?? "")),
@@ -181,10 +185,17 @@ export default function ChatPage() {
             threadId: d.thread_id ?? c[c.length - 1].threadId,
             failed: isFailedFinal(d),
           };
+          const secs = Math.round((performance.now() - t0) / 1000);
+          island.emit(isFailedFinal(d)
+            ? { key: "qa", kind: "info", title: "图执行中断", detail: "断点已保存,可从失败节点恢复" }
+            : { key: "qa", kind: "success", title: `问答完成 · 用时 ${secs}s`,
+              detail: `论断 ${d.claims?.length ?? 0} 条已逐条校验` });
           return c;
         }),
       }, conversationId(), agent);
     } catch (e) {
+      island.emit({ key: "qa", kind: "error", title: "问答请求失败",
+        detail: e instanceof Error ? e.message : String(e) });
       setTurns((t) => {
         const c = [...t];
         c[c.length - 1] = {
@@ -333,7 +344,7 @@ export default function ChatPage() {
                 <div key={ti}>
                   <div className="msg user"><span>{turn.question}</span></div>
                   <div className="msg bot">
-                    {turn.trace.length > 0 && <Pipeline cards={turn.trace} />}
+                    {turn.trace.length > 0 && <Pipeline cards={turn.trace} done={!!turn.final} />}
                     {turn.retrieval && turn.retrieval.hits.length > 0 && (
                       <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
                         <details>
@@ -449,8 +460,9 @@ export default function ChatPage() {
   );
 }
 
-/** 节点即卡片：内嵌可展开执行管线（官方 Graph Execution Cards 模式的自有协议实现）。 */
-function Pipeline({ cards }: { cards: TraceCard[] }) {
+/** 节点即卡片：内嵌可展开执行管线（官方 Graph Execution Cards 模式的自有协议实现）。
+ *  v2:无缝展开(grid-rows 过渡)+ 步骤卡 stagger 入场 + 完成时末卡一次性闪光。 */
+function Pipeline({ cards, done }: { cards: TraceCard[]; done?: boolean }) {
   const [open, setOpen] = useState(false);
   const retrieveCount = cards.filter((c) => c.node === "retrieve_task").length;
   const chips: string[] = [];
@@ -460,7 +472,7 @@ function Pipeline({ cards }: { cards: TraceCard[] }) {
     } else chips.push(c.title);
   }
   return (
-    <div className="pipeline" onClick={() => setOpen((o) => !o)}>
+    <div className={`pipeline acc${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)}>
       <div className="pipe-row">
         {chips.map((t, i) => (
           <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -473,10 +485,12 @@ function Pipeline({ cards }: { cards: TraceCard[] }) {
         <ChevronRight size={12} className="pipe-caret"
           style={{ transform: open ? "rotate(90deg)" : "none", color: "var(--ink-3)" }} />
       </div>
-      {open && (
+      <div className="acc-body"><div className="acc-inner">
         <div className="pipe-cards">
           {cards.map((c, i) => (
-            <div key={i} className="pipe-card">
+            <div key={i}
+              className={`pipe-card card-in${done && i === cards.length - 1 ? " flash-once" : ""}`}
+              style={{ ["--i" as string]: i }}>
               <b>{c.title}</b>
               <span className="kv"> · {c.summary}</span>
               {Object.keys(c.payload).length > 0 && (
@@ -485,7 +499,7 @@ function Pipeline({ cards }: { cards: TraceCard[] }) {
             </div>
           ))}
         </div>
-      )}
+      </div></div>
     </div>
   );
 }

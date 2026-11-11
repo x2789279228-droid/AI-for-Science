@@ -15,6 +15,8 @@ import {
   recommendApi, Recommendation, streamDiscover, streamMultiSearch,
   trackingApi, TrackingSub, TrackedItem, MultiEntry,
 } from "@/lib/api";
+import { useIsland } from "@/lib/island";
+import { RisoIllust } from "@/components/Illustrations";
 import type { Paper } from "@/lib/api";
 
 type Phase = "idle" | "searching" | "done" | "error";
@@ -23,6 +25,7 @@ type Zone = "search" | "refs" | "track" | "rec";
 export default function DiscoverPage() {
   const [zone, setZone] = useState<Zone>("search");
   const [papers, setPapers] = useState<Paper[]>([]);
+  const island = useIsland();
   useEffect(() => { listPapers().then(setPapers).catch(() => {}); }, []);
 
   // ---- ① 搜索区（多源） ----
@@ -42,17 +45,27 @@ export default function DiscoverPage() {
     setPhase("searching");
     setEntries([]);
     setStatusLine("多源检索中…");
+    island.emit({ key: "search", kind: "progress", title: "多源检索中",
+      detail: query.trim(), indeterminate: true });
     streamMultiSearch({ query: query.trim() }, {
-      status: (d) => setStatusLine(`[${d.source ?? d.stage}] ${d.note}`),
+      status: (d) => {
+        setStatusLine(`[${d.source ?? d.stage}] ${d.note}`);
+        island.emit({ key: "search", kind: "progress", title: `多源检索中 · [${d.source ?? d.stage}]`,
+          detail: d.note, indeterminate: true });
+      },
       results: (d) => {
         setEntries(d.entries as unknown as MultiEntry[]);
         setSource(d.source);
         setStatusLine(`检索完成：${(d.entries ?? []).length} 篇（多源去重后）`);
         setPhase("done");
+        island.emit({ key: "search", kind: "success",
+          title: `检索完成：${(d.entries ?? []).length} 篇`, detail: "多源去重后" });
       },
       final: (d) => { if (d.paper_id) setFinalPaper(String(d.paper_id)); },
-      error: (d) => { setStatusLine(`出错：${d.message}`); setPhase("error"); },
-    }).catch((e) => { setStatusLine(`请求失败：${e}`); setPhase("error"); });
+      error: (d) => { setStatusLine(`出错：${d.message}`); setPhase("error");
+        island.emit({ key: "search", kind: "error", title: "检索出错", detail: d.message }); },
+    }).catch((e) => { setStatusLine(`请求失败：${e}`); setPhase("error");
+      island.emit({ key: "search", kind: "error", title: "检索请求失败", detail: String(e) }); });
     void auto; // auto 闭环沿用旧端点（保持行为）：勾选后同样可下载
   };
 
@@ -85,23 +98,33 @@ export default function DiscoverPage() {
     }
     setPicked(key);
     setDlState({ key, msg: "下载中…" });
+    island.emit({ key: "dl", kind: "progress", title: `下载解析《${(e.title || key).slice(0, 24)}》`,
+      indeterminate: true });
     try {
       const out = await multiDownload(e.arxiv_id, e.pdf_url);
       if (out.dedup === "exact_file") {
         setDlState({ key, msg: `库中已有同一文件（精确去重复用）` });
+        island.emit({ key: "dl", kind: "info", title: "精确去重：已复用库内同一文件" });
       } else {
         setDlState({ key, msg: `解析${out.parse?.status === "done" ? "完成" : "进行中"}` });
+        island.emit({ key: "dl", kind: "success", title: "已入库并解析",
+          detail: (e.title || key).slice(0, 40) });
       }
       setFinalPaper(out.paper_id);
     } catch (err) {
       setDlState({ key, msg: `失败：${err}` });
+      island.emit({ key: "dl", kind: "error", title: "下载失败", detail: String(err) });
     }
   };
 
   const loadRepro = async (key: string, title: string) => {
     setRepros((prev) => ({ ...prev, [key]: prev[key] ?? [] }));
     const out = await fetchRepro(title);
-    if (out.ok) setRepros((prev) => ({ ...prev, [key]: out.repos }));
+    if (out.ok) {
+      setRepros((prev) => ({ ...prev, [key]: out.repos }));
+      island.emit({ key: "repro", kind: "info", title: `复现仓库 ${out.repos.length} 个`,
+        detail: title.slice(0, 40) });
+    }
   };
 
   // ---- ② 参考文献下钻（含库内论文含金量闭环） ----
@@ -118,12 +141,19 @@ export default function DiscoverPage() {
     setEntries([]);
     setLibRefs(null);
     setRefsNote("解析列表并补全元数据中…");
+    island.emit({ key: "refs", kind: "progress", title: "参考文献批量补全中", indeterminate: true });
     streamMultiSearch({ references_text: refsText.trim() }, {
-      status: (d) => setRefsNote(d.note),
+      status: (d) => { setRefsNote(d.note);
+        island.emit({ key: "refs", kind: "progress", title: "参考文献批量补全中",
+          detail: d.note, indeterminate: true }); },
       results: (d) => setEntries(d.entries as MultiEntry[]),
-      final: (d) => setRefsNote(`✓ ${d.note ?? ""}`),
-      error: (d) => setRefsNote(`出错：${d.message}`),
-    }).catch((e) => setRefsNote(`请求失败：${e}`))
+      final: (d) => { setRefsNote(`✓ ${d.note ?? ""}`);
+        island.emit({ key: "refs", kind: "success", title: "参考文献补全完成",
+          detail: d.note }); },
+      error: (d) => { setRefsNote(`出错：${d.message}`);
+        island.emit({ key: "refs", kind: "error", title: "补全出错", detail: d.message }); },
+    }).catch((e) => { setRefsNote(`请求失败：${e}`);
+      island.emit({ key: "refs", kind: "error", title: "补全请求失败", detail: String(e) }); })
       .finally(() => setRefsBusy(false));
   };
 
@@ -152,8 +182,11 @@ export default function DiscoverPage() {
       setEntries([]);   // 与粘贴列表互斥展示
       const n = Object.keys(q).length;
       setRefsNote(`已导入 ${entries.length} 条参考文献（含金量覆盖 ${n} 条——有引用句的条目；其余为中性态）`);
+      island.emit({ key: "librefs", kind: "success", title: "参考文献导入完成",
+        detail: `${entries.length} 条 · 含金量覆盖 ${n} 条` });
     } catch (e) {
       setRefsNote(`导入失败：${e}`);
+      island.emit({ key: "librefs", kind: "error", title: "导入失败", detail: String(e) });
     }
   };
 
@@ -191,27 +224,41 @@ export default function DiscoverPage() {
       setSubName(""); setSubValue("");
       await loadTrack();
       setTrackMsg("订阅已添加，可立即刷新");
+      island.emit({ key: "sub", kind: "success", title: "订阅已添加", detail: "可立即刷新" });
     } catch (e) { setTrackMsg(`添加失败：${e}`); }
   };
 
   const refreshTrack = async () => {
     setTrackMsg("刷新中…");
+    island.emit({ key: "track", kind: "progress", title: "arXiv 追踪刷新中", indeterminate: true });
     try {
       const rs = await trackingApi.refresh();
-      setTrackMsg(`刷新完成：` + rs.map((r) => `+${r.added}（${r.channel}）`).join(" · "));
+      const summary = rs.map((r) => `+${r.added}（${r.channel}）`).join(" · ");
+      setTrackMsg(`刷新完成：` + summary);
+      island.emit({ key: "track", kind: "success", title: "追踪刷新完成", detail: summary });
       await loadTrack();
-    } catch (e) { setTrackMsg(`刷新失败：${e}`); }
+    } catch (e) {
+      setTrackMsg(`刷新失败：${e}`);
+      island.emit({ key: "track", kind: "error", title: "追踪刷新失败", detail: String(e) });
+    }
   };
 
   const ingestTracked = async (it: TrackedItem) => {
     setDlState({ key: it.arxiv_id, msg: "下载中…" });
+    island.emit({ key: "dl", kind: "progress", title: `下载《${(it.title || "").slice(0, 24)}》`,
+      indeterminate: true });
     try {
       const out = await discoverDownload(it.arxiv_id);
       setDlState({ key: it.arxiv_id, msg: "已入库" + (out.dedup ? "（去重复用）" : "") });
+      island.emit({ key: "dl", kind: "success", title: "追踪条目已入库",
+        detail: (it.title || "").slice(0, 40) });
       setFinalPaper(out.paper_id);
       await trackingApi.dismiss(it.id);
       await loadTrack();
-    } catch (e) { setDlState({ key: it.arxiv_id, msg: `失败：${e}` }); }
+    } catch (e) {
+      setDlState({ key: it.arxiv_id, msg: `失败：${e}` });
+      island.emit({ key: "dl", kind: "error", title: "下载失败", detail: String(e) });
+    }
   };
 
   // ---- ④ 推荐流 ----
@@ -222,11 +269,19 @@ export default function DiscoverPage() {
 
   const loadRecs = async (refresh: boolean) => {
     setRecBusy(true);
+    island.emit({ key: "rec", kind: "progress", title: "个性化推荐生成中",
+      detail: "库内画像打分:相关性/新近/含金量/复现", indeterminate: true });
     try {
       const out = await recommendApi.list(refresh);
       setRecs(out.recommendations ?? []);
       setRecNote(out.note ?? "");
-    } catch (e) { setRecNote(`加载失败：${e}`); }
+      island.emit({ key: "rec", kind: "success",
+        title: `推荐已就绪 · ${out.recommendations?.length ?? 0} 篇候选`,
+        detail: out.note ?? undefined });
+    } catch (e) {
+      setRecNote(`加载失败：${e}`);
+      island.emit({ key: "rec", kind: "error", title: "推荐生成失败", detail: String(e) });
+    }
     setRecBusy(false);
   };
 
@@ -235,14 +290,17 @@ export default function DiscoverPage() {
   const vote = async (r: Recommendation, v: 1 | -1) => {
     if (!r.id) return;
     setVoted((prev) => ({ ...prev, [r.id!]: v }));
+    island.emit({ key: "vote", kind: "info", title: v === 1 ? "已标记有用" : "已标记不相关",
+      detail: "反馈将实时重加权你的画像" });
     try { await recommendApi.vote(r.id!, v); } catch { /* 失败回滚提示 */ }
   };
 
-  const entryCard = (e: MultiEntry, idxKey?: string) => {
+  const entryCard = (e: MultiEntry, idxKey?: string, idx = 0) => {
     const key = idxKey ?? e.arxiv_id ?? e.title;
     const unresolved = e.resolved === false;
     return (
-      <div className="card" key={key} style={{ opacity: unresolved ? 0.65 : 1 }}>
+      <div className="card card-in card-lift" key={key}
+        style={{ opacity: unresolved ? 0.65 : 1, ["--i" as string]: idx }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <b style={{ flex: 1, minWidth: 200 }}>{e.title || e.raw || "（未解析标题）"}</b>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -271,7 +329,7 @@ export default function DiscoverPage() {
             onClick={() => loadRepro(key, e.title)}>
             查复现性
           </button>
-          {e.arxiv_id && <span className="chip">{e.arxiv_id}</span>}
+          {e.arxiv_id && <span className="chip mono">{e.arxiv_id}</span>}
           {(repros[key] ?? []).map((r) => (
             <span key={r.repo} className="chip ok"
               title={`${r.url} · stars ${r.stars} · license ${r.license || "-"}`}>
@@ -336,10 +394,12 @@ export default function DiscoverPage() {
                 </p>
               )}
             </div>
-            {entries.map((e) => entryCard(e))}
+            {entries.map((e, i) => entryCard(e, undefined, i))}
             {phase === "idle" && (
-              <div className="card">
-                <p className="kv">
+              <div className="card card-in" style={{ display: "flex", gap: "var(--space-4)",
+                alignItems: "center", flexWrap: "wrap" }}>
+                <RisoIllust name="paper-sea" size={170} />
+                <p className="kv" style={{ flex: 1, minWidth: 260 }}>
                   三源检索（arXiv Atom / Semantic Scholar / OpenAlex，DOI→arXiv→标题归一去重）→
                   勾选下载 → 解析 → 检索闭环。断网时各源独立回放缓存。也可切换上方
                   「参考文献下钻」粘贴 BibTeX/RIS/DOI 列表批量补全。
@@ -387,7 +447,8 @@ export default function DiscoverPage() {
             {libRefs && visibleLibRefs.map((e, i) => {
               const q = libRefs.quality[i + 1];
               return (
-                <div className="card" key={`lr-${i}`} style={{ opacity: q?.cls === "perfunctory" ? 0.6 : 1 }}>
+                <div className="card card-in card-lift" key={`lr-${i}`}
+                  style={{ opacity: q?.cls === "perfunctory" ? 0.6 : 1, ["--i" as string]: i }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                     <b style={{ flex: 1, minWidth: 200 }}>{e.title}</b>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -421,7 +482,7 @@ export default function DiscoverPage() {
                 </div>
               );
             })}
-            {!libRefs && entries.map((e, i) => entryCard(e, `ref-${i}`))}
+            {!libRefs && entries.map((e, i) => entryCard(e, `ref-${i}`, i))}
           </>
         )}
 
@@ -464,8 +525,8 @@ export default function DiscoverPage() {
                 </div>
               )}
             </div>
-            {items.map((it) => (
-              <div className="card" key={it.id}>
+            {items.map((it, i) => (
+              <div className="card card-in card-lift" key={it.id} style={{ ["--i" as string]: i }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <b style={{ flex: 1 }}>{it.title}</b>
                   <span className="chip">{it.published}</span>
@@ -504,7 +565,8 @@ export default function DiscoverPage() {
               {recNote && <p className="kv" style={{ marginTop: 8 }}>{recNote}</p>}
             </div>
             {recs.map((r, i) => (
-              <div className="card" key={r.id ?? i}>
+              <div className="card card-in card-lift card-glow" key={r.id ?? i}
+                style={{ ["--i" as string]: i }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <b style={{ flex: 1 }}>{r.title}</b>
                   <span className="chip accent">推荐分 {Object.values(r.scores ?? {}).length

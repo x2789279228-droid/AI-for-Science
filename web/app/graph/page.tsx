@@ -9,11 +9,15 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { Graph } from "@antv/g6";
 import {
   FullGraph, FutureCheckItem, GraphNode, IdeaItem, fetchGraph, listPapers,
   streamCommunitySummary, streamFutureChecks, streamIdeas, streamSurvey, SurveySection,
 } from "@/lib/api";
+import { useIsland } from "@/lib/island";
+import { useShell } from "@/components/ShellContext";
+import { Maximize } from "@/components/icons";
 import type { Paper } from "@/lib/api";
 
 const PALETTE = ["#5B8FF9", "#61DDAA", "#F6BD16", "#7262fd", "#78D3F8", "#9661BC", "#F6903D", "#008685"];
@@ -49,6 +53,14 @@ export default function GraphPage() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [selectedEdges, setSelectedEdges] = useState<FullGraph["edges"]>([]);
   const [err, setErr] = useState("");
+  const { immersive, setImmersive } = useShell();
+  const island = useIsland();
+  // 沉浸切换 → 容器尺寸经 CSS 过渡后再重建画布(epoch 触发下方 G6 useEffect 重挂)
+  const [canvasEpoch, setCanvasEpoch] = useState(0);
+  useEffect(() => {
+    const t = window.setTimeout(() => setCanvasEpoch((c) => c + 1), 400);
+    return () => window.clearTimeout(t);
+  }, [immersive]);
 
   // 模块五 P0-1：批量选择（默认全库；2–50 护栏与后端一致）
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -152,7 +164,7 @@ export default function GraphPage() {
       g6.on("canvas:click", () => setSelected(null));
     }).catch((e) => setErr(`G6 渲染失败：${e}`));
     return () => { g6.destroy(); graphRef.current = null; };
-  }, [graph]);
+  }, [graph, canvasEpoch]);
 
   const runSummary = () => {
     if (summarizing || !graph) return;
@@ -161,6 +173,8 @@ export default function GraphPage() {
     setClaims([]);
     setGuardrails([]);
     const paperIds = graph.nodes.map((n) => n.paper_id);
+    island.emit({ key: "summary", kind: "progress", title: `社区 ${commId} 综述生成中`,
+      detail: "逐论断经 ClaimTrace 校验", indeterminate: true });
     streamCommunitySummary(paperIds, commId, {
       delta: (d) => setSummary((prev) => prev + d.text),
       final: (d) => {
@@ -169,21 +183,34 @@ export default function GraphPage() {
         setAnchors(d.anchors ?? {});
         setGuardrails(d.guardrails ?? []);
         setSummarizing(false);
+        island.emit({ key: "summary", kind: "success", title: `社区 ${commId} 综述完成`,
+          detail: `${d.claims?.length ?? 0} 条论断已校验` });
       },
-      error: (d) => { setSummary(`（出错：${d.message}）`); setSummarizing(false); },
+      error: (d) => { setSummary(`（出错：${d.message}）`); setSummarizing(false);
+        island.emit({ key: "summary", kind: "error", title: "社区综述失败", detail: d.message }); },
       done: () => setSummarizing(false),
-    }).catch((e) => { setSummary(`（请求失败：${e}）`); setSummarizing(false); });
+    }).catch((e) => { setSummary(`（请求失败：${e}）`); setSummarizing(false);
+      island.emit({ key: "summary", kind: "error", title: "社区综述请求失败", detail: String(e) }); });
   };
 
   const runIdeas = () => {
     if (!graph || ideasMsg) return;
     setIdeasMsg("扫描 Conclusion/Limitation…");
+    island.emit({ key: "ideas", kind: "progress", title: "研究缝隙分析中",
+      detail: "Future Work 去重过滤", indeterminate: true });
     streamIdeas(graph.nodes.map((n) => n.paper_id), {
-      status: (d) => setIdeasMsg(d.note),
-      final: (d) => { setIdeas({ solved: d.solved, open: d.open }); setIdeasMsg(`共 ${d.total} 条想法`); },
-      error: (d) => setIdeasMsg(`出错：${d.message}`),
+      status: (d) => { setIdeasMsg(d.note);
+        island.emit({ key: "ideas", kind: "progress", title: "研究缝隙分析中",
+          detail: d.note, indeterminate: true }); },
+      final: (d) => { setIdeas({ solved: d.solved, open: d.open });
+        setIdeasMsg(`共 ${d.total} 条想法`);
+        island.emit({ key: "ideas", kind: "success", title: `缝隙分析完成 · ${d.total} 条想法`,
+          detail: `${d.open.length} 条 open · ${d.solved.length} 条已有进展` }); },
+      error: (d) => { setIdeasMsg(`出错：${d.message}`);
+        island.emit({ key: "ideas", kind: "error", title: "缝隙分析失败", detail: d.message }); },
       done: () => { },
-    }).catch((e) => setIdeasMsg(`请求失败：${e}`));
+    }).catch((e) => { setIdeasMsg(`请求失败：${e}`);
+      island.emit({ key: "ideas", kind: "error", title: "缝隙分析请求失败", detail: String(e) }); });
   };
 
   // ---- 模块五 P0-2：整批领域综述（SSE 流式，五节结构） ----
@@ -193,8 +220,12 @@ export default function GraphPage() {
     setSurveySections([]);
     setSurveyCached(false);
     setSurveyNote("收集证据…");
+    island.emit({ key: "survey", kind: "progress", title: `领域综述生成中（${activeIds.length} 篇）`,
+      detail: "五节结构 · SSE 流式", indeterminate: true });
     streamSurvey(activeIds, {
-      status: (d) => setSurveyNote(d.note),
+      status: (d) => { setSurveyNote(d.note);
+        island.emit({ key: "survey", kind: "progress", title: "领域综述生成中",
+          detail: d.note, indeterminate: true }); },
       delta: (d) => setSurveySections((prev) => {
         const i = prev.findIndex((s) => s.title === d.section);
         if (i >= 0) {
@@ -209,9 +240,14 @@ export default function GraphPage() {
         setSurveyCached(Boolean(d.cached));
         setSurveyNote(`完成：${d.sections.length} 节 · ${Array.isArray(d.stats?.years) ? `${d.stats.years[0]}–${d.stats.years[1]}` : ""}`);
         setSurveying(false);
+        island.emit({ key: "survey", kind: "success",
+          title: `领域综述完成 · ${d.sections.length} 节`,
+          detail: d.cached ? "缓存命中" : undefined });
       },
-      error: (d) => { setSurveyNote(`出错：${d.message}`); setSurveying(false); },
-    }).catch((e) => { setSurveyNote(`请求失败：${e}`); setSurveying(false); });
+      error: (d) => { setSurveyNote(`出错：${d.message}`); setSurveying(false);
+        island.emit({ key: "survey", kind: "error", title: "领域综述失败", detail: d.message }); },
+    }).catch((e) => { setSurveyNote(`请求失败：${e}`); setSurveying(false);
+      island.emit({ key: "survey", kind: "error", title: "综述请求失败", detail: String(e) }); });
   };
 
   const exportSurveyMd = () => {
@@ -229,11 +265,19 @@ export default function GraphPage() {
     if (checkMsg && checks) { setChecks(null); setCheckMsg(""); return; }
     setCheckMsg("抽取并去重 Future Work…");
     setChecks(null);
+    island.emit({ key: "checks", kind: "progress", title: "外部进展核查中",
+      detail: "S2 证据 · open_unverified 诚实态", indeterminate: true });
     streamFutureChecks(activeIds, {
-      status: (d) => setCheckMsg(d.note),
-      final: (d) => { setChecks(d.items); setCheckMsg(`共 ${d.total} 条（外部证据：S2）`); },
-      error: (d) => setCheckMsg(`出错：${d.message}`),
-    }).catch((e) => setCheckMsg(`请求失败：${e}`));
+      status: (d) => { setCheckMsg(d.note);
+        island.emit({ key: "checks", kind: "progress", title: "外部进展核查中",
+          detail: d.note, indeterminate: true }); },
+      final: (d) => { setChecks(d.items); setCheckMsg(`共 ${d.total} 条（外部证据：S2）`);
+        island.emit({ key: "checks", kind: "success", title: `核查完成 · ${d.total} 条`,
+          detail: "外部证据:S2" }); },
+      error: (d) => { setCheckMsg(`出错：${d.message}`);
+        island.emit({ key: "checks", kind: "error", title: "核查失败", detail: d.message }); },
+    }).catch((e) => { setCheckMsg(`请求失败：${e}`);
+      island.emit({ key: "checks", kind: "error", title: "核查请求失败", detail: String(e) }); });
   };
 
   // ---- 导出 ----
@@ -296,6 +340,11 @@ export default function GraphPage() {
                     onClick={() => setShowPicker((v) => !v)}>
                     选择论文（{pickedIds.length || "全部"}）
                   </button>
+                  <button className="chip" style={{ cursor: "pointer" }} data-testid="graph-immersive"
+                    title="大屏畅想：隐藏侧边栏，画布占满视口（Esc 退出）"
+                    onClick={() => setImmersive(!immersive)}>
+                    <Maximize size={12} /> {immersive ? "退出沉浸" : "沉浸全屏"}
+                  </button>
                   <button className="chip" style={{ cursor: "pointer" }} onClick={exportPng}>导出 PNG</button>
                   <button className="chip" style={{ cursor: "pointer" }} onClick={exportJson}>导出 JSON</button>
                   <select value={commId} onChange={(e) => setCommId(Number(e.target.value))}
@@ -343,7 +392,7 @@ export default function GraphPage() {
             </div>
 
             {surveySections.length > 0 && (
-              <div className="card">
+              <div className="card card-in" style={{ ["--i" as string]: 2 }}>
                 <h2>领域综述（整批 {activeIds.length} 篇 · 五节结构）
                   {surveyCached && <span className="chip ok" style={{ marginLeft: 8 }}>缓存命中</span>}
                   <button className="chip" style={{ cursor: "pointer", marginLeft: 8 }}
@@ -362,7 +411,7 @@ export default function GraphPage() {
             )}
 
             {checks && (
-              <div className="card">
+              <div className="card card-in" style={{ ["--i" as string]: 3 }}>
                 <h2>外部最新进展核查
                   <span className="chip accent" style={{ marginLeft: 8 }}>S2 证据 · open_unverified 诚实态</span>
                 </h2>
@@ -400,59 +449,76 @@ export default function GraphPage() {
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "var(--space-4)", alignItems: "start" }}>
-              <div className="card" style={{ height: 480, position: "relative" }}>
-                <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-                <div style={{ position: "absolute", right: 12, bottom: 10, fontSize: 11, opacity: 0.6 }}>
-                  节点大小=PageRank · 颜色=社区 · 边粗细=含金量（红边=基石 / 绿边=边缘衍生）
-                </div>
-              </div>
-
-              <div className="card">
-                {selected ? (
-                  <>
-                    <h2 style={{ marginTop: 0 }}>{selected.title}</h2>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                      {selected.role && (
-                        <span className={`chip ${selected.role === "cornerstone" ? "ok" : ""}`}
-                          title={selected.role_reason ?? undefined}>
-                          {ROLE_BADGE[selected.role] ?? selected.role}
-                        </span>
-                      )}
-                      {selected.year && <span className="chip">{selected.year} 年</span>}
-                      <span className="chip">社区 {selected.community}</span>
-                      <Link className="chip accent" href={`/reader/${selected.paper_id}`}>打开阅读器 →</Link>
-                    </div>
-                    <div className="kv" style={{ lineHeight: 2 }}>
-                      PageRank <b>{selected.pagerank}</b> · 被引 <b>{selected.in_degree}</b> ·
-                      引出 <b>{selected.out_degree}</b> · 介数 <b>{selected.betweenness}</b>
-                      {selected.time_rank != null && <> · 时间序位 <b>{selected.time_rank}</b></>}
-                    </div>
-                    {selected.role_reason && (
-                      <p className="kv" style={{ fontSize: 12, color: "var(--ink-2, #555)",
-                        background: "var(--surface-2, #f8fafc)", borderRadius: 6, padding: "6px 8px" }}>
-                        🧭 {selected.role_reason}
-                      </p>
-                    )}
-                    <h2 style={{ fontSize: 13 }}>引用明细（实质性引用句）</h2>
-                    {selectedEdges.flatMap((e) => e.examples ?? []).length === 0 && (
-                      <p className="kv">无实质性引用句记录（边或为背景/凑数引用）。</p>
-                    )}
-                    {selectedEdges.flatMap((e) => e.examples ?? []).slice(0, 4).map((x, i) => (
-                      <p key={i} className="kv" style={{ borderBottom: "1px dashed var(--line)",
-                        padding: "4px 0", fontSize: 12 }}>
-                        「{x.sentence.slice(0, 80)}」<span className="chip ok" style={{ fontSize: 10 }}>实质</span>
-                      </p>
-                    ))}
-                  </>
-                ) : (
-                  <p className="kv">点击节点查看详情（年份 / 指标 / 角色 / 实质性引用句）。</p>
-                )}
+            <div className="card graph-canvas-card card-in" style={{
+              height: immersive ? "calc(100vh - var(--topbar-h) - var(--space-8))" : 480,
+              position: "relative", ["--i" as string]: 1,
+            }}>
+              <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+              <div style={{ position: "absolute", right: 12, bottom: 10, fontSize: 11, opacity: 0.6 }}>
+                节点大小=PageRank · 颜色=社区 · 边粗细=含金量（红边=基石 / 绿边=边缘衍生）· 点击节点 → 详情抽屉
               </div>
             </div>
 
+            {/* 节点详情抽屉：点击节点右侧弹簧滑入，点遮罩/空白画布关闭 */}
+            <AnimatePresence>
+              {selected && (
+                <>
+                  <motion.div className="drawer-mask" key="g-mask"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => setSelected(null)} />
+                  <motion.aside className="drawer" key="g-drawer" data-testid="graph-drawer"
+                    initial={{ x: "105%" }} animate={{ x: 0 }} exit={{ x: "105%" }}
+                    transition={{ type: "spring", stiffness: 320, damping: 32 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8,
+                      padding: "var(--space-4)", borderBottom: "1px solid var(--line)",
+                      flexShrink: 0 }}>
+                      <b style={{ flex: 1, minWidth: 0, overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected.title}</b>
+                      <button className="chip" style={{ cursor: "pointer", flexShrink: 0 }}
+                        onClick={() => setSelected(null)}>✕ 关闭</button>
+                    </div>
+                    <div style={{ padding: "var(--space-4)", overflowY: "auto", flex: 1 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        {selected.role && (
+                          <span className={`chip ${selected.role === "cornerstone" ? "ok" : ""}`}
+                            title={selected.role_reason ?? undefined}>
+                            {ROLE_BADGE[selected.role] ?? selected.role}
+                          </span>
+                        )}
+                        {selected.year && <span className="chip num">{selected.year} 年</span>}
+                        <span className="chip">社区 {selected.community}</span>
+                        <Link className="chip accent" href={`/reader/${selected.paper_id}`}>打开阅读器 →</Link>
+                      </div>
+                      <div className="kv num" style={{ lineHeight: 2 }}>
+                        PageRank <b>{selected.pagerank}</b> · 被引 <b>{selected.in_degree}</b> ·
+                        引出 <b>{selected.out_degree}</b> · 介数 <b>{selected.betweenness}</b>
+                        {selected.time_rank != null && <> · 时间序位 <b>{selected.time_rank}</b></>}
+                      </div>
+                      {selected.role_reason && (
+                        <p className="kv" style={{ fontSize: 12, color: "var(--ink-2)",
+                          background: "var(--surface-2)", borderRadius: 6, padding: "6px 8px" }}>
+                          🧭 {selected.role_reason}
+                        </p>
+                      )}
+                      <h2 style={{ fontSize: 13, marginTop: 12 }}>引用明细（实质性引用句）</h2>
+                      {selectedEdges.flatMap((e) => e.examples ?? []).length === 0 && (
+                        <p className="kv">无实质性引用句记录（边或为背景/凑数引用）。</p>
+                      )}
+                      {selectedEdges.flatMap((e) => e.examples ?? []).slice(0, 4).map((x, i) => (
+                        <p key={i} className="kv" style={{ borderBottom: "1px dashed var(--line)",
+                          padding: "4px 0", fontSize: 12 }}>
+                          「{x.sentence.slice(0, 80)}」<span className="chip ok" style={{ fontSize: 10 }}>实质</span>
+                        </p>
+                      ))}
+                    </div>
+                  </motion.aside>
+                </>
+              )}
+            </AnimatePresence>
+
             {summary && (
-              <div className="card">
+              <div className="card card-in" style={{ ["--i" as string]: 2 }}>
                 <h2>社区 {commId} 演进综述 <span className="chip accent">逐论断经 ClaimTrace 校验</span></h2>
                 <EvidenceText text={summary} anchors={anchors} />
                 {guardrails.length > 0 && (
@@ -476,7 +542,7 @@ export default function GraphPage() {
             )}
 
             {ideas && (
-              <div className="card">
+              <div className="card card-in" style={{ ["--i" as string]: 3 }}>
                 <h2>Future Work 去重过滤 <span className="chip accent">招牌创新：已失效 vs 值得做</span></h2>
                 <p className="kv">{ideasMsg}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>

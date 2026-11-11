@@ -237,7 +237,9 @@ export interface FamilyGroup {
 
 export async function fetchFamilies(): Promise<FamilyGroup[]> {
   const r = await fetch(`${API}/api/families`, { cache: "no-store" });
-  return (await r.json()).families;
+  if (!r.ok) return [];                       // 旧后端/降级时端点可能不存在
+  const d = await r.json().catch(() => null);
+  return Array.isArray(d?.families) ? d.families : [];
 }
 
 export async function getPaper(id: string): Promise<Paper> {

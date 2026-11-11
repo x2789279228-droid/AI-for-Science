@@ -26,6 +26,9 @@ import {
   TranslationEntry, fetchTranslation, streamTranslate, translateSelection, addTerm,
   SearchHit, searchPaper,
 } from "@/lib/api";
+import { useIsland } from "@/lib/island";
+import { useShell } from "@/components/ShellContext";
+import { List, Maximize } from "@/components/icons";
 import PdfAnchored from "@/components/PdfAnchored";
 
 type ViewMode = "pdf" | "text" | "bilingual" | "compare" | "pdf-bilingual";
@@ -343,9 +346,27 @@ function SelectionPopup({ sel, onClose }: {
   );
 }
 
+/** 通用手风琴卡:标题行+计数即触发器,grid-rows 无缝展开(reader 工具页克制档)。 */
+function AccCard({ title, children, defaultOpen = false, style }: {
+  title: React.ReactNode; children: React.ReactNode;
+  defaultOpen?: boolean; style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`card acc${open ? " open" : ""}`} style={style}>
+      <h2 className="acc-trigger" onClick={() => setOpen((v) => !v)}>
+        {title}<span className="acc-caret">▸</span>
+      </h2>
+      <div className="acc-body"><div className="acc-inner">{children}</div></div>
+    </div>
+  );
+}
+
 function ReaderInner() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
+  const { immersive, setImmersive } = useShell();
+  const island = useIsland();
   const [paper, setPaper] = useState<Paper | null>(null);
   const [outline, setOutline] = useState<OutlinePayload | null>(null);
   const [pageData, setPageData] = useState<PagePayload | null>(null);
@@ -379,6 +400,8 @@ function ReaderInner() {
   const [pendingBid, setPendingBid] = useState<string | null>(null);      // D：全文搜索跨页块跳转
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null); // A：当前章节（滚动推导）
   const [toast, setToast] = useState<string | null>(null);                // C：续读恢复提示
+  const [refsOpen, setRefsOpen] = useState(false);                        // References 手风琴
+  const [tocDrawer, setTocDrawer] = useState(false);                      // 沉浸态浮动目录抽屉
   const [searchMode, setSearchMode] = useState<"page" | "full">("page");  // D：页内过滤 / 全文 FTS
   const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null); // D：null=未查询
   const [searching, setSearching] = useState(false);                      // D
@@ -761,8 +784,30 @@ function ReaderInner() {
       || b.text.toLowerCase().includes(query.toLowerCase()));
   const pageFigures = (pageData?.figures ?? outline.figures).filter((f) => f.page === page - 1);
 
+  // 标题树:常规 TOC 面板与沉浸态浮动抽屉共用同一元素描述(元素可复用,无组件重挂载)
+  const tocBody = (
+    <>
+      <h2>标题树（{meta.parse_engine === "mineru" ? "MinerU" : "DocIR"} 解析）</h2>
+      {outline.toc.map((t, i) => (
+        <div key={i} style={{ paddingLeft: (t.level - 1) * 14 }}>
+          <span
+            className={`toc-item${activeToc && tocKey(t) === tocKey(activeToc) ? " active" : ""}`}
+            onClick={() => { gotoSection(t); setTocDrawer(false); }}
+            title="块级跳转：定位到本章首个标题块并高亮">
+            {t.level === 1 ? <b>{t.title}</b> : t.title}
+            {t.appendix && <span className="chip" style={{ fontSize: 9, marginLeft: 6 }}
+              title="附录章节（结构化标记）">附录</span>}
+            <span className="toc-page">p{t.page + 1}</span>
+          </span>
+        </div>
+      ))}
+      {outline.toc.length === 0 && <p className="kv">未识别出标题结构。</p>}
+    </>
+  );
+
   const gotoRef = (n: number) => {
     setHighlightRef(n);
+    setRefsOpen(true);   // 手风琴联动:跳转前自动展开(滚动定位依赖可见高度)
     if (view === "pdf") setView("text");
     window.setTimeout(() => {
       refsPanelRef.current?.querySelector(`[data-refidx="${n}"]`)
@@ -772,6 +817,7 @@ function ReaderInner() {
 
   const jumpFromRef = (n: number) => {
     setHighlightRef(n);
+    setRefsOpen(true);
     const local = fullRefsIndex.get(n)?.[0];
     if (local) {
       const pane = view === "bilingual" ? origPaneRef.current
@@ -858,9 +904,9 @@ function ReaderInner() {
         setTranslating({ done: d.done, total: d.total });
       },
       final: () => setTranslating(null),
-      error: (d) => { window.alert(`翻译失败：${d.message}`); setTranslating(null); },
+      error: (d) => { island.emit({ key: "trans", kind: "error", title: "翻译失败", detail: d.message }); setTranslating(null); },
       done: () => setTranslating(null),
-    }).catch((e) => { window.alert(`翻译请求失败：${e}`); setTranslating(null); });
+    }).catch((e) => { island.emit({ key: "trans", kind: "error", title: "翻译请求失败", detail: String(e) }); setTranslating(null); });
   };
 
   // ---- 模块三 G：整篇翻译（缓存续译 + AbortController 断流即停） ----
@@ -872,17 +918,27 @@ function ReaderInner() {
     setTranslatingAll(true);
     const ac = new AbortController();
     abortRef.current = ac;
+    island.emit({ key: "trans-all", kind: "progress", title: "整篇翻译进行中",
+      detail: "已完成块落缓存,可中断续译", progress: 0 });
     streamTranslate(id as string, { include_extras: true, lang: transLang }, {
       tDelta: (d) => {
         setTrans((prev) => ({ ...prev, [d.block_id]: { text: d.text, format_ok: d.format_ok } }));
         setTranslating({ done: d.done, total: d.total });
+        island.emit({ key: "trans-all", kind: "progress", title: "整篇翻译进行中",
+          detail: `${d.done}/${d.total} 块`,
+          progress: d.total ? d.done / d.total : undefined, indeterminate: !d.total });
       },
       final: () => setTranslating(null),
-      error: (d) => { window.alert(`翻译失败：${d.message}`); },
-      done: () => { setTranslating(null); setTranslatingAll(false); abortRef.current = null; },
+      error: (d) => { island.emit({ key: "trans-all", kind: "error", title: "翻译失败", detail: d.message }); },
+      done: () => { setTranslating(null); setTranslatingAll(false); abortRef.current = null;
+        island.emit({ key: "trans-all", kind: "success", title: "整篇翻译完成",
+          detail: "公式块不译,占位符已校验" }); },
     }, ac.signal).catch((e) => {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
-        window.alert(`翻译请求失败：${e}`);
+        island.emit({ key: "trans-all", kind: "error", title: "翻译请求失败", detail: String(e) });
+      } else {
+        island.emit({ key: "trans-all", kind: "info", title: "整篇翻译已停止",
+          detail: "已完成块已落缓存,重试即续译" });
       }
       setTranslating(null);
       setTranslatingAll(false);
@@ -894,11 +950,14 @@ function ReaderInner() {
   // ---- 模块三 P0-2：服务端导出译文 PDF（overlay 原位 / bilingual 双页） ----
   const exportServerPdf = async (layout: "overlay" | "bilingual") => {
     setExporting(true);
+    island.emit({ key: "export", kind: "progress", title: "服务端导出 PDF 中",
+      detail: layout === "overlay" ? "原位替换" : "双语对照", indeterminate: true });
     try {
       const r = await fetch(`${API}/api/papers/${id}/export?fmt=pdf&target_lang=${transLang}&mode=academic&layout=${layout}`);
       if (!r.ok) {
         const msg = await r.json().catch(() => ({ detail: r.statusText }));
-        window.alert(`PDF 导出失败：${(msg as { detail?: string }).detail ?? r.status}`);
+        island.emit({ key: "export", kind: "error", title: "PDF 导出失败",
+          detail: (msg as { detail?: string }).detail ?? String(r.status) });
         return;
       }
       const blob = await r.blob();
@@ -908,10 +967,12 @@ function ReaderInner() {
       a.click();
       URL.revokeObjectURL(a.href);
       const overflow = Number(r.headers.get("X-Export-Overflow") ?? "0");
-      showToast(`已导出 PDF（${layout === "overlay" ? "原位替换" : "双语对照"}`
-        + `${overflow ? ` · ${overflow} 块进补遗页` : ""}）`);
+      island.emit({ key: "export", kind: "success",
+        title: `已导出 PDF（${layout === "overlay" ? "原位替换" : "双语对照"}）`,
+        detail: overflow ? `${overflow} 块进补遗页` : undefined });
     } catch (e) {
-      window.alert(`PDF 导出失败：${e instanceof Error ? e.message : e}`);
+      island.emit({ key: "export", kind: "error", title: "PDF 导出失败",
+        detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setExporting(false);
     }
@@ -921,6 +982,8 @@ function ReaderInner() {
   const exportDoc = async (fmt: "md" | "html") => {
     if (exporting) return;
     setExporting(true);
+    island.emit({ key: "export", kind: "progress", title: `导出 ${fmt.toUpperCase()} 中`,
+      detail: "全文拉取+逐块拼装", indeterminate: true });
     try {
       const r = await fetch(`${API}/api/papers/${id}/docir`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -988,9 +1051,12 @@ function ReaderInner() {
       a.download = `${title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60)}.${ext}`;
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      showToast(`已导出 ${fmt === "md" ? "Markdown" : "HTML"}（已译 ${translated}/${textBlocks.length} 块）`);
+      island.emit({ key: "export", kind: "success",
+        title: `已导出 ${fmt === "md" ? "Markdown" : "HTML"}`,
+        detail: `已译 ${translated}/${textBlocks.length} 块` });
     } catch (e) {
-      window.alert(`导出失败：${e instanceof Error ? e.message : e}`);
+      island.emit({ key: "export", kind: "error", title: "导出失败",
+        detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setExporting(false);
     }
@@ -1028,15 +1094,21 @@ function ReaderInner() {
   const translatePage = () => {
     if (translating) return;
     setTranslating({ done: 0, total: 0 });
+    island.emit({ key: "trans-page", kind: "progress", title: `翻译第 ${page} 页中`,
+      indeterminate: true });
     streamTranslate(id as string, { page: page - 1, lang: transLang }, {
       tDelta: (d) => {
         setTrans((prev) => ({ ...prev, [d.block_id]: { text: d.text, format_ok: d.format_ok } }));
         setTranslating({ done: d.done, total: d.total });
+        island.emit({ key: "trans-page", kind: "progress", title: `翻译第 ${page} 页中`,
+          detail: `${d.done}/${d.total} 块`,
+          progress: d.total ? d.done / d.total : undefined, indeterminate: !d.total });
       },
       final: () => setTranslating(null),
-      error: (d) => { window.alert(`翻译失败：${d.message}`); setTranslating(null); },
-      done: () => setTranslating(null),
-    }).catch((e) => { window.alert(`翻译请求失败：${e}`); setTranslating(null); });
+      error: (d) => { island.emit({ key: "trans-page", kind: "error", title: "翻译失败", detail: d.message }); setTranslating(null); },
+      done: () => { setTranslating(null);
+        island.emit({ key: "trans-page", kind: "success", title: `第 ${page} 页翻译完成` }); },
+    }).catch((e) => { island.emit({ key: "trans-page", kind: "error", title: "翻译请求失败", detail: String(e) }); setTranslating(null); });
   };
 
   const onTextMouseUp = () => {
@@ -1128,25 +1200,16 @@ function ReaderInner() {
         <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowReport((s) => !s)}>
           解析报告 <span style={{ opacity: 0.7 }}>{meta.parse_engine ?? ""}</span>
         </button>
+        <button className="chip" style={{ cursor: "pointer" }} data-testid="reader-immersive"
+          title="沉浸阅读：隐藏侧边栏与标题树，正文占满视口（目录收为左侧浮动按钮 · Esc 退出）"
+          onClick={() => setImmersive(!immersive)}>
+          <Maximize size={12} /> {immersive ? "退出沉浸" : "沉浸阅读"}
+        </button>
       </div>
       <div className="page">
         <div className="reader-grid">
           <div className="card toc-panel" style={{ marginBottom: 0, maxHeight: "100%" }}>
-            <h2>标题树（{meta.parse_engine === "mineru" ? "MinerU" : "DocIR"} 解析）</h2>
-            {outline.toc.map((t, i) => (
-              <div key={i} style={{ paddingLeft: (t.level - 1) * 14 }}>
-                <span
-                  className={`toc-item${activeToc && tocKey(t) === tocKey(activeToc) ? " active" : ""}`}
-                  onClick={() => gotoSection(t)}
-                  title="块级跳转：定位到本章首个标题块并高亮">
-                  {t.level === 1 ? <b>{t.title}</b> : t.title}
-                  {t.appendix && <span className="chip" style={{ fontSize: 9, marginLeft: 6 }}
-                    title="附录章节（结构化标记）">附录</span>}
-                  <span className="toc-page">p{t.page + 1}</span>
-                </span>
-              </div>
-            ))}
-            {outline.toc.length === 0 && <p className="kv">未识别出标题结构。</p>}
+            {tocBody}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", minHeight: 0 }}>
@@ -1303,7 +1366,7 @@ function ReaderInner() {
               <div className="card" style={{ marginBottom: 0, flex: 1, overflowY: "auto" }}>
                 <PdfAnchored paperId={id as string} page={page}
                   bbox={(urlBbox ?? focusBbox)?.length === 4 ? (urlBbox ?? focusBbox) : undefined}
-                  width={680} onMouseUp={onTextMouseUp} />
+                  width={immersive ? 880 : 680} onMouseUp={onTextMouseUp} />
               </div>
             ) : view === "compare" ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)", flex: 1, minHeight: 0 }}>
@@ -1427,12 +1490,16 @@ function ReaderInner() {
             )}
 
             {(view !== "pdf" && refs.length > 0) && (
-              <div className="card" ref={refsPanelRef} style={{ marginBottom: 0, maxHeight: 260, overflowY: "auto" }}>
-                <h2 style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div className={`card acc${refsOpen ? " open" : ""}`} ref={refsPanelRef}
+                style={{ marginBottom: 0 }}>
+                <h2 className="acc-trigger" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+                  onClick={() => setRefsOpen((v) => !v)}
+                  title={refsOpen ? "收起参考文献" : "展开参考文献"}>
                   References（{refs.length} 条 · 点击条目跳到正文首个引用处）
+                  <span className="acc-caret">▸</span>
                   {refQuality && (
                     <span className={`chip ${hideCheapRefs ? "accent" : ""}`} style={{ cursor: "pointer", fontSize: 10 }}
-                      onClick={() => setHideCheapRefs((v) => !v)}
+                      onClick={(e) => { e.stopPropagation(); setHideCheapRefs((v) => !v); }}
                       title="可逆过滤：只隐藏「凑数引用」（权重 0.1）；无引用句的条目保持显示为中性态；再次点击恢复">
                       {hideCheapRefs ? "已隐藏凑数（点击恢复）" : "隐藏凑数引用"}
                     </span>
@@ -1445,6 +1512,8 @@ function ReaderInner() {
                     </span>
                   )}
                 </h2>
+                <div className="acc-body"><div className="acc-inner"
+                  style={{ maxHeight: 260, overflowY: "auto" }}>
                 {refs
                   .filter((r) => !hideCheapRefs || refQuality?.[r.index]?.cls !== "perfunctory")
                   .map((r) => {
@@ -1482,26 +1551,27 @@ function ReaderInner() {
                     </div>
                   );
                 })}
+                </div></div>
               </div>
             )}
 
-            {pageFigures.filter((f) => f.image_path).map((f) => (
-              <div className="card" key={f.id} style={{ marginBottom: 0 }}>
-                <h2>图 {f.id}（第 {f.page + 1} 页）{f.caption ? `· ${f.caption.slice(0, 60)}` : ""}</h2>
+            {pageFigures.filter((f) => f.image_path).map((f, i) => (
+              <AccCard key={f.id} defaultOpen style={{ marginBottom: 0 }}
+                title={<span>图 {f.id}（第 {f.page + 1} 页）{f.caption ? `· ${f.caption.slice(0, 60)}` : ""}</span>}>
                 <img src={`${API}/api/papers/${id}/figure/${f.id}`} alt={f.caption || f.id}
                   style={{ maxWidth: "100%", borderRadius: "var(--radius-sm)" }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              </div>
+              </AccCard>
             ))}
 
-            {(pageData?.tables ?? []).filter((t) => t.page === page - 1).map((t) => (
-              <div className="card" key={t.id} style={{ marginBottom: 0 }}>
-                <h2>表格 {t.id}（第 {t.page + 1} 页）</h2>
+            {(pageData?.tables ?? []).filter((t) => t.page === page - 1).map((t, i) => (
+              <AccCard key={t.id} style={{ marginBottom: 0 }}
+                title={<span>表格 {t.id}（第 {t.page + 1} 页）</span>}>
                 {t.headers?.length ? (
                   <div style={{ overflowX: "auto" }}>
                     <table className="three-line">
                       <thead>
-                        <tr>{t.headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+                        <tr>{t.headers.map((h, i2) => <th key={i2}>{h}</th>)}</tr>
                       </thead>
                       <tbody>
                         {(t.rows ?? []).map((row, ri) => (
@@ -1513,11 +1583,27 @@ function ReaderInner() {
                 ) : (
                   <pre style={{ fontSize: "var(--text-xs)", overflowX: "auto", margin: 0 }}>{t.markdown}</pre>
                 )}
-              </div>
+              </AccCard>
             ))}
           </div>
         </div>
       </div>
+
+      {/* 沉浸态:左侧浮动目录按钮 + 抽屉(隐藏侧边栏后的导航补偿) */}
+      {immersive && (
+        <>
+          <button className="toc-float" data-testid="toc-float" title="目录（章节树）"
+            onClick={() => setTocDrawer((v) => !v)}>
+            <List size={16} />
+          </button>
+          {tocDrawer && (
+            <div className="toc-drawer-mask" onClick={() => setTocDrawer(false)} />
+          )}
+          <div className={`toc-drawer${tocDrawer ? " open" : ""}`} data-testid="toc-drawer">
+            {tocBody}
+          </div>
+        </>
+      )}
       <SelectionPopup sel={sel} onClose={() => setSel(null)} />
 
       {/* F：悬停翻译浮窗——只读缓存（hover 不调 LLM），未译块点按才触发单块翻译 */}

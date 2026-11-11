@@ -1,4 +1,4 @@
-# Meridian 设计令牌标准 v1.0
+# Meridian 设计令牌标准 v1.1
 
 > 全部 UI 的唯一取值依据。定义于 `web/app/tokens.css`，组件样式**只准引用 Semantic / Component 层**，禁止写死色值、字号、圆角。新增 token 必须先改本文档再改代码。
 
@@ -72,3 +72,34 @@ Primitive（原始阶：gray / blue 色板）
 3. **状态色语义**：论断「已验证」用 `--ok`，「未验证/降级」用 `--warn`，服务异常用 `--danger`
 4. **深色模式预留**：未来只需覆盖 Semantic 层（Primitive 不动），组件代码零改动
 5. 新增 token：先改本文档 → 再改 `tokens.css` → PR 说明用途
+
+## 4. RISO 主题（第二皮肤，v1.1 增补）
+
+> 基调：创新/艺术/大胆。母题 = riso 双色印刷海报（Klein 蓝 × 国际橙 × 米杏纸 × 墨黑、halftone 网点、粗衬线斜排、硬阴影版画）。启用方式：`html[data-theme="riso"]`（ShellContext 持久化于 `localStorage.meridian:theme`）。
+
+### Primitive 新增（classic 不引用）
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `--riso-cream / --riso-paper / --riso-cream-2` | `#f4e9d6 / #faf1df / #eadfc6` | 米杏纸底/提亮纸面/纸面暗部 |
+| `--riso-klein / --riso-klein-deep` | `#2233c9 / #1a2694` | Klein 蓝（主色）/ 蓝墨（已验证章） |
+| `--riso-orange / --riso-orange-deep` | `#ff5f3c / #e64a26` | 国际橙（光源/强调）/ 橙墨（未验证章） |
+| `--riso-vermilion` | `#d23a2e` | 朱砂（错误章） |
+| `--riso-ink / --riso-warm-gray / --riso-warm-gray-3` | `#17161a / #5a564e / #938d80` | 墨黑 / 暖灰文字阶 |
+| `--riso-line / --riso-line-strong / --riso-yellow` | `#e0d3b8 / #c9b995 / #ffd23f` | 纸边 / 海报黄点缀 |
+
+### Semantic 覆盖（`[data-theme="riso"]` 块，组件零改动）
+
+`--bg→米纸` `--surface→纸白` `--ink→墨黑` `--accent→Klein 蓝`；**状态色印章化**：`--ok→蓝墨(已验证)` `--warn→橙墨(未验证)` `--danger→朱砂(错误)`；`--grad-brand→蓝橙叠印`；`--radius-sm/md/lg→3/4/5px`（版画直角）；`--font-display→"Playfair Display", "Noto Serif SC", serif`。
+
+### 新令牌
+
+| Token | 用途 |
+|---|---|
+| `--font-serif-display` | 海报级衬线展示：`"Playfair Display", "Noto Serif SC", serif`（900 字重 + 斜排） |
+| `--paper-noise` | feTurbulence 纸噪点 data-uri（body::after multiply 叠印） |
+| `--halftone` | halftone 网点 background（currentColor 着色） |
+
+### 艺术浓度边界（RISO 设计契约）
+
+插图/叠印/斜排大字/印章只落**低密度区**（intro/书架/页头/空态/404/占位页/侧栏品牌区）；表格、正文、trace、chips 等**数据密集区只换色换纸感，不加装饰、对比度不降**。插图 = 自绘内联 SVG（components/Illustrations.tsx），仅 riso 主题渲染。

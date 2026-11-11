@@ -126,3 +126,31 @@ export const Spark = (p: IconProps) => (
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
+
+export const PanelLeft = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+  </svg>
+);
+
+export const Maximize = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+  </svg>
+);
+
+export const List = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+  </svg>
+);
+
+export const Palette = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M12 21a9 9 0 1 1 9-9c0 2.2-1.8 3.5-3.5 3.5H15a2 2 0 0 0-1.5 3.3c.4.5.5 1.2.1 1.7-.4.3-.9.5-1.6.5Z" />
+    <circle cx="7.8" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="16.2" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);

@@ -9,8 +9,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
       <body>
+        {/* 防主题闪烁:首帧同步读取皮肤存档(ShellContext 挂载后会接管) */}
+        <script dangerouslySetInnerHTML={{ __html:
+          "try{if(localStorage.getItem('meridian:theme')==='riso')document.documentElement.dataset.theme='riso'}catch(e){}" }} />
         <AppShell>{children}</AppShell>
       </body>
     </html>

@@ -1,11 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { Health, Paper, fetchHealth, listPapers } from "@/lib/api";
+import { IslandProvider, useIsland } from "@/lib/island";
+import { RisoFlagGlyph } from "./Illustrations";
+import { ShellProvider, useShell } from "./ShellContext";
+import BrandIntro from "./BrandIntro";
+import DynamicIsland from "./DynamicIsland";
 import {
-  Chat, Compass, Eye, Graph, Judge, Library, LogoMark, Pen, Plus, Reader,
+  Chat, Compass, Eye, Graph, Judge, Library, LogoMark, Palette, PanelLeft, Pen, Plus, Reader,
 } from "./icons";
 
 interface NavItem {
@@ -35,10 +41,26 @@ function relTime(ts: number): string {
   return `${Math.round(s / 86400)}天前`;
 }
 
+/** 组合根:Shell(沉浸/折叠/intro 信号) + Island(全局事件) + 品牌动画 + 动态岛 */
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <ShellProvider>
+      <IslandProvider>
+        <ShellFrame>{children}</ShellFrame>
+        <BrandIntro />
+        <DynamicIsland />
+      </IslandProvider>
+    </ShellProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { immersive, setImmersive, collapsed, toggleCollapsed, theme, setTheme } = useShell();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const island = useIsland();
+  const llmPrev = useRef<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -53,25 +75,53 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  const firstParsed = papers.find((p) => p.parsed);
-  const readerHref = firstParsed ? `/reader/${firstParsed.id}` : "/reader";
+  // LLM 可用性翻转 → 动态岛 ping(每会话只在状态变化时提示)
+  useEffect(() => {
+    const avail = health?.llm.available;
+    if (avail === undefined) return;
+    if (llmPrev.current !== null && llmPrev.current !== avail) {
+      island.emit(avail
+        ? { key: "llm", kind: "info", title: `LLM 已就绪(${health?.llm.model ?? ""})` }
+        : { key: "llm", kind: "info", title: "LLM 不可用 · 已降级为抽取式证据模式" });
+    }
+    llmPrev.current = avail;
+  }, [health, island]);
+
+  // 快捷键 [ 折叠侧边栏(输入控件聚焦时不拦截)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const inInput = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA"
+        || t.tagName === "SELECT" || t.isContentEditable);
+      if (inInput) return;
+      if (e.key === "[") { e.preventDefault(); toggleCollapsed(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleCollapsed]);
 
   return (
-    <div className="app">
+    <div className={`app${immersive ? " immersive" : ""}${collapsed ? " nav-collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="side-brand">
-          <span className="brand-mark"><LogoMark size={22} /></span>
-          <span className="brand-name">Meridian</span>
-          <span className="brand-badge">SCHOLAR</span>
+          <span className="brand-mark">
+            {theme === "riso" ? <RisoFlagGlyph size={22} /> : <LogoMark size={22} />}
+          </span>
+          {!collapsed && <span className="brand-name">Meridian</span>}
+          {!collapsed && <span className="brand-badge">SCHOLAR</span>}
         </div>
 
-        <Link href="/" className="side-cta">
-          <Plus size={16} /> 上传论文
+        <Link href="/" className="side-cta" title="上传论文">
+          <Plus size={16} /> {!collapsed && "上传论文"}
         </Link>
 
-        <div className="side-group">
-          <span className="side-group-label">模块</span>
-          {NAV.map(({ href, label, Icon, schedule }) => {
+        {!collapsed && (
+          <div className="side-group">
+            <span className="side-group-label">模块</span>
+          </div>
+        )}
+        <div className="side-group" style={collapsed ? { marginTop: 0 } : undefined}>
+          {NAV.map(({ href, label, Icon, schedule }, i) => {
             const active =
               href === "/" ? pathname === "/" :
               href === "/chat" ? pathname === "/chat" :
@@ -79,34 +129,69 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               pathname.startsWith(href);
             return (
               <Link key={href} href={href}
-                className={`side-item ${active ? "active" : ""} ${schedule ? "soon" : ""}`}>
+                title={collapsed ? label : undefined}
+                className={`side-item ${active ? "active" : ""} ${schedule ? "soon" : ""} nav-in`}
+                style={{ ["--i" as string]: i }}>
+                {active && (
+                  <motion.span layoutId="nav-pill" className="nav-pill"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                )}
                 <Icon size={16} />
-                <span>{label}</span>
-                {schedule && <span className="side-schedule">{schedule}</span>}
+                {!collapsed && <span>{label}</span>}
+                {!collapsed && schedule && <span className="side-schedule">{schedule}</span>}
               </Link>
             );
           })}
         </div>
 
-        <div className="side-group side-papers">
-          <span className="side-group-label">文献库 <em>{papers.length}</em></span>
-          <Suspense fallback={null}>
-            <PaperTree papers={papers} />
-          </Suspense>
-          {papers.length === 0 && <p className="side-empty">暂无论文，去上传一份 PDF</p>}
-        </div>
+        {!collapsed && (
+          <div className="side-group side-papers">
+            <span className="side-group-label">文献库 <em>{papers.length}</em></span>
+            <Suspense fallback={null}>
+              <PaperTree papers={papers} />
+            </Suspense>
+            {papers.length === 0 && <p className="side-empty">暂无论文，去上传一份 PDF</p>}
+          </div>
+        )}
 
         <div className="side-footer">
           <span className="avatar">M</span>
-          <span className="side-user">Meridian Demo</span>
+          {!collapsed && <span className="side-user">Meridian Demo</span>}
           <span className={`status-dot ${health?.llm.available ? "dot-ok" : "dot-warn"}`}
             title={health
               ? `LLM ${health.llm.available ? `就绪(${health.llm.model})` : "不可用·抽取式降级"} · Dense ${health.dense ? "开" : "关"}`
               : "后端未连接"} />
+          <button className="mini-btn" data-testid="theme-switch"
+            title={theme === "riso" ? "切换至经典皮肤" : "切换至 RISO 印刷皮肤"}
+            onClick={() => {
+              const next = theme === "riso" ? "classic" : "riso";
+              setTheme(next);
+              island.emit({ key: "theme", kind: "info",
+                title: next === "riso" ? "已切换至 RISO 印刷皮肤" : "已切换至经典皮肤",
+                detail: next === "riso" ? "蓝橙叠印 · halftone · 硬阴影版画" : "浅蓝学术风" });
+            }}
+            style={{ width: 24, height: 24, padding: 0, display: "inline-flex",
+              alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+            <Palette size={13} />
+          </button>
+          <button className="mini-btn" onClick={toggleCollapsed}
+            title={collapsed ? "展开侧边栏（[）" : "折叠侧边栏（[）"}
+            style={{ marginLeft: collapsed ? 0 : "auto", flex: collapsed ? "none" : "none",
+              width: 24, height: 24, padding: 0, display: "inline-flex",
+              alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+            <PanelLeft size={13} />
+          </button>
         </div>
       </aside>
 
       <main className="main">{children}</main>
+
+      {immersive && (
+        <button className="immersive-exit" data-testid="immersive-exit"
+          onClick={() => setImmersive(false)}>
+          退出沉浸 <kbd>Esc</kbd>
+        </button>
+      )}
     </div>
   );
 }

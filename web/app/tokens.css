@@ -31,6 +31,30 @@
   --blue-600: #2456e6;
   --blue-700: #1d43b8;
 
+  /* ---------- 1. Primitive：浅蓝天阶（渐变光感层：intro/动态岛/发光边缘） ---------- */
+  --sky-200: #bae6fd;
+  --sky-300: #7dd3fc;
+  --sky-400: #38bdf8;
+  --sky-500: #0ea5e9;
+  --ink-night: #0b1220;            /* 动态岛深色底（与浅色页面形成对比） */
+
+  /* ---------- 1. Primitive：RISO 印刷色板（第二皮肤专用，classic 不引用） ----------
+     母题：riso 双色印刷海报 —— Klein 蓝 × 国际橙 × 米杏纸 × 墨黑 */
+  --riso-cream: #f4e9d6;           /* 米杏纸底 */
+  --riso-paper: #faf1df;           /* 提亮纸面（卡片） */
+  --riso-cream-2: #eadfc6;         /* 纸面暗部/嵌套 */
+  --riso-klein: #2233c9;           /* Klein 蓝（主色） */
+  --riso-klein-deep: #1a2694;      /* 蓝墨（已验证印章） */
+  --riso-orange: #ff5f3c;          /* 国际橙（光源/强调） */
+  --riso-orange-deep: #e64a26;     /* 橙墨（未验证印章） */
+  --riso-vermilion: #d23a2e;       /* 朱砂（错误印章） */
+  --riso-ink: #17161a;             /* 墨黑 */
+  --riso-warm-gray: #5a564e;       /* 暖灰次级文字 */
+  --riso-warm-gray-3: #938d80;     /* 暖灰弱化 */
+  --riso-line: #e0d3b8;            /* 纸边 */
+  --riso-line-strong: #c9b995;
+  --riso-yellow: #ffd23f;          /* 海报黄点缀 */
+
   /* ---------- 2. Semantic：语义色（组件唯一取色层） ---------- */
   --bg: var(--gray-50);            /* 主区底色 */
   --surface: var(--gray-0);        /* 卡片/侧边栏 */
@@ -44,6 +68,11 @@
   --accent-hover: var(--blue-700);
   --accent-soft: var(--blue-50);   /* 选中/强调底 */
   --accent-border: var(--blue-200);
+  /* 渐变光感层（视觉识别层，功能色不占用） */
+  --grad-brand: linear-gradient(135deg, var(--blue-600) 0%, var(--sky-400) 100%);
+  --grad-brand-soft: linear-gradient(135deg, var(--blue-50) 0%, var(--sky-200) 100%);
+  --glow: rgba(56, 189, 248, 0.45);          /* 发光边缘光晕 */
+  --glow-soft: rgba(56, 189, 248, 0.16);
   --ok: #067647;
   --ok-soft: #e6f4ee;
   --warn: #b25e09;
@@ -62,6 +91,13 @@
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
   --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.08);
+
+  /* 动效令牌 */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);   /* 带 overshoot 的弹性 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.3s;
 
   --text-xs: 12px;
   --text-sm: 13px;
@@ -79,4 +115,47 @@
   --space-8: 32px;
 
   --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  /* 三轨字制：拉丁展示 / 中文衬线标题 / 等宽（自托管子集，见 public/fonts） */
+  --font-display: "Space Grotesk", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif-cn: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /* 海报级衬线展示（RISO 主题主用；classic 下也可引用但默认未挂） */
+  --font-serif-display: "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+
+  /* 纹理令牌（RISO 印刷语言） */
+  --paper-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  --halftone: radial-gradient(circle at center, currentColor 0.8px, transparent 1.3px);
+}
+
+/* ============================================================
+ * RISO 主题（第二皮肤）：Semantic 层整体覆盖 —— 组件零改动换肤
+ * 母题见 docs/design-tokens.md v1.1；classic（无 data-theme）不受影响
+ * ============================================================ */
+[data-theme="riso"] {
+  --bg: var(--riso-cream);
+  --surface: var(--riso-paper);
+  --surface-2: var(--riso-cream-2);
+  --ink: var(--riso-ink);
+  --ink-2: var(--riso-warm-gray);
+  --ink-3: var(--riso-warm-gray-3);
+  --line: var(--riso-line);
+  --line-strong: var(--riso-line-strong);
+  --accent: var(--riso-klein);
+  --accent-hover: var(--riso-klein-deep);
+  --accent-soft: #e5e7f6;                        /* 淡蓝印泥 */
+  --accent-border: #b9bff0;
+  --ok: var(--riso-klein-deep);                  /* 已验证 = 蓝墨章 */
+  --ok-soft: #e5e7f6;
+  --warn: var(--riso-orange-deep);               /* 未验证 = 橙墨章 */
+  --warn-soft: #ffe4d2;
+  --danger: var(--riso-vermilion);               /* 错误 = 朱砂章 */
+  --danger-soft: #f9dcd4;
+  --grad-brand: linear-gradient(135deg, var(--riso-klein) 0%, var(--riso-orange) 100%);
+  --grad-brand-soft: linear-gradient(135deg, #e5e7f6 0%, #ffe4d2 100%);
+  --glow: rgba(255, 95, 60, 0.4);
+  --glow-soft: rgba(255, 95, 60, 0.14);
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;                              /* 版画直角 */
+  --font-display: "Playfair Display", "Noto Serif SC", "Segoe UI", "PingFang SC", serif;
 }

@@ -6,6 +6,8 @@ import {
   cancelJob, dedupDecision, deletePaper, fetchFamilies, listPapers,
   renamePaper, reparsePaper, restorePaper, uploadPaperWithProgress,
 } from "@/lib/api";
+import { useIsland } from "@/lib/island";
+import { RisoIllust } from "@/components/Illustrations";
 import { Alert, Upload } from "@/components/icons";
 
 type Phase = "uploading" | "parsing" | "done" | "reused" | "error";
@@ -37,7 +39,9 @@ export default function LibraryPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [families, setFamilies] = useState<FamilyGroup[]>([]);
   const [collapsedFams, setCollapsedFams] = useState<Record<string, boolean>>({});
+  const [flippedFams, setFlippedFams] = useState<Record<string, boolean>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const island = useIsland();
 
   const refresh = useCallback(async () => {
     const [active, all, fams] = await Promise.all([
@@ -98,6 +102,8 @@ export default function LibraryPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const upload = async (files: File[]) => {
+    island.emit({ key: "upload", kind: "progress", title: `上传 ${files.length} 个文件…`,
+      indeterminate: true });
     const items: QueueItem[] = files.map((f, i) => ({
       key: `${Date.now()}_${i}_${f.name}`, name: f.name, frac: 0,
       phase: "uploading", message: "上传中 0%",
@@ -111,6 +117,8 @@ export default function LibraryPage() {
         const data = await uploadPaperWithProgress(files[i], (frac) => {
           setQueue((prev) => prev.map((q) => q.key === key
             ? { ...q, frac, message: `上传中 ${Math.round(frac * 100)}%` } : q));
+          island.emit({ key: "upload", kind: "progress", title: `上传《${files[i].name}》`,
+            progress: frac });
         });
         if (data.dedup === "exact_file") {
           setQueue((prev) => prev.map((q) => q.key === key
@@ -122,6 +130,8 @@ export default function LibraryPage() {
           setQueue((prev) => prev.map((q) => q.key === key
             ? { ...q, phase: "parsing", frac: 1, paperId: data.paper_id, jobId: data.job_id!,
               message: "排队解析…" } : q));
+          island.emit({ key: "upload", kind: "progress", title: "已入库 · 排队解析",
+            detail: files[i].name, indeterminate: true });
         } else {
           setQueue((prev) => prev.map((q) => q.key === key
             ? { ...q, phase: "done", message: "完成" } : q));
@@ -129,8 +139,12 @@ export default function LibraryPage() {
       } catch (e) {
         setQueue((prev) => prev.map((q) => q.key === key
           ? { ...q, phase: "error", message: e instanceof Error ? e.message : String(e) } : q));
+        island.emit({ key: "upload", kind: "error", title: `《${files[i].name}》上传失败`,
+          detail: e instanceof Error ? e.message : String(e) });
       }
     }
+    island.emit({ key: "upload", kind: "success",
+      title: `上传完成(${files.length} 个文件)`, detail: "解析在后台进行,进度见队列" });
     await refresh();
   };
 
@@ -146,8 +160,11 @@ export default function LibraryPage() {
     setBusyId(p.id);
     try {
       await dedupDecision(p.id, decision, alert.other_paper_id);
-      setNotice(`已${decision === "cover" ? "覆盖（旧版已归档）" : decision === "keep"
-        ? "保留库中版本（新上传已归档）" : "两版本并存"}：《${alert.other_title}》`);
+      const label = decision === "cover" ? "覆盖（旧版已归档）" : decision === "keep"
+        ? "保留库中版本（新上传已归档）" : "两版本并存";
+      setNotice(`已${label}：《${alert.other_title}》`);
+      island.emit({ key: "dedup", kind: "success", title: `版本决策：${label}`,
+        detail: alert.other_title });
       await refresh();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
@@ -277,7 +294,7 @@ export default function LibraryPage() {
       <div className="page-inner">
         <h1>文献库</h1>
 
-        <div className="card">
+        <div className="card card-in" style={{ ["--i" as string]: 0 }}>
           <h2>上传 PDF</h2>
           <div
             className={`dropzone${dragging ? " drag" : ""}`}
@@ -324,43 +341,118 @@ export default function LibraryPage() {
           )}
         </div>
 
-        <div className="card">
+        <div className="card card-in" style={{ ["--i" as string]: 1 }}>
           <h2>已入库（{papers.length}）</h2>
-          {papers.length === 0 && <p className="kv">暂无论文，先上传一份 PDF。</p>}
+          {papers.length === 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)",
+              flexWrap: "wrap" }}>
+              <RisoIllust name="night-reader" size={160} />
+              <p className="kv">暂无论文，先上传一份 PDF。</p>
+            </div>
+          )}
           {grouped.groups.map(({ group, rows }) => {
             const collapsed = !!collapsedFams[group.family_id];
+            const flipped = !!flippedFams[group.family_id];
+            const setFlip = (v: boolean) =>
+              setFlippedFams((m) => ({ ...m, [group.family_id]: v }));
+            const expand = () =>
+              setCollapsedFams((m) => ({ ...m, [group.family_id]: false }));
             return (
-              <div key={group.family_id}
-                style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 8,
-                         padding: "var(--space-2)", margin: "var(--space-2) 0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-                              cursor: "pointer" }}
-                  onClick={() => setCollapsedFams((m) => ({ ...m, [group.family_id]: !collapsed }))}>
-                  <b>{group.canonical_title}</b>
-                  <span className="chip">{group.versions.length} 个版本</span>
-                  {group.canonical_version &&
-                    <span className="chip score-chip">最新 {group.canonical_version}</span>}
-                  {group.pending_alerts > 0 && (
-                    <span className="chip score-chip">{group.pending_alerts} 条待决策</span>
-                  )}
-                  <span className="muted">{collapsed ? "展开 ▸" : "收起 ▾"}</span>
-                </div>
-                {!collapsed && (
-                  <>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap",
-                                  margin: "var(--space-2) 0" }}>
-                      {group.versions.map((v) => (
-                        <span key={v.id}
-                          className={`chip${v.status === "archived" ? " muted" : ""}`}>
-                          {v.status === "archived"
-                            ? <s>{v.version || "无版本号"}（已归档）</s>
-                            : <a href={`/reader/${v.id}`}>{v.version || "无版本号"}</a>}
-                          {v.pending_alerts > 0 ? " ⚠" : ""}
-                        </span>
-                      ))}
+              <div key={group.family_id} className="fam-group">
+                <div className="fam-layer l2" />
+                <div className="fam-layer l1" />
+                {collapsed ? (
+                  /* 收纳态:扑克翻面 —— 正面=最新摘要,背面=全部版本直达 */
+                  <div className={`fam-flip flip-card${flipped ? " flipped" : ""}`}
+                    data-testid="fam-flip"
+                    onClick={() => setFlip(!flipped)}>
+                    <div className="flip-inner">
+                      <div className="flip-face fam-body">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <b>{group.canonical_title}</b>
+                          <span className="chip num">{group.versions.length} 个版本</span>
+                          {group.canonical_version &&
+                            <span className="chip score-chip">最新 {group.canonical_version}</span>}
+                          {group.pending_alerts > 0 && (
+                            <span className="chip score-chip">{group.pending_alerts} 条待决策</span>
+                          )}
+                        </div>
+                        {rows[0] && (
+                          <p className="kv muted">
+                            {rows[0].arxiv_id ? `arXiv:${rows[0].arxiv_id} · ` : ""}
+                            {rows[0].page_count ? `${rows[0].page_count} 页` : "解析中"}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "center", gap: 8, marginTop: "auto" }}>
+                          <span className="flip-hint" title="点击卡片任意处翻面">
+                            ⟳ 翻面看其他 {group.versions.length} 个版本
+                          </span>
+                          <span className="flip-hint"
+                            onClick={(e) => { e.stopPropagation(); expand(); }}>
+                            展开列表 ▾
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flip-face flip-back fam-body"
+                        onClick={(e) => e.stopPropagation()}>
+                        <b style={{ fontSize: 12 }}>全部版本({group.versions.length})</b>
+                        {group.versions.map((v) => (
+                          <div key={v.id} className="fam-ver-row">
+                            {v.status === "archived"
+                              ? <s className="chip muted">{v.version || "无版本号"}（已归档）</s>
+                              : <span className="chip">{v.version || "无版本号"}</span>}
+                            {v.pending_alerts > 0 && (
+                              <span className="chip score-chip">⚠ {v.pending_alerts} 待决策</span>
+                            )}
+                            <span style={{ flex: 1 }} />
+                            {v.status !== "archived" && (
+                              <>
+                                <a className="chip accent" href={`/reader/${v.id}`}
+                                  title="打开阅读器">阅读</a>
+                                <a className="chip" href={`/chat?paper=${v.id}`}
+                                  title="溯源问答">问答</a>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "center", gap: 8, marginTop: "auto" }}>
+                          <span className="flip-hint" onClick={() => setFlip(false)}>↺ 翻回最新</span>
+                          <span className="flip-hint" onClick={expand}>展开完整列表 ▾</span>
+                        </div>
+                      </div>
                     </div>
-                    {rows.map(paperRow)}
-                  </>
+                  </div>
+                ) : (
+                  <div className="fam-body">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                                  cursor: "pointer" }}
+                      onClick={() => setCollapsedFams((m) => ({ ...m, [group.family_id]: true }))}>
+                      <b>{group.canonical_title}</b>
+                      <span className="chip num">{group.versions.length} 个版本</span>
+                      {group.canonical_version &&
+                        <span className="chip score-chip">最新 {group.canonical_version}</span>}
+                      {group.pending_alerts > 0 && (
+                        <span className="chip score-chip">{group.pending_alerts} 条待决策</span>
+                      )}
+                      <span className="muted">收起为书堆 ▴</span>
+                    </div>
+                    <>
+                      <div className="fam-versions">
+                        {group.versions.map((v) => (
+                          <span key={v.id}
+                            className={`chip${v.status === "archived" ? " muted" : ""}`}>
+                            {v.status === "archived"
+                              ? <s>{v.version || "无版本号"}（已归档）</s>
+                              : <a href={`/reader/${v.id}`}>{v.version || "无版本号"}</a>}
+                            {v.pending_alerts > 0 ? " ⚠" : ""}
+                          </span>
+                        ))}
+                      </div>
+                      {rows.map(paperRow)}
+                    </>
+                  </div>
                 )}
               </div>
             );
@@ -369,40 +461,43 @@ export default function LibraryPage() {
         </div>
 
         {archived.length > 0 && (
-          <div className="card">
-            <h2 style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+          <div className={`card acc${showArchived ? " open" : ""} card-in`}
+            style={{ ["--i" as string]: 2 }}>
+            <h2 className="acc-trigger" style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
               onClick={() => setShowArchived((v) => !v)}>
-              已归档（{archived.length}）{showArchived ? "▾" : "▸"}
+              已归档（{archived.length}）<span className="acc-caret">▸</span>
             </h2>
-            <p className="kv muted">
-              被覆盖/被保留决策归档的版本；不参与检索与问答，可恢复或彻底删除。
-            </p>
-            {showArchived && archived.map((p) => (
-              <div className="paper-row" key={p.id}>
-                <div className="t">
-                  <b>{p.title}</b>
-                  <small>
-                    {p.superseded_by ? `被 ${p.superseded_by} 取代 · ` : ""}
-                    {p.page_count ? `${p.page_count} 页 · ` : ""}id {p.id}
-                  </small>
+            <div className="acc-body"><div className="acc-inner">
+              <p className="kv muted">
+                被覆盖/被保留决策归档的版本；不参与检索与问答，可恢复或彻底删除。
+              </p>
+              {archived.map((p) => (
+                <div className="paper-row" key={p.id}>
+                  <div className="t">
+                    <b>{p.title}</b>
+                    <small>
+                      {p.superseded_by ? `被 ${p.superseded_by} 取代 · ` : ""}
+                      {p.page_count ? `${p.page_count} 页 · ` : ""}id {p.id}
+                    </small>
+                  </div>
+                  <div className="actions">
+                    <button className="mini-btn" disabled={busyId === p.id}
+                      onClick={async () => {
+                        setBusyId(p.id);
+                        try { await restorePaper(p.id); await refresh(); }
+                        finally { setBusyId(""); }
+                      }}>恢复</button>
+                    <button className="mini-btn danger" disabled={busyId === p.id}
+                      onClick={async () => {
+                        if (!window.confirm(`彻底删除《${p.title}》？不可恢复。`)) return;
+                        setBusyId(p.id);
+                        try { await deletePaper(p.id); await refresh(); }
+                        finally { setBusyId(""); }
+                      }}>彻底删除</button>
+                  </div>
                 </div>
-                <div className="actions">
-                  <button className="mini-btn" disabled={busyId === p.id}
-                    onClick={async () => {
-                      setBusyId(p.id);
-                      try { await restorePaper(p.id); await refresh(); }
-                      finally { setBusyId(""); }
-                    }}>恢复</button>
-                  <button className="mini-btn danger" disabled={busyId === p.id}
-                    onClick={async () => {
-                      if (!window.confirm(`彻底删除《${p.title}》？不可恢复。`)) return;
-                      setBusyId(p.id);
-                      try { await deletePaper(p.id); await refresh(); }
-                      finally { setBusyId(""); }
-                    }}>彻底删除</button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div></div>
           </div>
         )}
       </div>
