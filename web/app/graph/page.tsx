@@ -15,6 +15,7 @@ import {
   FullGraph, FutureCheckItem, GraphNode, IdeaItem, fetchGraph, listPapers,
   streamCommunitySummary, streamFutureChecks, streamIdeas, streamSurvey, SurveySection,
 } from "@/lib/api";
+import type { HullOptions } from "@antv/g6/lib/plugins/hull/index";
 import { useIsland } from "@/lib/island";
 import { useShell } from "@/components/ShellContext";
 import { Maximize } from "@/components/icons";
@@ -23,6 +24,23 @@ import type { Paper } from "@/lib/api";
 const PALETTE = ["#5B8FF9", "#61DDAA", "#F6BD16", "#7262fd", "#78D3F8", "#9661BC", "#F6903D", "#008685"];
 
 const ROLE_BADGE: Record<string, string> = { cornerstone: "🪨 基石", peripheral: "🌿 边缘衍生" };
+
+/** 节点标签词典（§5.2,可按语料扩充）：缩写命中 → 冒号前短名 → 前 3 词回退；中文取前 10 字。 */
+const LABEL_ABBR = ["LoRA", "GPT-3", "GPT-2", "ViT", "T5", "XLNet", "BERT", "RoBERTa",
+  "DeBERTa", "ALBERT", "ELECTRA", "BART", "Longformer", "Big Bird", "Reformer",
+  "FlashAttention", "Megatron-LM", "Scaling Laws"];
+
+function nodeLabel(title: string): string {
+  const t = title.replace(/\n/g, " ").trim();
+  const pre = t.split(":")[0].trim();
+  if (t.includes(":") && /^[A-Z][A-Za-z0-9\-+]{1,14}$/.test(pre)) return pre;
+  for (const a of LABEL_ABBR) {
+    if (t.toLowerCase().includes(a.toLowerCase())) return a;
+  }
+  const words = t.split(/\s+/).filter(Boolean);
+  if (/[\u4e00-\u9fff]/.test(t)) return words.join("").slice(0, 10);
+  return words.slice(0, 3).join(" ").slice(0, 20);
+}
 
 /** [E#] → 可点击 chip（悬停显示对应锚点信息）。 */
 function EvidenceText({ text, anchors }: { text: string; anchors: Record<string, unknown> }) {
@@ -66,6 +84,7 @@ export default function GraphPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(true);   // 图谱信息 popover(默认展开,保持统计可见)
 
   // 整批领域综述
   const [surveySections, setSurveySections] = useState<SurveySection[]>([]);
@@ -107,10 +126,35 @@ export default function GraphPage() {
   useEffect(() => {
     if (!graph || !containerRef.current) return;
     // G6 v5 约定：业务字段放 data 挂载点，style 回调从 d.data 读取
-    const g6 = new Graph({
-      container: containerRef.current,
-      autoFit: "view",
-      padding: 20,
+    // §5.3 社区凸包：按 Louvain community 分组的 Hull 插件（fill=社区色 8% 透明度）。
+    // 失败风险兜底：Hull options 类型不符会在 render 时报错并被下方 catch 捕获，
+    // 届时移除 plugins 重建一次（降级：社区色仅靠节点填充区分，如实记录于 checklist）。
+    const hullPlugins = (() => {
+      try {
+        const byComm = new Map<number, string[]>();
+        for (const n of graph.nodes) {
+          const arr = byComm.get(n.community) ?? [];
+          arr.push(n.paper_id);
+          byComm.set(n.community, arr);
+        }
+        return [...byComm.entries()].map(([cid, members], i) => ({
+          key: `hull-${cid}`,
+          type: "hull",
+          members,
+          fill: `${PALETTE[i % PALETTE.length]}14`,   // 8% 透明度
+          stroke: "transparent",
+          corner: "rounded",
+          padding: 18,
+        } as HullOptions & { key: string; type: string }));
+      } catch { return []; }
+    })();
+    let g6: Graph;
+    try {
+      g6 = new Graph({
+        container: containerRef.current,
+        autoFit: "view",
+        padding: 20,
+        plugins: hullPlugins,
       data: {
         nodes: graph.nodes.map((n) => ({ id: n.paper_id, data: { ...n } })),
         edges: graph.edges.map((e, i) => ({
@@ -125,9 +169,21 @@ export default function GraphPage() {
             return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
           },
           fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
-          labelText: (d) => String((d as { data?: GraphNode }).data?.title ?? "").slice(0, 16),
+          labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
           labelPlacement: "bottom",
           labelFontSize: 11,
+          labelFill: "#ffffff",
+          labelBackground: true,
+          labelBackgroundFill: "rgba(23, 22, 26, 0.78)",
+          labelPadding: [1, 3],
+          labelBackgroundRadius: 3,
+          badges: (d): any => {
+            const role = (d as { data?: GraphNode }).data?.role;
+            return role === "cornerstone"
+              ? [{ text: "基", placement: "right-top", background: "#ff5f3c",
+                   color: "#ffffff", fontSize: 8, padding: [1, 3] }]
+              : [];
+          },
           stroke: (d) => {
             const role = (d as { data?: GraphNode }).data?.role;
             return role === "cornerstone" ? "#cc0000" : role === "peripheral" ? "#00aa77" : "#ffffff";
@@ -150,9 +206,39 @@ export default function GraphPage() {
       },
       layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
       behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
-    });
+      });
+    } catch (e) {
+      // 插件选项异常等构造期失败 → 降级为无插件重建(§5.3 降级路径的同步分支)
+      setErr(`G6 初始化失败，已降级重试：${e}`);
+      const g6b = new Graph({
+        container: containerRef.current, autoFit: "view", padding: 20,
+        data: {
+          nodes: graph.nodes.map((n) => ({ id: n.paper_id, data: { ...n } })),
+          edges: graph.edges.map((e, i) => ({
+            id: `e${i}`, source: e.source, target: e.target,
+            data: { weight: e.weight, examples: e.examples },
+          })),
+        },
+        node: {
+          style: {
+            size: (d) => {
+              const n = (d as { data?: GraphNode }).data;
+              return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
+            },
+            fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
+            labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
+            labelPlacement: "bottom", labelFontSize: 11,
+          },
+        },
+        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
+        behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
+      });
+      graphRef.current = g6b;
+      g6b.render().catch(() => {});
+      return () => { try { g6b?.destroy(); } catch { /* 忽略 */ } graphRef.current = null; };
+    }
     graphRef.current = g6;
-    g6.render().then(() => {
+    const render = g6.render().then(() => {
       // G6 v5 IEvent 目标节点 id 在 evt.target.id（类型宽松处，见 G6 5.x 文档事件示例）
       g6.on("node:click", (evt: any) => {
         const id = evt?.target?.id as string | undefined;
@@ -162,8 +248,41 @@ export default function GraphPage() {
         setSelectedEdges(graph.edges.filter((e) => e.source === id || e.target === id));
       });
       g6.on("canvas:click", () => setSelected(null));
+    });
+    // Hull 插件降级路径(§5.3)：render 失败且本次启用了 hull → 去插件重建一次
+    render.catch((e0) => {
+      if (!hullPlugins.length) throw e0;
+      if (!containerRef.current) throw e0;
+      const g6b = new Graph({
+        container: containerRef.current, autoFit: "view", padding: 20,
+        data: {
+          nodes: graph.nodes.map((n) => ({ id: n.paper_id, data: { ...n } })),
+          edges: graph.edges.map((e, i) => ({
+            id: `e${i}`, source: e.source, target: e.target,
+            data: { weight: e.weight, examples: e.examples },
+          })),
+        },
+        node: {
+          style: {
+            size: (d) => {
+              const n = (d as { data?: GraphNode }).data;
+              return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
+            },
+            fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
+            labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
+            labelPlacement: "bottom", labelFontSize: 11,
+          },
+        },
+        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
+        behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
+      });
+      graphRef.current = g6b;
+      return g6b.render();
     }).catch((e) => setErr(`G6 渲染失败：${e}`));
-    return () => { g6.destroy(); graphRef.current = null; };
+    return () => {
+      try { g6?.destroy(); } catch { /* 容器已随 HMR/卸载销毁等场景,忽略 */ }
+      graphRef.current = null;
+    };
   }, [graph, canvasEpoch]);
 
   const runSummary = () => {
@@ -314,27 +433,13 @@ export default function GraphPage() {
         {err && <div className="card"><p className="kv">{err}</p></div>}
         {graph && (
           <>
-            <div className="card">
+            <div className="card" style={{ position: "relative" }}>
               <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", alignItems: "center" }}>
-                <span className="chip">{graph.nodes.length} 节点 · {graph.edge_count} 边</span>
-                <span className="chip">外部引用 {graph.external_count} 条</span>
-                <span className="chip">backend {graph.backend}</span>
-                {graph.modularity != null && (
-                  <span className="chip">模块度 Q={graph.modularity}</span>
-                )}
-                {graph.insights?.cornerstone?.length > 0 && (
-                  <span className="chip ok">🪨 基石 ×{graph.insights.cornerstone.length}</span>
-                )}
-                {graph.insights?.peripheral?.length > 0 && (
-                  <span className="chip">🌿 边缘衍生 ×{graph.insights.peripheral.length}</span>
-                )}
-                {graph.insights?.class_stat && (
-                  <span className="chip" title={`实质/背景/凑数 · 共 ${graph.insights.mention_count} 处引用标记`}>
-                    含金量：实质 {graph.insights.class_stat.substantive ?? 0} ·
-                    背景 {graph.insights.class_stat.background ?? 0} ·
-                    凑数 {graph.insights.class_stat.perfunctory ?? 0}
-                  </span>
-                )}
+                <button className={`chip ${infoOpen ? "accent" : ""}`} style={{ cursor: "pointer" }}
+                  data-testid="graph-info"
+                  onClick={() => setInfoOpen((v) => !v)}>
+                  ⓘ 图谱信息
+                </button>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <button className={`chip ${showPicker ? "accent" : ""}`} style={{ cursor: "pointer" }}
                     onClick={() => setShowPicker((v) => !v)}>
@@ -365,6 +470,29 @@ export default function GraphPage() {
                   </button>
                 </span>
               </div>
+              {infoOpen && (
+                <div className="graph-info-pop" data-testid="graph-info-pop">
+                  <span className="chip num">{graph.nodes.length} 节点 · {graph.edge_count} 边</span>
+                  <span className="chip num">外部引用 {graph.external_count} 条</span>
+                  <span className="chip num">backend {graph.backend}</span>
+                  {graph.modularity != null && (
+                    <span className="chip num">模块度 Q={graph.modularity}</span>
+                  )}
+                  {graph.insights?.cornerstone?.length > 0 && (
+                    <span className="chip ok">🪨 基石 ×{graph.insights.cornerstone.length}</span>
+                  )}
+                  {graph.insights?.peripheral?.length > 0 && (
+                    <span className="chip">🌿 边缘衍生 ×{graph.insights.peripheral.length}</span>
+                  )}
+                  {graph.insights?.class_stat && (
+                    <span className="chip" title={`实质/背景/凑数 · 共 ${graph.insights.mention_count} 处引用标记`}>
+                      含金量：实质 {graph.insights.class_stat.substantive ?? 0} ·
+                      背景 {graph.insights.class_stat.background ?? 0} ·
+                      凑数 {graph.insights.class_stat.perfunctory ?? 0}
+                    </span>
+                  )}
+                </div>
+              )}
               {showPicker && (
                 <div style={{ marginTop: 10, borderTop: "1px dashed var(--line)", paddingTop: 10 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
@@ -450,12 +578,21 @@ export default function GraphPage() {
             )}
 
             <div className="card graph-canvas-card card-in" style={{
-              height: immersive ? "calc(100vh - var(--topbar-h) - var(--space-8))" : 480,
+              height: immersive
+                ? "calc(100vh - var(--topbar-h) - var(--space-8))"
+                : "max(560px, calc(100vh - var(--topbar-h) - 180px))",
               position: "relative", ["--i" as string]: 1,
             }}>
               <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+              <div className="graph-legend">
+                <span>● 大小=PageRank</span>
+                <span>◐ 颜色=社区</span>
+                <span>证=已验证</span>
+                <span>基=基石论文</span>
+                <span>— 边粗=含金量</span>
+              </div>
               <div style={{ position: "absolute", right: 12, bottom: 10, fontSize: 11, opacity: 0.6 }}>
-                节点大小=PageRank · 颜色=社区 · 边粗细=含金量（红边=基石 / 绿边=边缘衍生）· 点击节点 → 详情抽屉
+                （红边=基石 / 绿边=边缘衍生）· 点击节点 → 详情抽屉
               </div>
             </div>
 
@@ -489,6 +626,7 @@ export default function GraphPage() {
                         {selected.year && <span className="chip num">{selected.year} 年</span>}
                         <span className="chip">社区 {selected.community}</span>
                         <Link className="chip accent" href={`/reader/${selected.paper_id}`}>打开阅读器 →</Link>
+                        <Link className="chip" href={`/chat?paper=${selected.paper_id}`}>去问答 →</Link>
                       </div>
                       <div className="kv num" style={{ lineHeight: 2 }}>
                         PageRank <b>{selected.pagerank}</b> · 被引 <b>{selected.in_degree}</b> ·
