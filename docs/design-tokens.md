@@ -1,4 +1,4 @@
-# Meridian 设计令牌标准 v1.1
+# Meridian 设计令牌标准 v1.2
 
 > 全部 UI 的唯一取值依据。定义于 `web/app/tokens.css`，组件样式**只准引用 Semantic / Component 层**，禁止写死色值、字号、圆角。新增 token 必须先改本文档再改代码。
 
@@ -73,9 +73,9 @@ Primitive（原始阶：gray / blue 色板）
 4. **深色模式预留**：未来只需覆盖 Semantic 层（Primitive 不动），组件代码零改动
 5. 新增 token：先改本文档 → 再改 `tokens.css` → PR 说明用途
 
-## 4. RISO 主题（第二皮肤，v1.1 增补）
+## 4. RISO 品牌层（v1.2 降级：不再是可切换工作皮肤）
 
-> 基调：创新/艺术/大胆。母题 = riso 双色印刷海报（Klein 蓝 × 国际橙 × 米杏纸 × 墨黑、halftone 网点、粗衬线斜排、硬阴影版画）。启用方式：`html[data-theme="riso"]`（ShellContext 持久化于 `localStorage.meridian:theme`）。
+> **降级决策（前端改造方案 §0.2）**：经典浅蓝 = 唯一工作皮肤；RISO 降级为**品牌层**——仅用于 intro 动画、印章语义、答辩截图（`?theme=riso` 强制，查询参数优先于 localStorage 且不落盘）。侧边栏切换按钮已下线，CSS 变量全部保留。业务组件禁止引用 `--riso-*`（品牌层组件 Stamp/Illustrations/BrandIntro 除外）。
 
 ### Primitive 新增（classic 不引用）
 
@@ -103,3 +103,35 @@ Primitive（原始阶：gray / blue 色板）
 ### 艺术浓度边界（RISO 设计契约）
 
 插图/叠印/斜排大字/印章只落**低密度区**（intro/书架/页头/空态/404/占位页/侧栏品牌区）；表格、正文、trace、chips 等**数据密集区只换色换纸感，不加装饰、对比度不降**。插图 = 自绘内联 SVG（components/Illustrations.tsx），仅 riso 主题渲染。
+
+## 5. 品牌印章语义（v1.2 新增）
+
+| Token | 值 | 语义 |
+|---|---|---|
+| `--stamp-verified` | `var(--riso-klein-deep)` | 「证」章：claim 已验证 / 证据齐全 |
+| `--stamp-cornerstone` | `var(--riso-orange-deep)` | 「基」章：图谱基石论文 |
+| `--stamp-bg` | `var(--riso-paper)` | 章底色（米白纸） |
+| `--stamp-border` | `1.5px solid` | 硬边（配 -2deg 微旋转） |
+
+组件 `web/components/Stamp.tsx`：kind = verified/cornerstone；size = xs(16px 行内)/sm(22px 徽章)/md(36px 答辩材料)。
+**红线**：仅此两种语义，禁止营销化滥用；同屏 ≤ 12 个。
+
+## 6. ClaimTrace 四态语义色（v1.2 新增）
+
+| Token | 指向 | 语义 |
+|---|---|---|
+| `--claim-ok` | `var(--ok)` | supported 已验证 |
+| `--claim-check` | `var(--warn)` | needs_check 需核对 |
+| `--claim-bad` | `var(--danger)` | unsupported 未验证 |
+| `--claim-absent` | `#5b6b7c` | absent 未涉及（中性灰蓝，≠unsupported 红） |
+
+## 7. 展示体语义变量与字号（v1.2 新增）
+
+| Token | 用途 |
+|---|---|
+| `--font-display-cn` | 中文展示体：页面主标题(h1)/品牌词/印章字（Noto Serif SC） |
+| `--font-display-en` | 西文展示体：品牌词 MERIDIAN/大图数字（Playfair Display） |
+| `--font-data` | 数据体：E# 编号/页码/耗时/token 数/路径 chip（= --font-mono） |
+| `--text-h1` | `26px`——页面主标题统一字号，禁止 20/22/24 混用 |
+
+正文字体 = 系统 sans 栈（`--font`），正文禁用展示体。

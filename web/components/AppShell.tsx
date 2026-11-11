@@ -11,14 +11,13 @@ import { ShellProvider, useShell } from "./ShellContext";
 import BrandIntro from "./BrandIntro";
 import DynamicIsland from "./DynamicIsland";
 import {
-  Chat, Compass, Eye, Graph, Judge, Library, LogoMark, Palette, PanelLeft, Pen, Plus, Reader,
+  Chat, Compass, Eye, Graph, Judge, Library, LogoMark, PanelLeft, Pen, Plus, Reader,
 } from "./icons";
 
 interface NavItem {
   href: string;
   label: string;
   Icon: (p: { size?: number; className?: string }) => React.JSX.Element;
-  schedule?: string; // 未实现模块的排期徽章
 }
 
 const NAV: NavItem[] = [
@@ -29,7 +28,7 @@ const NAV: NavItem[] = [
   { href: "/discover", label: "检索发现", Icon: Compass },
   { href: "/ideas", label: "研究缝隙", Icon: Graph },
   { href: "/copilot", label: "写作 Copilot", Icon: Pen },
-  { href: "/judge", label: "评审模式", Icon: Judge, schedule: "D11" },
+  { href: "/judge", label: "评审导览", Icon: Judge },
   { href: "/audit", label: "透明度中心", Icon: Eye },
 ];
 
@@ -56,11 +55,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 function ShellFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { immersive, setImmersive, collapsed, toggleCollapsed, theme, setTheme } = useShell();
+  const { immersive, setImmersive, collapsed, toggleCollapsed, theme } = useShell();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const island = useIsland();
   const llmPrev = useRef<boolean | null>(null);
+  const [refsCount, setRefsCount] = useState<number | null>(null);
+
+  // 数据规模行 refs 数:C2 首页工作台拉取图谱统计后写入 sessionStorage,侧栏读缓存(零额外请求)
+  useEffect(() => {
+    try {
+      const v = sessionStorage.getItem("meridian:stats.refs");
+      if (v) setRefsCount(Number(v));
+    } catch { /* 忽略 */ }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -121,7 +129,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className="side-group" style={collapsed ? { marginTop: 0 } : undefined}>
-          {NAV.map(({ href, label, Icon, schedule }, i) => {
+          {NAV.map(({ href, label, Icon }, i) => {
             const active =
               href === "/" ? pathname === "/" :
               href === "/chat" ? pathname === "/chat" :
@@ -130,7 +138,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
             return (
               <Link key={href} href={href}
                 title={collapsed ? label : undefined}
-                className={`side-item ${active ? "active" : ""} ${schedule ? "soon" : ""} nav-in`}
+                className={`side-item ${active ? "active" : ""} nav-in`}
                 style={{ ["--i" as string]: i }}>
                 {active && (
                   <motion.span layoutId="nav-pill" className="nav-pill"
@@ -138,7 +146,6 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
                 )}
                 <Icon size={16} />
                 {!collapsed && <span>{label}</span>}
-                {!collapsed && schedule && <span className="side-schedule">{schedule}</span>}
               </Link>
             );
           })}
@@ -154,6 +161,12 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
+        {!collapsed && (
+          <div className="side-stats num" data-testid="side-stats">
+            {papers.length} 篇{refsCount ? ` · ${refsCount} refs` : ""}
+          </div>
+        )}
+
         <div className="side-footer">
           <span className="avatar">M</span>
           {!collapsed && <span className="side-user">Meridian Demo</span>}
@@ -161,19 +174,6 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
             title={health
               ? `LLM ${health.llm.available ? `就绪(${health.llm.model})` : "不可用·抽取式降级"} · Dense ${health.dense ? "开" : "关"}`
               : "后端未连接"} />
-          <button className="mini-btn" data-testid="theme-switch"
-            title={theme === "riso" ? "切换至经典皮肤" : "切换至 RISO 印刷皮肤"}
-            onClick={() => {
-              const next = theme === "riso" ? "classic" : "riso";
-              setTheme(next);
-              island.emit({ key: "theme", kind: "info",
-                title: next === "riso" ? "已切换至 RISO 印刷皮肤" : "已切换至经典皮肤",
-                detail: next === "riso" ? "蓝橙叠印 · halftone · 硬阴影版画" : "浅蓝学术风" });
-            }}
-            style={{ width: 24, height: 24, padding: 0, display: "inline-flex",
-              alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
-            <Palette size={13} />
-          </button>
           <button className="mini-btn" onClick={toggleCollapsed}
             title={collapsed ? "展开侧边栏（[）" : "折叠侧边栏（[）"}
             style={{ marginLeft: collapsed ? 0 : "auto", flex: collapsed ? "none" : "none",
@@ -199,19 +199,32 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
 function PaperTree({ papers }: { papers: Paper[] }) {
   const params = useSearchParams();
   const currentPaper = params.get("paper");
+  const famCount = new Map<string, number>();
+  for (const p of papers) {
+    if (p.family_id) famCount.set(p.family_id, (famCount.get(p.family_id) ?? 0) + 1);
+  }
   return (
     <>
-      {papers.map((p) => (
-        <Link key={p.id}
-          href={`/chat?paper=${p.id}`}
-          className={`side-paper ${currentPaper === p.id ? "active" : ""}`}
-          title={p.title}>
-          <span className="paper-title">{p.title || "解析中…"}</span>
-          <span className="paper-meta">
-            {p.parsed ? `${p.page_count} 页 · ${relTime(p.created_at)}` : "解析中…"}
-          </span>
-        </Link>
-      ))}
+      {papers.map((p) => {
+        const famN = p.family_id ? famCount.get(p.family_id) ?? 1 : 1;
+        return (
+          <Link key={p.id}
+            href={`/chat?paper=${p.id}`}
+            className={`side-paper ${currentPaper === p.id ? "active" : ""}`}
+            title={p.title}>
+            <span className="paper-top">
+              {famN > 1 && (
+                <span className="paper-fam" title={`同族 ${famN} 个版本`}>▦</span>
+              )}
+              <span className="paper-title">{p.title || "解析中…"}</span>
+              {p.version && <span className="paper-ver">{p.version}</span>}
+            </span>
+            <span className="paper-meta">
+              {p.parsed ? `${p.page_count} 页 · ${relTime(p.created_at)}` : "解析中…"}
+            </span>
+          </Link>
+        );
+      })}
     </>
   );
 }

@@ -109,28 +109,28 @@ h1, h2, h3, p { margin: 0; }
 .side-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
 .side-item.soon { color: var(--ink-3); }
 .side-item.soon:hover { color: var(--ink-2); }
-.side-schedule {
-  margin-left: auto;
-  font-size: 10px; font-weight: 600; color: var(--ink-3);
-  border: 1px solid var(--line); border-radius: var(--radius-full);
-  padding: 0 6px; line-height: 16px;
-}
-.side-item.active .side-schedule { color: var(--accent); border-color: var(--accent-border); }
 
 .side-papers { flex: 1; min-height: 0; }
 .side-paper {
-  display: flex; flex-direction: column; gap: 1px;
-  padding: 6px var(--space-2);
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 5px var(--space-2);
   border-radius: var(--radius-md);
   transition: background .15s;
 }
 .side-paper:hover { background: var(--surface-2); }
 .side-paper.active { background: var(--accent-soft); }
 .side-paper.active .paper-title { color: var(--accent); }
+.paper-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.paper-fam { flex: none; font-size: 9px; color: var(--ink-3); cursor: help; }
 .paper-title {
+  flex: 1; min-width: 0;
   font-size: var(--text-sm); color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.paper-ver { flex: none; font-family: var(--font-data); font-size: 10px;
+  color: var(--ink-2); background: var(--surface-2);
+  border-radius: 3px; padding: 0 4px; line-height: 14px; }
+.side-paper.active .paper-ver { background: var(--accent-soft); color: var(--accent); }
 .paper-meta { font-size: var(--text-xs); color: var(--ink-3); }
 .side-empty { font-size: var(--text-xs); color: var(--ink-3); padding: var(--space-1) var(--space-2); }
 
@@ -164,8 +164,8 @@ h1, h2, h3, p { margin: 0; }
 
 .page { flex: 1; overflow-y: auto; padding: var(--space-6); }
 .page-inner { max-width: 880px; margin: 0 auto; }
-.page h1 { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.01em;
-  font-family: "Space Grotesk", var(--font-serif-cn);
+.page h1 { font-size: var(--text-h1); font-weight: 700; letter-spacing: -0.01em;
+  font-family: var(--font-display-cn);
   margin-bottom: var(--space-5); display: flex; align-items: center; gap: var(--space-2); }
 
 /* ============ 通用组件 ============ */
@@ -284,7 +284,8 @@ h1, h2, h3, p { margin: 0; }
   transition: border-color .15s;
 }
 .claim:hover { border-color: var(--accent-border); }
-.claim.unverified { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.claim.unverified { background: color-mix(in srgb, var(--claim-bad) 7%, var(--surface));
+  border-color: color-mix(in srgb, var(--claim-bad) 35%, transparent); }
 .claim .anchor { font-size: var(--text-xs); color: var(--accent); margin-top: 4px; }
 .claim .evidence {
   margin-top: var(--space-2);
@@ -487,8 +488,10 @@ h1, h2, h3, p { margin: 0; }
   0%, 100% { box-shadow: 0 0 0 2px rgba(229, 72, 77, 0.15); }
   50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.05); }
 }
-.claim.needs-check { border-left-color: var(--warn); background: var(--warn-soft); }
-.claim.absent { border-left-color: var(--line); opacity: 0.75; background: var(--surface-2); }
+.claim.needs-check { border-left-color: var(--claim-check);
+  background: color-mix(in srgb, var(--claim-check) 7%, var(--surface)); }
+.claim.absent { border-left-color: var(--claim-absent); opacity: 0.75;
+  background: color-mix(in srgb, var(--claim-absent) 6%, var(--surface-2)); }
 
 /* ---- 模块三：PDF 取词文本层（pdfjs TextLayer，透明可选中） ---- */
 .textLayer {
@@ -1131,3 +1134,7 @@ h1, h2, h3, p { margin: 0; }
   opacity: 0; transform: rotate(-24deg) scale(2.2); pointer-events: none; }
 .intro-stamp.in { animation: stampIn .32s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 @keyframes stampIn { to { opacity: 0.92; transform: rotate(-12deg) scale(1); } }
+
+/* ---------- 侧栏数据规模行(v1.2 §2.3) ---------- */
+.side-stats { flex: none; font-size: 10px; color: var(--ink-3);
+  padding: var(--space-1) var(--space-2) 0; letter-spacing: 0.02em; }

@@ -38,7 +38,10 @@
   --sky-500: #0ea5e9;
   --ink-night: #0b1220;            /* 动态岛深色底（与浅色页面形成对比） */
 
-  /* ---------- 1. Primitive：RISO 印刷色板（第二皮肤专用，classic 不引用） ----------
+  /* ---------- 1. Primitive：RISO 印刷色板（⚠ 品牌层专用，工作皮肤不引用 ----------
+     v1.2 降级说明：RISO 不再是可切换工作皮肤，仅保留为品牌层（intro 动画 /
+     印章语义 / 答辩截图 ?theme=riso）。本组变量只允许被下方 [data-theme="riso"]
+     块与品牌层组件（Stamp/Illustrations/BrandIntro）引用，业务组件禁止取用。
      母题：riso 双色印刷海报 —— Klein 蓝 × 国际橙 × 米杏纸 × 墨黑 */
   --riso-cream: #f4e9d6;           /* 米杏纸底 */
   --riso-paper: #faf1df;           /* 提亮纸面（卡片） */
@@ -80,6 +83,12 @@
   --danger: #d92d20;
   --danger-soft: #fee4e2;
 
+  /* ClaimTrace 四态（论断校验语义色，claim 徽章/印章唯一取色层） */
+  --claim-ok: var(--ok);                       /* supported 已验证 */
+  --claim-check: var(--warn);                  /* needs_check 需核对 */
+  --claim-bad: var(--danger);                  /* unsupported 未验证 */
+  --claim-absent: #5b6b7c;                     /* absent 未涉及（中性灰蓝，≠unsupported 红） */
+
   /* ---------- 3. Component / Layout ---------- */
   --sidebar-w: 272px;
   --topbar-h: 56px;
@@ -105,6 +114,13 @@
   --text-lg: 15px;
   --text-xl: 17px;
   --text-2xl: 20px;
+  --text-h1: 26px;   /* 页面主标题统一字号（serif 展示体 26px ≈ sans 30px 量感） */
+
+  /* 印章语义系统（§1.2：仅两种语义——证=已验证，基=基石论文；禁止营销化滥用） */
+  --stamp-verified: var(--riso-klein-deep);      /* "证"章：claim 已验证 / 证据齐全 */
+  --stamp-cornerstone: var(--riso-orange-deep);  /* "基"章：图谱基石论文 */
+  --stamp-bg: var(--riso-paper);                 /* 章底色（米白纸） */
+  --stamp-border: 1.5px solid;                   /* 硬边（配 -2deg 微旋转） */
 
   --space-1: 4px;
   --space-2: 8px;
@@ -121,6 +137,10 @@
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   /* 海报级衬线展示（RISO 主题主用；classic 下也可引用但默认未挂） */
   --font-serif-display: "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+  /* 展示体语义变量（§1.1 字体系统收敛：全部页面引用这三轨，禁止散用） */
+  --font-display-cn: "Noto Serif SC", "Songti SC", "SimSun", serif;   /* 中文展示体：页面主标题/品牌词/印章字 */
+  --font-display-en: "Playfair Display", serif;                        /* 西文展示体：品牌词 MERIDIAN/大图数字 */
+  --font-data: var(--font-mono);                                       /* 数据体：E# 编号/页码/耗时/路径 chip */
 
   /* 纹理令牌（RISO 印刷语言） */
   --paper-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");

@@ -65,8 +65,11 @@ export default function BrandIntro() {
     if (started.current) return;           // StrictMode 二次 setup:决策已做
     started.current = true;
     try { sessionStorage.setItem("meridian:intro", "1"); } catch { /* 隐私模式忽略 */ }
-    try { setRisoMode(localStorage.getItem("meridian:theme") === "riso"); }
-    catch { /* 隐私模式忽略 */ }
+    try {
+      const qTheme = new URLSearchParams(window.location.search).get("theme");
+      setRisoMode(qTheme === "riso"
+        || (qTheme !== "classic" && localStorage.getItem("meridian:theme") === "riso"));
+    } catch { /* 隐私模式忽略 */ }
     setPhase("play");
   }, [setIntroDone]);
 
@@ -131,7 +134,8 @@ export default function BrandIntro() {
       timers.current.forEach((t) => window.clearTimeout(t));
       timers.current = [];
     };
-  }, [phase, finish]);
+    // risoMode 与 phase 同批置位(setState 批处理),只会触发一次编排;入 deps 消除 exhaustive-deps
+  }, [phase, risoMode, finish]);
 
   // 播放中按 Esc 跳过(点击由 overlay onClick 承担)
   useEffect(() => {

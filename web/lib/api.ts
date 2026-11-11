@@ -20,6 +20,7 @@ export interface Paper {
   title: string;
   arxiv_id: string;
   page_count: number;
+  version?: string;
   supersedes: string;
   superseded_by?: string;
   family_id?: string;

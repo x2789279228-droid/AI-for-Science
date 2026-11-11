@@ -35,12 +35,17 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("classic");
   const [introDone, setIntroDoneState] = useState(false);
 
-  // 持久化状态挂载后读取,避免 SSR 水合不一致(防闪烁首帧由 layout 内联脚本负责)
+  // 持久化状态挂载后读取,避免 SSR 水合不一致(防闪烁首帧由 layout 内联脚本负责)。
+  // ?theme=riso|classic 查询参数强制覆盖(答辩截图通道,优先于 localStorage,不落盘)
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("theme");
+    try { setCollapsed(localStorage.getItem("meridian:nav-collapsed") === "1"); } catch { /* 忽略 */ }
+    if (q === "riso") { setThemeState("riso"); applyTheme("riso"); return; }
+    if (q === "classic") { setThemeState("classic"); applyTheme("classic"); return; }
     try {
-      setCollapsed(localStorage.getItem("meridian:nav-collapsed") === "1");
-      const t = localStorage.getItem("meridian:theme");
-      if (t === "riso") { setThemeState("riso"); applyTheme("riso"); }
+      if (localStorage.getItem("meridian:theme") === "riso") {
+        setThemeState("riso"); applyTheme("riso");
+      }
     } catch { /* 隐私模式忽略 */ }
   }, []);
 
