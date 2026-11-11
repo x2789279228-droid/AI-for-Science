@@ -1295,3 +1295,18 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 4px; overflow: hidden; }
 .h-bar-track > i { display: block; height: 100%; border-radius: 4px;
   transition: width var(--dur-base) var(--ease-out); }
+
+/* ---------- 动态岛·书童小M版:加长/衬线台词/吉祥物 ---------- */
+.island { min-width: 340px; padding: 10px 20px; gap: 12px; }
+.island-phrase { font-family: var(--font-display-cn); font-weight: 600;
+  font-size: 13.5px; color: #f4f6fb;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island-detail { color: rgba(244, 246, 251, 0.62); }
+.island-ok { font-family: var(--font-display-cn); border: 1px solid rgba(125, 211, 252, 0.4) !important;
+  background: rgba(125, 211, 252, 0.14) !important; color: #bae6fd !important;
+  white-space: nowrap; }
+.island-mascot { flex: none; }
+.island-mascot.bob { animation: mascotBob 1.15s ease-in-out infinite; }
+@keyframes mascotBob { 0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-2.5px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .island-mascot.bob { animation: none; } }
