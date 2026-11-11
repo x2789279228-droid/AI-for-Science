@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { useIsland } from "@/lib/island";
 import { RisoIllust } from "@/components/Illustrations";
+import { WorkbenchStats, WorkbenchPulse } from "@/components/home/Workbench";
 import { Alert, Upload } from "@/components/icons";
 
 type Phase = "uploading" | "parsing" | "done" | "reused" | "error";
@@ -291,8 +292,13 @@ export default function LibraryPage() {
 
   return (
     <div className="page">
-      <div className="page-inner">
-        <h1>文献库</h1>
+      <div className="page-inner" style={{ maxWidth: 1080 }}>
+        {/* 研究工作台:数据带 + Pulse 双卡(§3 首页叙事层) */}
+        <WorkbenchStats paperCount={papers.length} />
+        <WorkbenchPulse />
+
+        {/* 文献库分区(原有列表/上传逻辑整体下移,逻辑零改动) */}
+        <h2 className="wb-section-title">文献库</h2>
 
         <div className="card card-in" style={{ ["--i" as string]: 0 }}>
           <h2>上传 PDF</h2>

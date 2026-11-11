@@ -567,6 +567,23 @@ export interface QaTrace {
   events: TLEvent[];
 }
 
+export interface QaRecentItem {
+  thread_id: string;
+  question: string;
+  status: string;
+  ts: number;
+  elapsed?: number;
+  claims: { supported: number; needs_check: number; unsupported: number; absent: number };
+}
+
+/** 最近问答轻列表(首页工作台左卡;§3.3 唯一后端新增点 /api/qa/recent)。 */
+export async function fetchQaRecent(limit = 3): Promise<QaRecentItem[]> {
+  const r = await fetch(`${API}/api/qa/recent?limit=${limit}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  return Array.isArray(d?.items) ? d.items : [];
+}
+
 /** 回放：GET /api/qa/{trace_id}（trace_id = thread_id，含断点续跑并入的完整事件流）。 */
 export async function fetchQaTrace(traceId: string): Promise<QaTrace> {
   const r = await fetch(`${API}/api/qa/${encodeURIComponent(traceId)}`, { cache: "no-store" });

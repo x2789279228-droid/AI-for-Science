@@ -521,6 +521,38 @@ def health():
 
 # ---------- Trace 回放 ----------
 
+@router.get("/qa/recent")
+def qa_recent(limit: int = 3):
+    """最近问答轻列表（首页工作台左卡数据源，前端改造方案 v1.0 §3.3 唯一后端新增点，只读）。
+
+    从 trace_events 取最近 N 条，逐条从 events 里的 final 事件聚合 ClaimTrace
+    四态计数（supported/needs_check/unsupported/absent）。必须声明在
+    /qa/{trace_id} 之前，否则 "recent" 会被当作 trace_id 吞并。
+    """
+    lim = max(1, min(limit, 10))
+    rows = db.query(
+        "SELECT thread_id, question, status, updated_at, events_json "
+        "FROM trace_events ORDER BY updated_at DESC LIMIT ?", (lim,))
+    items = []
+    for r in rows:
+        try:
+            events = json.loads(r["events_json"] or "[]")
+        except ValueError:
+            events = []
+        # 事件形状 = {"kind": ..., "data": ...}（trace_store 落盘口径）；final 在最后
+        final = next((e.get("data") or {} for e in reversed(events)
+                      if isinstance(e, dict) and e.get("kind") == "final"), {})
+        counts = {"supported": 0, "needs_check": 0, "unsupported": 0, "absent": 0}
+        for c in final.get("claims") or []:
+            k = c.get("status")
+            if k in counts:
+                counts[k] += 1
+        items.append({"thread_id": r["thread_id"], "question": r["question"],
+                      "status": r["status"], "ts": r["updated_at"],
+                      "elapsed": final.get("elapsed"), "claims": counts})
+    return {"items": items}
+
+
 @router.get("/qa/{trace_id}")
 def get_qa_trace(trace_id: str):
     """回放一次问答的完整事件流（trace_id = thread_id，含断点续跑并入的事件）。"""
