@@ -16,7 +16,9 @@ export default function EmptyState({ icon, illust, title, desc, action }: {
   return (
     <div className="empty-state card-in">
       {illust && <RisoIllust name={illust} size={140} />}
-      {icon && !illust && <div className="placeholder-icon">{icon}</div>}
+      {icon && !illust && <div style={{ width: 46, height: 46, borderRadius: "var(--radius-lg)",
+        background: "var(--accent-soft)", color: "var(--accent)", display: "flex",
+        alignItems: "center", justifyContent: "center" }}>{icon}</div>}
       <b>{title}</b>
       {desc && <p className="kv" style={{ maxWidth: 380 }}>{desc}</p>}
       {action}

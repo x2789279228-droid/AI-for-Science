@@ -395,24 +395,14 @@ h1, h2, h3, p { margin: 0; }
   overflow-y: auto;
 }
 
-/* ============ 占位页 ============ */
-.placeholder {
-  flex: 1; display: flex; align-items: center; justify-content: center; padding: var(--space-6);
-}
-.placeholder-card {
-  text-align: center; max-width: 420px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
-  padding: var(--space-8) var(--space-6);
-}
+/* ============ 占位页样式已下线(§7.8,judge 改评审导览页) ============ */
+/* .placeholder-icon 保留一条基础定义:RISO 品牌层覆盖规则与 EmptyState 图标兜底 */
 .placeholder-icon {
   width: 52px; height: 52px; margin: 0 auto var(--space-4);
   border-radius: var(--radius-lg);
   background: var(--accent-soft); color: var(--accent);
   display: flex; align-items: center; justify-content: center;
 }
-.placeholder-card h2 { font-size: var(--text-xl); margin-bottom: var(--space-2); }
-.placeholder-card p { font-size: var(--text-sm); color: var(--ink-2); margin-bottom: var(--space-4); }
 
 /* ---------- Trace 时间线面板（协议 v1.1：plan/tool_call/tool_result/evidence/verifier） ---------- */
 .chat-body { flex: 1; min-height: 0; display: flex; }
@@ -1262,3 +1252,17 @@ h1, h2, h3, p { margin: 0; }
 .empty-state { display: flex; flex-direction: column; align-items: center;
   gap: var(--space-2); text-align: center; padding: var(--space-6) var(--space-4); }
 .empty-state b { font-size: var(--text-md); }
+
+/* ---------- 评审导览(§7.7) ---------- */
+.judge-route { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; }
+.judge-step { display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4); padding: var(--space-3) 0;
+  border-bottom: 1px dashed var(--line); }
+.judge-step:last-child { border-bottom: 0; }
+.judge-step p { margin: 2px 0 0; }
+.judge-evidence { display: flex; gap: var(--space-3); flex-wrap: wrap;
+  font-size: var(--text-xs); }
+.judge-ev-item { background: var(--surface-2); border-radius: var(--radius-md);
+  padding: 6px 12px; color: var(--ink-2); }
+.judge-ev-item b { color: var(--ink); font-weight: 700; }
