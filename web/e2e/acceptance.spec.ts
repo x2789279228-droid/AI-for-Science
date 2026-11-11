@@ -421,3 +421,21 @@ test("⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章", async ({ pag
   expect(body).not.toContain("D11");
   expect(body).not.toContain("排期");
 });
+
+test("⑮ 健康中心：综合分+子分公式卡+模块明细", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/health");
+  await expect(page.getByTestId("health-total")).toBeVisible({ timeout: 30_000 });
+  // 总分 0-100 数字存在(Playfair 大数字)
+  const totalText = await page.locator(".h-total-num").textContent();
+  expect(Number(totalText)).not.toBeNaN();
+  // 六张子分卡(五运行时+工程静态),每张含公式文本
+  const cards = page.locator(".h-score-card");
+  await expect(cards).toHaveCount(6);
+  for (let i = 0; i < 6; i++) {
+    await expect(cards.nth(i)).toContainText("权重");
+  }
+  // 模块明细原始计数区
+  await expect(page.getByTestId("health-detail")).toBeVisible();
+  await expect(page.getByText("ClaimTrace 四态分布")).toBeVisible();
+});

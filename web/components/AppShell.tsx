@@ -11,7 +11,7 @@ import { ShellProvider, useShell } from "./ShellContext";
 import BrandIntro from "./BrandIntro";
 import DynamicIsland from "./DynamicIsland";
 import {
-  Chat, Compass, Eye, Graph, Judge, Library, LogoMark, PanelLeft, Pen, Plus, Reader,
+  Activity, Chat, Compass, Eye, Graph, Judge, Library, LogoMark, PanelLeft, Pen, Plus, Reader,
 } from "./icons";
 
 interface NavItem {
@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/copilot", label: "写作 Copilot", Icon: Pen },
   { href: "/judge", label: "评审导览", Icon: Judge },
   { href: "/audit", label: "透明度中心", Icon: Eye },
+  { href: "/health", label: "健康中心", Icon: Activity },
 ];
 
 function relTime(ts: number): string {

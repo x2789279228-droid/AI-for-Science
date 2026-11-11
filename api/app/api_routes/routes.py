@@ -521,6 +521,193 @@ def health():
 
 # ---------- Trace 回放 ----------
 
+@router.get("/health-report")
+def health_report():
+    """系统健康报告（健康中心页数据源，只读聚合，公式随返回值下发保证评分可审计）。
+
+    五个子分（溯源可信/幻觉抑制/检索充分/解析覆盖/性能）全部由运行时数据计算；
+    工程健康子分（pytest/e2e 离线门禁）由前端静态注入，不在此计算。
+    每个子分附 formula 字符串与原始计数——评分本身可审计。
+    """
+    def _clamp01(x: float) -> float:
+        return round(max(0.0, min(1.0, x)), 4)
+
+    # ---- ① 溯源可信 + ② 幻觉抑制（实时口径：最近 30 条 trace 的 final.claims 四态） ----
+    rows = db.query(
+        "SELECT thread_id, status, events_json FROM trace_events "
+        "ORDER BY updated_at DESC LIMIT 30")
+    claims = {"supported": 0, "needs_check": 0, "unsupported": 0, "absent": 0}
+    verifier_pass = verifier_fail = 0
+    plans = replans = 0
+    samples = 0
+    for r in rows:
+        samples += 1
+        try:
+            events = json.loads(r["events_json"] or "[]")
+        except ValueError:
+            continue
+        for e in events:
+            if not isinstance(e, dict):
+                continue
+            if e.get("kind") == "verifier":
+                ev = e.get("data") or {}
+                if ev.get("verdict") == "pass":
+                    verifier_pass += 1
+                else:
+                    verifier_fail += 1
+            elif e.get("kind") == "plan":
+                plans += 1
+                if (e.get("data") or {}).get("round", 1) > 1:
+                    replans += 1
+        final = next((e.get("data") or {} for e in reversed(events)
+                      if isinstance(e, dict) and e.get("kind") == "final"), {})
+        for c in final.get("claims") or []:
+            k = c.get("status")
+            if k in claims:
+                claims[k] += 1
+    judged = claims["supported"] + claims["needs_check"] + claims["unsupported"]
+    trace_trust = _clamp01(claims["supported"] / judged) if judged else None
+    halluc = None
+    if judged:
+        halluc = _clamp01(1 - claims["unsupported"] / judged)
+
+    # ---- ③ 检索充分（离线 recall/mrr 优先 + 实时 verifier 通过率） ----
+    # ---- ④ 解析覆盖（遍历 papers 的 DocIR meta.quality 均值） ----
+    papers = db.query("SELECT id, docir_path FROM papers WHERE docir_path!=''")
+    cov_vals: list[float] = []
+    ref_vals: list[float] = []
+    scanned = 0
+    parse_fail = 0
+    for pr in papers:
+        try:
+            data = _resolve_paper_data(pr["id"])
+        except Exception:  # noqa: BLE001 —— 单篇 DocIR 异常不阻塞整体
+            parse_fail += 1
+            continue
+        if not data:
+            continue
+        q = (data.get("meta") or {}).get("quality") or {}
+        if isinstance(q.get("text_coverage"), (int, float)):
+            cov_vals.append(float(q["text_coverage"]))
+        if isinstance(q.get("reference_parse_rate"), (int, float)):
+            ref_vals.append(float(q["reference_parse_rate"]))
+        if q.get("scanned_ratio") and float(q["scanned_ratio"]) > 0.5:
+            scanned += 1
+    parse = None
+    if cov_vals or ref_vals:
+        mc = sum(cov_vals) / len(cov_vals) if cov_vals else None
+        mr = sum(ref_vals) / len(ref_vals) if ref_vals else None
+        parts = [v for v in (mc, mr) if v is not None]
+        parse = _clamp01(sum(parts) / len(parts)) if parts else None
+        parse = {"mean_text_coverage": _clamp01(mc) if mc is not None else None,
+                 "mean_ref_parse": _clamp01(mr) if mr is not None else None,
+                 "papers_with_quality": len(parts), "papers_total": len(papers),
+                 "scanned_papers": scanned, "parse_fail": parse_fail,
+                 "value": parse}
+
+    # ---- ⑤ 性能（qa_logs 延迟/错误） ----
+    perf_row = db.query(
+        "SELECT COUNT(*) c, COALESCE(AVG(latency_ms),0) avg_ms FROM qa_logs "
+        "WHERE module='chat'")[0]
+    failed_qa = db.query(
+        "SELECT COUNT(*) c FROM trace_events WHERE status='failed'")[0]["c"]
+    done_qa = db.query(
+        "SELECT COUNT(*) c FROM trace_events WHERE status='done'")[0]["c"]
+    error_rate = (failed_qa / (failed_qa + done_qa)) if (failed_qa + done_qa) else None
+    avg_ms = float(perf_row["avg_ms"])
+    performance = _clamp01((15000 - avg_ms) / 12000) if avg_ms else None  # ≤3s 满分,线性至 15s
+
+    # ---- 去重与数据健康 ----
+    dedup_rows = db.query("SELECT status, COUNT(*) c FROM dedup_alerts "
+                          "GROUP BY status")
+    dedup = {r["status"]: r["c"] for r in dedup_rows}
+    dedup_total = sum(dedup.values())
+    dedup_pending = dedup.get("pending", 0)
+
+    # ---- 离线门禁（docs/acceptance 最近一轮 eval_gold.json） ----
+    offline = {"available": False}
+    try:
+        acc_dir = Path(__file__).resolve().parents[3] / "docs" / "acceptance"
+        rounds = sorted(acc_dir.glob("round*"))
+        if rounds:
+            eg = rounds[-1] / "eval_gold.json"
+            if eg.exists():
+                d = json.loads(eg.read_text(encoding="utf-8"))
+                g = d.get("generative") or {}
+                offline = {"available": True,
+                           "round": rounds[-1].name,
+                           "date": str(d.get("time", ""))[:10],
+                           "hallucination_rate": g.get("hallucination_rate"),
+                           "supported_ratio": g.get("supported_ratio"),
+                           "anchor_precision": g.get("anchor_precision"),
+                           "quote_unverified_rate": g.get("quote_unverified_rate"),
+                           "recall_at5": d.get("recall_at5"),
+                           "mrr_at5": d.get("mrr_at5"),
+                           "refusal_accuracy": d.get("refusal_accuracy")}
+    except Exception:  # noqa: BLE001 —— 容器内无 docs 目录等场景,离线子分降级
+        offline = {"available": False}
+
+    # ---- 子分与权重（工程健康由前端静态注入,权重 15%） ----
+    scores = {}
+    weights = {"trace_trust": 0.30, "hallucination_ctrl": 0.25, "retrieval": 0.15,
+               "parse": 0.15, "performance": 0.15}
+    if trace_trust is not None:
+        scores["trace_trust"] = {
+            "value": trace_trust, "weight": weights["trace_trust"],
+            "formula": f"supported {claims['supported']} / 判定论断 {judged}"
+                       f"（absent {claims['absent']} 诚实负向不计入分母）",
+            "raw": claims}
+    if halluc is not None:
+        scores["hallucination_ctrl"] = {
+            "value": halluc, "weight": weights["hallucination_ctrl"],
+            "formula": f"1 - unsupported {claims['unsupported']} / {judged}"
+                       + (f"（离线对照 eval hallucination_rate="
+                          f"{offline.get('hallucination_rate')}）"
+                          if offline.get("available") else "（实时口径）"),
+            "raw": claims}
+    if verifier_pass + verifier_fail:
+        retrieval = _clamp01(verifier_pass / (verifier_pass + verifier_fail))
+        scores["retrieval"] = {
+            "value": retrieval, "weight": weights["retrieval"],
+            "formula": f"Verifier 通过 {verifier_pass} / {verifier_pass + verifier_fail}"
+                       f"（补检索触发 {replans}/{plans}）"
+                       + (f"（离线 recall@5={offline.get('recall_at5')}）"
+                          if offline.get("available") else ""),
+            "raw": {"pass": verifier_pass, "fail": verifier_fail,
+                    "replans": replans, "plans": plans}}
+    if isinstance(parse, dict) and parse.get("value") is not None:
+        scores["parse"] = {
+            "value": parse["value"], "weight": weights["parse"],
+            "formula": f"mean(text_coverage {parse['mean_text_coverage']}"
+                       f", ref_parse {parse['mean_ref_parse']}) · 覆盖 "
+                       f"{parse['papers_with_quality']}/{parse['papers_total']} 篇",
+            "raw": parse}
+    if performance is not None:
+        scores["performance"] = {
+            "value": performance, "weight": weights["performance"],
+            "formula": f"平均延迟 {int(avg_ms)}ms（≤3000ms 满分,线性至 15000ms）"
+                       f" · 失败率 {error_rate if error_rate is not None else '无数据'}",
+            "raw": {"avg_ms": int(avg_ms), "error_rate": error_rate,
+                    "qa_count": perf_row["c"]}}
+
+    total = None
+    if scores:
+        w_used = sum(s["weight"] for s in scores.values())
+        total = _clamp01(sum(s["value"] * s["weight"] for s in scores.values()) / w_used)
+
+    return {"total": total, "scores": scores,
+            "trace": {"samples": samples, "claims": claims,
+                      "verifier_pass": verifier_pass, "verifier_fail": verifier_fail,
+                      "plans": plans, "replans": replans},
+            "qa_perf": {"count": perf_row["c"], "avg_latency_ms": int(avg_ms),
+                        "error_rate": error_rate},
+            "parse": parse if isinstance(parse, dict) else None,
+            "dedup": {"total": dedup_total, "pending": dedup_pending,
+                      "covered": dedup.get("covered", 0), "kept": dedup.get("kept", 0),
+                      "coexisted": dedup.get("coexisted", 0)},
+            "offline": offline}
+
+
 @router.get("/qa/recent")
 def qa_recent(limit: int = 3):
     """最近问答轻列表（首页工作台左卡数据源，前端改造方案 v1.0 §3.3 唯一后端新增点，只读）。

@@ -94,6 +94,7 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 - **C2 研究工作台**：首页 = 数据带（22 篇/50 库内边/2371 外部引用/LLM 状态）+ 最近问答卡（`GET /api/qa/recent` 唯一后端新增）+ 图谱只读缩略卡 + 文献库分区
 - **C3 Chat 演示入口**：空态演示问题卡（按选中论文动态，点击即发送）；claim「证」章 Stamp；E# mono 脉冲；回答 15px/68ch
 - **C4 图谱舞台化**：画布 ≥560px（实测 664）；标签词典零截断；社区 Hull 凸包（双降级路径）；基石「基」章 badges；图例；统计 popover；详情抽屉 340px+去问答
+- **C8 健康中心(/health,导航第 10 项)**:抽象宣称→具体数据的自证面板——溯源可信/幻觉抑制/检索充分/解析覆盖/性能五子分(全部运行时数据,公式+原始计数随卡展示,评分本身可审计)+ 工程健康静态注入(pytest/e2e 手注,权重 15%)+ ClaimTrace 四态分布/去重三态/离线金标对照明细;后端唯一增量 `GET /api/health-report` 只读聚合
 - **C5/C6 一致性**：阅读器五视图分段控件+⋯菜单；EmptyState 空态规范；Ideas 栏头色块；Discover 示例词点击即搜；/judge 评审导览（8 步路线+工程证据）；Placeholder/排期徽章全下线
 - **门禁**：tsc 绿 · e2e 14/14（10 旧+4 新）· build 绿 · pytest 286（2 个 tracker 环境性失败为预存,与本轮无关）
 - **已知边界**：双语同步指示线（§6.2）、统一 Tooltip（§8.1）、快捷键 cheatsheet（§8.3）为可选项未实施；节点标签 canvas 文本不可 DOM 断言（⑬ 由视觉截图人工核）
@@ -105,7 +106,8 @@ cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2
 cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚动同步 / [n]→References /
                                     #   CSV 出图+图注 / 多源搜索 / G6 / PDF↔译文 bbox 双向（⑦反向）/ 
                                     #   discover 含金量可逆过滤 / 滚动同步中线块锚定量化 / 拓扑四格式渲染
-                                    #   + 前端改造 v1.0 新增 ④:首页工作台 / Chat 空态演示卡 / 图谱舞台 / 评审导览（14 用例）
+                                    #   + 前端改造 v1.0 新增 ④:首页工作台 / Chat 空态演示卡 / 图谱舞台 / 评审导览
+                                    #   + 健康中心新增 ①:综合健康分(五子分公式透明)/ClaimTrace 四态分布/离线金标对照（15 用例）
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
 #   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
 #   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round5 见 docs/acceptance/

@@ -146,6 +146,12 @@ export const List = (p: IconProps) => (
   </svg>
 );
 
+export const Activity = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M3 12h4l2.5-7 4 14 2.5-7H21" />
+  </svg>
+);
+
 export const Palette = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M12 21a9 9 0 1 1 9-9c0 2.2-1.8 3.5-3.5 3.5H15a2 2 0 0 0-1.5 3.3c.4.5.5 1.2.1 1.7-.4.3-.9.5-1.6.5Z" />

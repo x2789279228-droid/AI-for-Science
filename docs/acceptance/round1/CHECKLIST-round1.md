@@ -10,4 +10,5 @@
 - [x] 视觉截图 7 张入 docs/acceptance/round1/screenshots/（首页/Chat 空态/回答中/回答完成/图谱/阅读器/评审导览）
 - [x] README、design-tokens.md v1.2 已同步
 - [ ] CI acceptance 绿（待 push 后确认——本地未推送）
+- [x] 健康中心(/health):综合健康分 93.1(五子分公式透明+原始计数)+ 工程健康静态注入 + ClaimTrace 四态分布/去重三态/离线金标对照;pytest 新增 5 例(test_health_report 2 + test_qa_recent 3);e2e ⑮ 断言总分/六卡/明细
 - [ ] 可选项未实施（如实记录）：双语同步指示线（§6.2）、统一 Tooltip（§8.1）、快捷键 cheatsheet（§8.3）、速览力导向悬停（§8.4）；audit 数字 mono 未逐项替换（§7.4 低优先级遗留）

@@ -567,6 +567,37 @@ export interface QaTrace {
   events: TLEvent[];
 }
 
+export interface HealthScore {
+  value: number;
+  weight: number;
+  formula: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface HealthReport {
+  total: number | null;
+  scores: Record<string, HealthScore>;
+  trace: { samples: number; claims: Record<string, number>;
+           verifier_pass: number; verifier_fail: number; plans: number; replans: number };
+  qa_perf: { count: number; avg_latency_ms: number; error_rate: number | null };
+  parse: { mean_text_coverage: number | null; mean_ref_parse: number | null;
+           papers_with_quality: number; papers_total: number;
+           scanned_papers: number; parse_fail: number; value?: number } | null;
+  dedup: { total: number; pending: number; covered: number; kept: number; coexisted: number };
+  offline: { available: boolean; round?: string; date?: string;
+             hallucination_rate?: number | null; supported_ratio?: number | null;
+             anchor_precision?: number | null; quote_unverified_rate?: number | null;
+             recall_at5?: number | null; mrr_at5?: number | null;
+             refusal_accuracy?: number | null };
+}
+
+/** 系统健康报告(健康中心页;只读聚合,公式随返回值下发)。 */
+export async function fetchHealthReport(): Promise<HealthReport> {
+  const r = await fetch(`${API}/api/health-report`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
 export interface QaRecentItem {
   thread_id: string;
   question: string;

@@ -1266,3 +1266,32 @@ h1, h2, h3, p { margin: 0; }
 .judge-ev-item { background: var(--surface-2); border-radius: var(--radius-md);
   padding: 6px 12px; color: var(--ink-2); }
 .judge-ev-item b { color: var(--ink); font-weight: 700; }
+
+/* ---------- 健康中心(/health):总分+子分公式卡+明细 ---------- */
+.h-total { display: flex; align-items: center; gap: var(--space-5);
+  margin-bottom: var(--space-5); flex-wrap: wrap; }
+.h-total-num { font-family: var(--font-display-en); font-weight: 700;
+  font-size: 64px; line-height: 1; letter-spacing: -0.02em; }
+.h-total-side { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 4px; }
+.h-total-bar { width: 100%; height: 8px; border-radius: 4px; overflow: hidden;
+  display: flex; background: var(--surface-2); }
+.h-total-bar > span { height: 100%; }
+.h-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3); margin-bottom: var(--space-5); }
+.h-score-card { margin-bottom: 0; display: flex; flex-direction: column; gap: 6px; }
+.h-score-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.h-score-val { font-family: var(--font-display-en); font-weight: 700;
+  font-size: 34px; line-height: 1.1; }
+.h-formula { font-size: 11px; color: var(--ink-2); line-height: 1.5;
+  border-top: 1px dashed var(--line); padding-top: 6px; min-height: 44px; }
+.h-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+@media (max-width: 900px) { .h-detail-grid { grid-template-columns: 1fr; } }
+.h-detail-block { border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; }
+.h-detail-block > b { font-size: var(--text-sm); }
+.h-bars { display: flex; flex-direction: column; gap: 5px; }
+.h-bar-row { display: flex; align-items: center; gap: 8px; }
+.h-bar-track { flex: 1; height: 8px; background: var(--surface-2);
+  border-radius: 4px; overflow: hidden; }
+.h-bar-track > i { display: block; height: 100%; border-radius: 4px;
+  transition: width var(--dur-base) var(--ease-out); }
