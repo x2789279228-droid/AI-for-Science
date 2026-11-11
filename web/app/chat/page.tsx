@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Anchor, ChartSpec, Claim, CompareCell, CompareTable, FinalEvent, GraphData, Hit,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { ChevronRight, Spark } from "@/components/icons";
 import { useIsland } from "@/lib/island";
+import Stamp from "@/components/Stamp";
 import TracePanel from "@/components/chat/TracePanel";
 import PdfAnchored from "@/components/PdfAnchored";
 
@@ -112,6 +113,19 @@ export default function ChatPage() {
   const msgsRef = useRef<HTMLDivElement>(null);
   const convRef = useRef<string>("");
 
+  /** §4.1 演示问题卡:按当前选中论文动态选择(Attention→专属三题;多篇→对比题优先)。 */
+  const demoQuestions = useMemo(() => {
+    if (selected.size > 1) {
+      return ["对比这几篇论文的核心差异", "这些论文共同引用了哪些方法？", "哪一篇的实验设置最完整？"];
+    }
+    const t = (papers.find((p) => selected.has(p.id))?.title ?? "").toLowerCase();
+    const isAttention = t.includes("attention is all you need")
+      || (t.includes("attention") && t.includes("transform"));
+    return isAttention
+      ? ["模型用了多少块 GPU？", "BLEU 分数是多少？", "对比这篇论文的预训练目标"]
+      : ["这篇论文的核心方法是什么？", "实验用了什么数据集和指标？", "主要结论和局限是什么？"];
+  }, [selected, papers]);
+
   /** 打开原文溯源浮层：anchor 缺失（无锚点数据）时静默忽略。 */
   const showEvidence = (eid?: string, anchor?: Anchor, quote?: string) => {
     if (!anchor) return;
@@ -142,8 +156,8 @@ export default function ChatPage() {
     msgsRef.current?.scrollTo({ top: msgsRef.current.scrollHeight });
   }, [turns]);
 
-  const ask = async () => {
-    const q = question.trim();
+  const ask = async (override?: string) => {
+    const q = (typeof override === "string" ? override : question).trim();
     if (!q || busy) return;
     setQuestion("");
     setShowScope(false);
@@ -329,15 +343,19 @@ export default function ChatPage() {
           <div className="msgs" ref={msgsRef}>
             <div className="msgs-inner">
               {turns.length === 0 && (
-                <div className="placeholder" style={{ minHeight: "50vh" }}>
-                  <div className="placeholder-card">
-                    <div className="placeholder-icon"><Spark size={24} /></div>
-                    <h2>向文献提问</h2>
-                    <p>
-                      例如「模型用了多少块 GPU？」「BLEU 分数是多少？」——
-                      Agent 状态图（Router→Plan→并行检索→校验→回答）全程可视化，每句可溯源。
-                    </p>
+                <div className="chat-hero" data-testid="chat-empty">
+                  <p className="chat-hero-title">
+                    <Spark size={16} /> 向文献提问 —— 每个论断都带证据
+                  </p>
+                  <div className="chat-demo-cards">
+                    {demoQuestions.map((q, i) => (
+                      <button key={i} className="chat-demo-card" data-testid={`demo-q-${i}`}
+                        onClick={() => { setQuestion(q); ask(q); }}>
+                        {q}
+                      </button>
+                    ))}
                   </div>
+                  <p className="chat-hero-sub">点击即提问 · 全程可溯源 · 右侧 Trace 实时点亮</p>
                 </div>
               )}
               {turns.map((turn, ti) => (
@@ -408,6 +426,7 @@ export default function ChatPage() {
           <div className="dock-wrap">
             <div className="dock">
               <div className="dock-row">
+                {busy && <span className="dock-busy-bar" aria-hidden />}
                 <input
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
@@ -415,7 +434,7 @@ export default function ChatPage() {
                   placeholder={busy ? "Agent 执行中…" : "对选中的论文提问，每句回答可溯源到原文…"}
                   disabled={busy}
                 />
-                <button className="send-btn" onClick={ask} disabled={busy || !selected.size}
+                <button className="send-btn" onClick={() => ask()} disabled={busy || !selected.size}
                   aria-label="发送">↑</button>
               </div>
               <div className="dock-tools">
@@ -432,7 +451,8 @@ export default function ChatPage() {
                   ))}
                 </span>
                 {lastTurn?.final && (
-                  <span className={`chip ${lastTurn.final.mode === "generative" ? "ok" : "warn"}`}>
+                  <span className={`chip ${lastTurn.final.mode === "generative" ? "ok" : "warn"}`}
+                    style={{ marginLeft: "auto" }}>
                     {lastTurn.final.mode === "generative" ? "生成式 · 引用已后验"
                       : lastTurn.final.mode === "refusal" ? "范围外拒答"
                       : lastTurn.final.mode === "none" ? "未找到依据"
@@ -690,11 +710,11 @@ function AnswerWithAnchors({ text, anchors, onEvidence }: {
           (() => {
             const a = anchors?.[part];
             if (!a) {
-              return <span key={i} className="chip accent anchor-chip" style={{ opacity: 0.55 }}
+              return <span key={i} className="chip accent anchor-chip num" style={{ opacity: 0.55 }}
                 title="无锚点数据（历史轮次或降级模式）">{part}</span>;
             }
             return (
-              <span key={i} className="chip accent anchor-chip clickable"
+              <span key={i} className="chip accent anchor-chip clickable num"
                 onClick={() => onEvidence?.(part, a)}
                 title={`点击查看原文 p${a.page} · §${secName(a.section_path)}`}>
                 {part} · p{a.page} · §{secName(a.section_path)}
@@ -763,6 +783,7 @@ function Claims({ claims, anchors, hits, onEvidence }: {
           onClick={() => setOpen(open === i ? null : i)}>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline",
             flexWrap: "wrap" }}>
+            {c.status === "supported" && <Stamp kind="verified" size="xs" />}
             {c.status === "supported"
               ? <span className="badge ok">已验证</span>
               : c.status === "needs_check"

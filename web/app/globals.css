@@ -1183,3 +1183,39 @@ h1, h2, h3, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } }
 .wb-section-title { font-family: var(--font-display-cn); font-size: var(--text-h1);
   font-weight: 700; margin: 0 0 var(--space-4); }
+
+/* ---------- Chat 空态演示入口(§4.1)+ 证据语义(§4.2)+ dock(§4.3) ---------- */
+.chat-hero { display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-4); padding-top: 14vh; }
+.chat-hero-title { display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-display-cn); font-weight: 700;
+  font-size: var(--text-xl); color: var(--ink); }
+.chat-demo-cards { display: flex; gap: var(--space-3); flex-wrap: wrap;
+  justify-content: center; }
+.chat-demo-card { max-width: 230px; min-height: 64px; text-align: left;
+  padding: var(--space-3) var(--space-4); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  font-size: var(--text-sm); color: var(--ink-2); font-family: var(--font);
+  cursor: pointer;
+  transition: transform .12s ease-out, border-color .12s ease-out, color .12s ease-out,
+    box-shadow .12s ease-out; }
+.chat-demo-card:hover { transform: translateY(-2px); border-color: var(--accent-border);
+  color: var(--ink); box-shadow: var(--shadow-sm); }
+.chat-hero-sub { font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .04em; }
+.chat-demo-card[data-testid="demo-q-0"] { border-left: 3px solid var(--accent); }
+
+.bubble { font-size: 15px; max-width: 68ch; }
+.anchor-chip.num { font-family: var(--font-data); }
+.anchor-chip.clickable:active { animation: chipPulse .35s var(--ease-out); }
+@keyframes chipPulse { 0% { box-shadow: 0 0 0 0 var(--glow-soft); }
+  100% { box-shadow: 0 0 0 8px transparent; } }
+
+.dock-busy-bar { width: 2px; align-self: stretch; border-radius: 2px;
+  background: var(--accent); margin-right: 6px;
+  animation: busyBreath 1.2s ease-in-out infinite; }
+@keyframes busyBreath { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dock-busy-bar { animation: none; } }
+
+/* ---------- Trace 面板微调(§4.4):节点卡间距 10px ---------- */
+.tl-round { margin-bottom: 10px; }
+.tl-step { margin-top: 10px; }

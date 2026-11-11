@@ -119,10 +119,7 @@ export default function TracePanel({ tl, busy, final }: {
       </div>
       <div className="trace-body" ref={bodyRef}>
         {rows.length === 0 && (
-          <p className="kv">
-            提问后，Agent 的检索计划、工具调用与证据校验会在这里逐步点亮；
-            「证据不足 → 补检索」等恢复事件会高亮显示。
-          </p>
+          <p className="kv">等待首次提问 · 提问后这里逐步点亮</p>
         )}
         {rows.map((row, i) => (
           <RowView key={i} row={row} open={openSteps} toggle={toggleStep} />
@@ -137,8 +134,8 @@ export default function TracePanel({ tl, busy, final }: {
           <div className="tl-row">
             <span className="tl-dot tl-done" />
             <span className="kv">
-              图执行完成{final.elapsed != null ? ` · ${final.elapsed}s` : ""}
-              {final.thread_id ? ` · trace ${final.thread_id.slice(-6)}` : ""}
+              图执行完成{final.elapsed != null ? <> · <span className="num">{final.elapsed}s</span></> : ""}
+              {final.thread_id ? <> · trace <span className="num">{final.thread_id.slice(-6)}</span></> : ""}
             </span>
           </div>
         )}
@@ -257,7 +254,7 @@ function StepView({ s, open, toggle }: {
         <span className={`tl-dot ${DOT_CLS[s.status]}`} />
         <span className="tl-step-title">{s.title}</span>
         <span className="chip">{s.call?.tool ?? "kb_search"}</span>
-        <span className="kv">{STATUS_TEXT[s.status]}{s.result ? ` · ${s.result.elapsed_ms}ms` : ""}</span>
+        <span className="kv">{STATUS_TEXT[s.status]}{s.result ? <> · <span className="num">{s.result.elapsed_ms}ms</span></> : ""}</span>
         <ChevronRight size={12} className="pipe-caret"
           style={{ transform: isOpen ? "rotate(90deg)" : "none" }} />
       </div>
