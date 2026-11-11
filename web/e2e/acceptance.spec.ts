@@ -51,7 +51,7 @@ test("① 双语对照：左栏滚动 → 右栏跟随", async ({ page }) => {
   test.skip(bestBlocks < 12, `库内最密页仅 ${bestBlocks} 块，无法观测滚动同步`);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/reader/${pid}?page=${pageNo}`);
-  await page.getByRole("button", { name: "双语对照" }).click();
+  await page.getByRole("button", { name: "双语" }).click();   // C5 分段控件:文案由「双语对照」收敛为「双语」(同 PR 同步)
   await expect(page.getByText("译文（block 级对齐）")).toBeVisible({ timeout: 20_000 });
   // 块渲染就绪（fetchPage 竞态：pane 无块时 observer 无可绑定目标，同步必不触发）
   await expect(async () => {
@@ -83,7 +83,7 @@ test("② [n] 引用标记 → References 跳转高亮", async ({ page }) => {
   const pid = await attentionPaperId();
   test.skip(!pid, "库内无论文");
   await page.goto(`/reader/${pid}`);
-  await page.getByRole("button", { name: "DocIR 文本" }).click();
+  await page.getByRole("button", { name: "DocIR" }).click();   // C5 分段控件同 PR 同步
   const chip = page.locator("span.chip[data-bid], p span").filter({ hasText: /^\[\d+\]$/ }).first();
   const hasCite = await chip.count();
   test.skip(!hasCite, "该论文正文无 [n] 标记（换用含数字引用的论文）");
@@ -293,7 +293,7 @@ test("⑨ 双语滚动同步量化：中线块锚定一致", async ({ page }) =>
   test.skip(blocks < 12, `最密页仅 ${blocks} 块`);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/reader/${pid}?page=${pageNo}`);
-  await page.getByRole("button", { name: "双语对照" }).click();
+  await page.getByRole("button", { name: "双语" }).click();   // C5 分段控件:文案由「双语对照」收敛为「双语」(同 PR 同步)
   await expect(page.getByText("译文（block 级对齐）")).toBeVisible({ timeout: 20_000 });
   // 等块渲染就绪（fetchPage 竞态会让 pane 暂无 [data-bid]，直接 evaluate 会踩 undefined）
   await expect(async () => {

@@ -402,6 +402,7 @@ function ReaderInner() {
   const [toast, setToast] = useState<string | null>(null);                // C：续读恢复提示
   const [refsOpen, setRefsOpen] = useState(false);                        // References 手风琴
   const [tocDrawer, setTocDrawer] = useState(false);                      // 沉浸态浮动目录抽屉
+  const [moreOpen, setMoreOpen] = useState(false);                        // §6.1 ⋯ 菜单
   const [searchMode, setSearchMode] = useState<"page" | "full">("page");  // D：页内过滤 / 全文 FTS
   const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null); // D：null=未查询
   const [searching, setSearching] = useState(false);                      // D
@@ -1194,12 +1195,6 @@ function ReaderInner() {
             长文档 · 按需加载
           </span>
         )}
-        <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowMeta((v) => !v)}>
-          文献信息{meta.authors?.length ? ` · ${meta.authors.length} 作者` : ""}
-        </button>
-        <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowReport((s) => !s)}>
-          解析报告 <span style={{ opacity: 0.7 }}>{meta.parse_engine ?? ""}</span>
-        </button>
         <button className="chip" style={{ cursor: "pointer" }} data-testid="reader-immersive"
           title="沉浸阅读：隐藏侧边栏与标题树，正文占满视口（目录收为左侧浮动按钮 · Esc 退出）"
           onClick={() => setImmersive(!immersive)}>
@@ -1241,20 +1236,24 @@ function ReaderInner() {
                     </span>
                   );
                 })()}
-                {([["pdf", "PDF 原文"], ["text", "DocIR 文本"], ["bilingual", "双语对照"],
-                  ["compare", "原版对照"], ["pdf-bilingual", "PDF↔译文"]] as [ViewMode, string][]).map(([m, label]) => (
-                  <button key={m} className={`chip ${view === m ? "accent" : ""}`}
-                    style={{ cursor: "pointer" }} onClick={() => setView(m)}>{label}</button>
-                ))}
-                {([["zh", "英→中"], ["en", "中→英"]] as ["zh" | "en", string][]).map(([l, label]) => (
-                  <button key={l} data-testid={`trans-lang-${l}`}
-                    className={`chip ${transLang === l ? "accent" : ""}`} style={{ cursor: "pointer" }}
-                    title="翻译方向（切换后拉取对应方向缓存；中文论文自动默认中→英）"
-                    onClick={() => {
-                      localStorage.setItem("trans_lang_manual", "1");
-                      setTransLang(l);
-                    }}>{label}</button>
-                ))}
+                {/* §6.1 右组·视图分段控件 */}
+                <span className="seg" role="group" aria-label="视图切换">
+                  {([["pdf", "PDF 原文"], ["text", "DocIR"], ["bilingual", "双语"],
+                    ["compare", "原版对照"], ["pdf-bilingual", "PDF↔译文"]] as [ViewMode, string][]).map(([m, label]) => (
+                    <button key={m} className={view === m ? "on" : ""} data-testid={`view-${m}`}
+                      onClick={() => setView(m)}>{label}</button>
+                  ))}
+                </span>
+                <span className="seg" role="group" aria-label="翻译方向">
+                  {([["zh", "英→中"], ["en", "中→英"]] as ["zh" | "en", string][]).map(([l, label]) => (
+                    <button key={l} data-testid={`trans-lang-${l}`} className={transLang === l ? "on" : ""}
+                      title="翻译方向（切换后拉取对应方向缓存；中文论文自动默认中→英）"
+                      onClick={() => {
+                        localStorage.setItem("trans_lang_manual", "1");
+                        setTransLang(l);
+                      }}>{label}</button>
+                  ))}
+                </span>
                 {view !== "pdf" && (
                   <button className="chip" style={{ cursor: "pointer" }} onClick={translatePage}
                     title="翻译本页（block 级，公式/代码/引用标记占位符保护，缓存续译）— 快捷键 t">
@@ -1281,28 +1280,29 @@ function ReaderInner() {
                   </button>
                 )}
                 {view !== "pdf" && (
-                  <>
-                    <button className="chip" style={{ cursor: "pointer" }} disabled={exporting}
-                      onClick={() => exportDoc("md")}
-                      title="导出中英对照 Markdown（公式/代码保留英文 LaTeX；未译块仅原文）">
-                      {exporting ? "导出中…" : "导出 MD"}
-                    </button>
-                    <button className="chip" style={{ cursor: "pointer" }} disabled={exporting}
-                      onClick={() => exportDoc("html")}
-                      title="导出中英对照 HTML（内联样式，离线可看）">
-                      导出 HTML
-                    </button>
-                    <button className="chip" style={{ cursor: "pointer" }} disabled={exporting}
-                      onClick={() => exportServerPdf("overlay")}
-                      title="服务端导出：原 PDF 原位替换译文（公式/表格/图片不动；放不下的块进文末补遗页）">
-                      导出 PDF（原位）
-                    </button>
-                    <button className="chip" style={{ cursor: "pointer" }} disabled={exporting}
-                      onClick={() => exportServerPdf("bilingual")}
-                      title="服务端导出：原页+译文页交替的双语 PDF">
-                      导出 PDF（双语）
-                    </button>
-                  </>
+                  <span className="more-menu-wrap">
+                    <button className="chip" data-testid="reader-more"
+                      style={{ cursor: "pointer" }} onClick={() => setMoreOpen((v) => !v)}>⋯</button>
+                    {moreOpen && (
+                      <div className="more-pop" data-testid="reader-more-pop">
+                        <button disabled={exporting} onClick={() => { exportDoc("md"); setMoreOpen(false); }}
+                          title="导出中英对照 Markdown（公式/代码保留英文 LaTeX；未译块仅原文）">
+                          {exporting ? "导出中…" : "导出 MD"}
+                        </button>
+                        <button disabled={exporting} onClick={() => { exportDoc("html"); setMoreOpen(false); }}
+                          title="导出中英对照 HTML（内联样式，离线可看）">导出 HTML</button>
+                        <button disabled={exporting} onClick={() => { exportServerPdf("overlay"); setMoreOpen(false); }}
+                          title="服务端导出：原 PDF 原位替换译文（公式/表格/图片不动；放不下的块进文末补遗页）">导出 PDF（原位）</button>
+                        <button disabled={exporting} onClick={() => { exportServerPdf("bilingual"); setMoreOpen(false); }}
+                          title="服务端导出：原页+译文页交替的双语 PDF">导出 PDF（双语）</button>
+                        <hr />
+                        <button onClick={() => { setShowMeta((v) => !v); setMoreOpen(false); }}
+                          title="作者+机构/摘要/venue·DOI">文献信息</button>
+                        <button onClick={() => { setShowReport((s) => !s); setMoreOpen(false); }}
+                          title="六指标+解析引擎+峰值内存">解析报告 {meta.parse_engine ?? ""}</button>
+                      </div>
+                    )}
+                  </span>
                 )}
                 <span className={`chip ${searchMode === "full" ? "accent" : ""}`}
                   style={{ cursor: "pointer", marginLeft: "auto" }}

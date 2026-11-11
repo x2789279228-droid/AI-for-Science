@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IdeaItem, listPapers, streamIdeas } from "@/lib/api";
 import { useIsland } from "@/lib/island";
+import EmptyState from "@/components/EmptyState";
 
 export default function IdeasPage() {
   const [paperIds, setPaperIds] = useState<string[]>([]);
@@ -71,7 +72,10 @@ export default function IdeasPage() {
         {ideas && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)" }}>
             <div className="card card-in" style={{ ["--i" as string]: 0 }}>
-              <h2>已失效 / 有进展（{ideas.solved.length}）</h2>
+              <h2 style={{ background: "var(--ok-soft)", color: "var(--ok)",
+                borderRadius: "var(--radius-md)", padding: "6px 10px" }}>
+                已失效 / 有进展（{ideas.solved.length}）
+              </h2>
               {ideas.solved.map((x) => (
                 <div key={x.id} className="kv card-lift"
                   style={{ border: "1px solid var(--line)",
@@ -100,15 +104,18 @@ export default function IdeasPage() {
                   )}
                 </div>
               ))}
-              {ideas.solved.length === 0 && <p className="kv">暂无（库内后续文献尚未覆盖这些方向）。</p>}
+              {ideas.solved.length === 0 && <EmptyState title="暂无已解决方向" desc="库内后续文献尚未覆盖这些方向——分析完成后这里会如实展示。" />}
             </div>
 
             <div className="card card-in" style={{ ["--i" as string]: 1 }}>
-              <h2>真正值得做的方向（{ideas.open.length} · 按被引数升序）</h2>
+              <h2 style={{ background: "var(--warn-soft)", color: "var(--warn)",
+                borderRadius: "var(--radius-md)", padding: "6px 10px" }}>
+                真正值得做的方向（{ideas.open.length} · 按被引数升序）
+              </h2>
               {ideas.open.map((x, i) => (
                 <GapFlipCard key={x.id} x={x} idx={i} titleOf={titleOf} />
               ))}
-              {ideas.open.length === 0 && <p className="kv">暂无。</p>}
+              {ideas.open.length === 0 && <EmptyState title="暂无 open 缝隙" desc="本次分析未发现值得做的方向——可扩大语料后重试。" />}
             </div>
           </div>
         )}

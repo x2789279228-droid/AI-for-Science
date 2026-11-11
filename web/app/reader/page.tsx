@@ -79,7 +79,7 @@ export default function ReaderShelfPage() {
                   style={{ background: COVER_STYLES[i % COVER_STYLES.length],
                     ["--i" as string]: i }}
                   title={`${p.title || p.id} · 共 ${total} 页`}>
-                  <span className="book-badge">{p.year ?? "PDF"}</span>
+                  <span className="book-badge">{p.version || p.year || "PDF"}</span>
                   <span className="book-title">{p.title || "(未命名)"}</span>
                   <span className="book-meta num">
                     {p.arxiv_id ? `arXiv:${p.arxiv_id.split("v")[0]} · ` : ""}{total} 页

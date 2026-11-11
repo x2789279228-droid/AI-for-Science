@@ -40,14 +40,16 @@ export default function DiscoverPage() {
   const [finalPaper, setFinalPaper] = useState("");
   const [repros, setRepros] = useState<Record<string, ReproRepo[]>>({});
 
-  const run = () => {
-    if (!query.trim() || phase === "searching") return;
+  const run = (overrideQ?: string) => {
+    const qv = (typeof overrideQ === "string" ? overrideQ : query).trim();
+    if (!qv || phase === "searching") return;
+    setQuery(qv);
     setPhase("searching");
     setEntries([]);
     setStatusLine("多源检索中…");
     island.emit({ key: "search", kind: "progress", title: "多源检索中",
-      detail: query.trim(), indeterminate: true });
-    streamMultiSearch({ query: query.trim() }, {
+      detail: qv, indeterminate: true });
+    streamMultiSearch({ query: qv }, {
       status: (d) => {
         setStatusLine(`[${d.source ?? d.stage}] ${d.note}`);
         island.emit({ key: "search", kind: "progress", title: `多源检索中 · [${d.source ?? d.stage}]`,
@@ -370,7 +372,7 @@ export default function DiscoverPage() {
                   style={{ flex: 1, minWidth: 280, border: "1px solid var(--line-strong)",
                     borderRadius: "var(--radius-sm)", padding: "10px 12px",
                     fontFamily: "var(--font)", outline: "none" }} />
-                <button className="btn primary" onClick={run} disabled={phase === "searching"}>
+                <button className="btn primary" onClick={() => run()} disabled={phase === "searching"}>
                   {phase === "searching" ? "检索中…" : "多源检索"}
                 </button>
                 <label className="chip" style={{ cursor: "pointer", display: "flex", gap: 6 }}>
@@ -399,11 +401,21 @@ export default function DiscoverPage() {
               <div className="card card-in" style={{ display: "flex", gap: "var(--space-4)",
                 alignItems: "center", flexWrap: "wrap" }}>
                 <RisoIllust name="paper-sea" size={170} />
-                <p className="kv" style={{ flex: 1, minWidth: 260 }}>
-                  三源检索（arXiv Atom / Semantic Scholar / OpenAlex，DOI→arXiv→标题归一去重）→
-                  勾选下载 → 解析 → 检索闭环。断网时各源独立回放缓存。也可切换上方
-                  「参考文献下钻」粘贴 BibTeX/RIS/DOI 列表批量补全。
-                </p>
+                <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column",
+                  gap: 8, alignItems: "flex-start" }}>
+                  <p className="kv">
+                    三源检索（arXiv Atom / Semantic Scholar / OpenAlex，DOI→arXiv→标题归一去重）→
+                    勾选下载 → 解析 → 检索闭环。断网时各源独立回放缓存。
+                  </p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <span className="kv muted">试试:</span>
+                    {["linear attention Mamba", "mixture of experts"].map((w) => (
+                      <button key={w} className="chip accent" style={{ cursor: "pointer" }}
+                        data-testid={`demo-search-${w.split(" ")[0]}`}
+                        onClick={() => run(w)}>{w}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </>
