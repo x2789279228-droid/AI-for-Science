@@ -1,6 +1,8 @@
 {
-  "generated_at": "2026-11-15 16:56:17",
+  "generated_at": "2026-11-15 19:13:07",
   "algorithm": "sha256",
+  "git_head": "df124e5",
+  "dirty": "",
   "note": "评测证据包：报告数字 ← 这些脚本 × 这份源码 × 这些数据。复核=逐条比对 sha256。",
   "files": [
     {
@@ -60,13 +62,13 @@
     },
     {
       "path": "api\\scripts\\eval_ablation.py",
-      "bytes": 11463,
-      "sha256": "9cefb9b59794a20dfb35ea1d6ef7b256104cd979fa78384a9c492a78c393929e"
+      "bytes": 11262,
+      "sha256": "d793d9bff3643fae82f490e3797cb55dfaa2d9cfe52cec0a1c2898a80ebcacdd"
     },
     {
       "path": "api\\scripts\\eval_evidence_manifest.py",
-      "bytes": 2753,
-      "sha256": "49fc8e356da79c7e4498c4a3df2d80e4a484fd81daff8ce2318947e47b9392a1"
+      "bytes": 4072,
+      "sha256": "68579a986dcac2cf5fd235445856008413341b8fc9a3f75b64eed9a22f0f443d"
     },
     {
       "path": "api\\scripts\\eval_gold.py",
@@ -75,8 +77,8 @@
     },
     {
       "path": "api\\scripts\\eval_kappa.py",
-      "bytes": 13695,
-      "sha256": "f1daa5ced0b6a39502c5db79d03895f4b2c53dfeea1058a4e3b41e6abcfdbec6"
+      "bytes": 15307,
+      "sha256": "ee63075277e8ef9a620efbe43e4366ed6d6b736e8626eab382d43b7d2e0545d6"
     },
     {
       "path": "api\\scripts\\eval_quick.py",
@@ -85,18 +87,18 @@
     },
     {
       "path": "api\\scripts\\eval_round6_metrics.py",
-      "bytes": 7864,
-      "sha256": "9dcdf328572f289c2a0fab7f691f814e54fb2a97b2ade8e84c21509bd6a351c6"
+      "bytes": 7795,
+      "sha256": "cad93f1c1b9fefbdf61501355fa236250db39c9465013e64e81801f26f18b3c7"
     },
     {
       "path": "api\\scripts\\eval_seeds.py",
-      "bytes": 5817,
-      "sha256": "2066010a11357cc4968c808eb4acef91e10b0744242937a355b94d41a4466000"
+      "bytes": 5775,
+      "sha256": "680b4a1b94c15261714d8304e0a1ce5869a63c6c8eee636f1e8c9ef23bac6dfb"
     },
     {
       "path": "api\\scripts\\verify_goldset_40.py",
-      "bytes": 6121,
-      "sha256": "d72d1afbbfc64b70ad195646f17d2ff22bcdfe6f942b819ca88ee6945c6f739c"
+      "bytes": 6093,
+      "sha256": "7fea7c871e75b7b5185cfdd273f9e8bbbe8a2b76bbee1c0547813d3c87962b75"
     },
     {
       "path": "api\\scripts\\ablation.json",
@@ -125,8 +127,8 @@
     },
     {
       "path": "api\\scripts\\kappa_report.json",
-      "bytes": 29360,
-      "sha256": "474763f1419e685e0c6123ed6ffb160f9f642533a17844f3e010c3e8c511bcd3"
+      "bytes": 29627,
+      "sha256": "6b2b30ef44646f64ddaea111b92160479049bb8ac83df7c07ead59e8081789d0"
     },
     {
       "path": "api\\scripts\\seeds_ci.json",
@@ -146,7 +148,7 @@
     {
       "path": "api\\app\\agents\\nodes.py",
       "bytes": 54864,
-      "sha256": "58da09824ff8ed6b3dc4808dda7d11638526839451d1dcbedd343acc34837ee7"
+      "sha256": "908eb9c53b72c1b0acdf26e503cc5b3b441d4b2f9416166f54ab6e07e4e583f0"
     },
     {
       "path": "api\\app\\agents\\graph.py",
@@ -165,8 +167,8 @@
     },
     {
       "path": "api\\app\\api_routes\\routes.py",
-      "bytes": 59441,
-      "sha256": "6b91a479461c02da6940c5bfa109ab2eed40f9d3f0988d535cb3ca9a1147c021"
+      "bytes": 60880,
+      "sha256": "f33e914a145af8543939dd82ea1e1d4e97932a1b6e7f440c0d357e0461ffb465"
     },
     {
       "path": "api\\app\\api_routes\\graph_routes.py",
