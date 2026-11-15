@@ -23,10 +23,10 @@ os.environ.setdefault("MINERU_ENABLED", "off")
 os.environ.setdefault("RATE_LIMIT_PER_MIN", "0")
 # LLM 凭据尊重宿主机 .env（生成指标需要真实 LLM）
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from app import db  # noqa: E402
-from app.main import app  # noqa: E402
+from app import db
+from app.main import app
 
 QS = [
     "How many GPUs were the base models trained on?",

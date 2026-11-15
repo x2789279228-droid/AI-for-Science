@@ -19,6 +19,9 @@ services:
     volumes:
       # 宿主数据目录 = scholar-agent/data（config.ROOT/data，与本地开发同源）
       - ./data:/app/data
+      # 外部校准/趋势数据源（/health 的外部金标 gates 与轮次趋势读它）——
+      # 镜像内不打包 docs（演示快照保持最小），只读挂载进容器
+      - ./docs/acceptance:/app/docs/acceptance:ro
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8100/api/health', timeout=5)"]

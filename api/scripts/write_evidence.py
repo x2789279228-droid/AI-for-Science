@@ -170,7 +170,7 @@ def main() -> int:
     eval_path = ROOT / args.eval_json if args.eval_json else find_latest_eval()
 
     commit, branch = git_commit()
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M +08")
     ev = {
         "generatedAt": now,

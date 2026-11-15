@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.rag.verify import verify_claims  # noqa: E402
+from app.rag.verify import verify_claims
 
 _GOLD_R3 = Path(__file__).resolve().parents[2] / "docs" / "acceptance" / "eval-20261114-r3" / "eval_gold.json"
 _BATCH = 6          # 每批样本数——批证据包 6×1200 字符 ≈ 生产 judge 包规模
@@ -37,9 +37,11 @@ def _load_positive_claims() -> list[dict]:
     """实时生成收集 supported claims（text/quote/support 齐全的）——比读历史
     trace 更新鲜且数量可控；走与生产一致的 chat 管线。"""
     import time as _time
+
     from fastapi.testclient import TestClient
-    from app.main import app as _app
+
     from app import db as _db
+    from app.main import app as _app
     _db.init_db()
     client = TestClient(_app)
     rows = _db.query("SELECT id FROM papers WHERE docir_path!='' AND "
@@ -135,7 +137,7 @@ def _build_negatives(claims: list[dict]) -> list[dict]:
                          "support_ref": c["support_ref"], "neg_kind": f"entity:{hit}"})
     # c. 论断-证据错配：claim i 的 text+quote 配 claim i+2 的证据文本
     #    （错配证据在主流程用 evidence_for(b.quote) 反查——b 的 quote 找 b 的块）
-    for i in range(0, min(6, len(claims) - 2)):
+    for i in range(min(6, len(claims) - 2)):
         a, b = claims[i], claims[i + 2]
         negs.append({"text": a["text"], "quote": a["quote"], "eid": b["support_ref"]["eid"],
                      "support_ref": {**b["support_ref"], "_evidence_quote": b["quote"]},
@@ -159,6 +161,34 @@ def _kappa(pairs: list[tuple[str, str]]) -> dict:
     kappa = round((po - pe) / (1 - pe), 3) if pe < 1 else 1.0
     return {"n": n, "kappa": kappa, "accuracy": round((tp + tn) / n, 3),
             "confusion": {"tp": tp, "tn": tn, "fp": fp, "fn": fn}}
+
+
+def _kappa_raw(ps: list[tuple[str, str]]) -> float:
+    """κ 裸值（bootstrap 重采样用，不四舍五入）。"""
+    n = len(ps)
+    tp = sum(1 for t, j in ps if t == "supported" and j == "positive")
+    tn = sum(1 for t, j in ps if t == "unsupported" and j == "negative")
+    fp = sum(1 for t, j in ps if t == "unsupported" and j == "positive")
+    fn = sum(1 for t, j in ps if t == "supported" and j == "negative")
+    po = (tp + tn) / n
+    p_pos = (tp + fn) / n
+    p_j = (tp + fp) / n
+    pe = p_pos * p_j + (1 - p_pos) * (1 - p_j)
+    return (po - pe) / (1 - pe) if pe < 1 else 1.0
+
+
+def _bootstrap_ci(pairs: list[tuple[str, str]], n_boot: int = 2000,
+                  seed: int = 42) -> list[float] | None:
+    """κ 95%CI（percentile bootstrap，固定种子可复现）。披露口径：报告必须带 n/CI，
+    不能只有点估计。"""
+    import random
+    n = len(pairs)
+    if n < 2:
+        return None
+    rng = random.Random(seed)
+    boots = sorted(_kappa_raw([pairs[rng.randrange(n)] for _ in range(n)])
+                   for _ in range(n_boot))
+    return [round(boots[int(0.025 * n_boot)], 3), round(boots[int(0.975 * n_boot) - 1], 3)]
 
 
 def main() -> int:
@@ -222,11 +252,11 @@ def main() -> int:
                            "chunk_id": f"k{b0 + k}", "section_path": ""}
                    for k, s in enumerate(chunk)}
 
-        def _mk(s, k, status):
+        def _mk(s, k, status, _b0=b0):   # 默认参绑定 b0（B023：闭包不共享循环变量）
             return {"text": s["text"], "status": status,
                     "evidence_ids": [k + 1], "quote": s["quote"],
                     "support": [{"eid": f"E{k + 1}", "page": 1, "quote": s["quote"],
-                                 "chunk_id": f"k{b0 + k}", "section_path": ""}]}
+                                 "chunk_id": f"k{_b0 + k}", "section_path": ""}]}
 
         # ---- 口径 A：judge-only（初始态=生产 L4 候选真实入口，verdict 落
         # semantic_status——判定读它而非 final status）----
@@ -254,16 +284,22 @@ def main() -> int:
 
     kj = _kappa(judge_pairs)
     kp = _kappa(pipe_pairs)
+    ci_j = _bootstrap_ci(judge_pairs)
+    ci_p = _bootstrap_ci(pipe_pairs)
     import time as _time
     out = {
         "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
         "n_evaluated": kj["n"], "n_pipeline": kp["n"],
         "cohens_kappa": kj["kappa"], "accuracy": kj["accuracy"],
         "confusion": kj.get("confusion"),
+        "kappa_ci95": ci_j,
         "pipeline_kappa": kp["kappa"], "pipeline_accuracy": kp["accuracy"],
         "pipeline_confusion": kp.get("confusion"),
+        "pipeline_kappa_ci95": ci_p,
         "kappa_note": "构造真值口径：真实 supported + 程序负类（数值/实体/错配）；"
-                      "judge-only κ 读 semantic_status，pipeline κ 读 final status",
+                      "judge-only κ 读 semantic_status，pipeline κ 读 final status。"
+                      "正类来自管线自身产物，非独立人工标注——负类为构造校准口径",
+        "ci_note": f"95%CI bootstrap 2000 次重采样（固定种子），n={kj['n']}",
         "batches": len(per_batch),
         "samples": samples,
     }

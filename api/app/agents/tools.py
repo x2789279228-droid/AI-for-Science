@@ -548,10 +548,16 @@ def _github_repro(title: str) -> dict:
 
 
 _SANDBOX_PREAMBLE = (
-    # matplotlib 为可选依赖（pip 组 sandbox）：未安装时非绘图脚本仍可执行
+    # matplotlib 为可选依赖（pip 组 sandbox）：未安装时非绘图脚本仍可执行；
+    # CJK 字体族按序回退（容器=fonts-wqy-microhei / 宿主机=微软雅黑等）——
+    # 无此行中文标签在 PNG 里渲染为方框
     "try:\n"
     "    import matplotlib\n"
     "    matplotlib.use('Agg')\n"
+    "    matplotlib.rcParams['font.sans-serif'] = [\n"
+    "        'Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'Microsoft YaHei',\n"
+    "        'PingFang SC', 'SimHei', 'DejaVu Sans']\n"
+    "    matplotlib.rcParams['axes.unicode_minus'] = False\n"
     "    import matplotlib.pyplot as plt\n"
     "except ImportError:\n"
     "    pass\n"

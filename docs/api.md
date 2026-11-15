@@ -145,7 +145,7 @@ event: done        → {}
 |---|---|---|
 | GET | `/api/audit/prompts?limit=50` | 调用日志（模块/模型/token/耗时/guardrail）+ 系统状态 |
 | GET | `/api/health` | LLM 连通性（真实 ping）/ Dense 开关 / 论文数 |
-| GET | `/api/health-report` | 运行时健康评分卡（只读聚合）：7 个固定权重子分（可靠性/回答可信/回答覆盖/检索/解析/性能/数据卫生）；仅统计最近 7 天真实用户轨迹（排除 kappa_/gold_/bench_/e2e_ 等评测前缀），样本 <30 不出总分；失败 trace/任务进分母、缺测按 0 计不重归一化；最新 eval_gold gates 未全过时总分封顶 0.90；返回 n/CI/`missing`/`external` 与逐项公式。工程快照（pytest/e2e）由前端单独展示，不计分 |
+| GET | `/api/health-report` | 运行时健康评分卡（只读聚合）：7 个固定权重子分（可靠性/回答可信/回答覆盖/检索/解析/性能/数据卫生）；仅统计最近 7 天本机运行轨迹（排除 kappa_/gold_/bench_/e2e_ 等评测前缀），样本 <30 不出总分；失败 trace/任务进分母、缺测按 0 计不重归一化；最新 eval_gold gates 未全过时总分封顶 0.90；返回 n/CI/`missing`/`external` 与逐项公式。工程快照（pytest/e2e）由前端单独展示，不计分 |
 | GET | `/api/metrics` | 运行指标：请求计数（总数/状态码/限流命中/in-flight）+ LLM 聚合（qa_logs：调用数/token/平均时延）+ 任务/翻译计数 + 进程 RSS/CPU |
 
 **Request-ID**：所有响应回写 `X-Request-Id`（透传调用方值或自动生成 12 位 hex），与日志绑定。

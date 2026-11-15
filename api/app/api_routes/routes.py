@@ -575,6 +575,11 @@ def chat(body: ChatBody):
 
     if body.doc_mode not in DOC_TYPES:
         raise HTTPException(400, f"doc_mode 仅支持 {'|'.join(DOC_TYPES)}")
+    # 空问题入口拦截（P1）：空输入此前会流进执行链失败并留下 resumable 轨迹，
+    # 把「用户输入错误」伪装成系统中断——400 直接拒绝，不产生失败样本
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(400, "问题不能为空")
     # 双模式 Agent 白名单：普通模式无 Graph（引用图谱）/Writer（学术写作）
     allowed_agents = FORCED_AGENT_VALUES if body.doc_mode == "paper" else GENERAL_FORCED_AGENTS
     if body.agent not in allowed_agents:
@@ -608,7 +613,7 @@ def chat(body: ChatBody):
     if paper_cap_note:                            # 先入队保证顺序：runner 事件之前到达前端
         q.put(("guardrail", {"message": paper_cap_note, "kind": "paper_cap"}))
     threading.Thread(target=runner.run_stream,
-                     args=(body.question.strip(), paper_ids, q),
+                     args=(question, paper_ids, q),
                      kwargs={"thread_id": thread_id, "conversation_id": conv, "turn": turn,
                              "forced_agent": body.agent, "doc_mode": body.doc_mode},
                      daemon=True).start()
@@ -715,10 +720,21 @@ def _slo_score(value_ms: float, full_ms: float, zero_ms: float) -> float:
     return _clamp01((zero_ms - value_ms) / max(1.0, zero_ms - full_ms))
 
 
+def _acceptance_dir() -> Path:
+    """docs/acceptance 定位（宿主机=仓库根；容器=compose 只读挂载 /app/docs）。
+    向上逐级探测而非固定 parents[N]——两种布局零配置生效。"""
+    here = Path(__file__).resolve()
+    for base in here.parents[:6]:
+        cand = base / "docs" / "acceptance"
+        if cand.is_dir():
+            return cand
+    return here.parents[3] / "docs" / "acceptance"
+
+
 def _latest_eval_gold() -> tuple[str, dict] | None:
     """docs/acceptance 下按 mtime 取最新 eval_gold.json（兼容 round*/ 与 eval-*/*）。"""
     try:
-        acc = Path(__file__).resolve().parents[3] / "docs" / "acceptance"
+        acc = _acceptance_dir()
         candidates = list(acc.glob("*/eval_gold.json")) + list(acc.glob("*/*/eval_gold.json"))
         candidates = [p for p in candidates if p.is_file()]
         if not candidates:
@@ -1104,6 +1120,7 @@ def health_report():
         "missing": missing,
         "scores": scores,
         "samples": {"traces": n_traces, "failed": failed_traces,
+                    "resumable": failed_user_input,
                     "answered": answered, "no_answer": n_traces - answered,
                     "modes": modes, "jobs": jobs_total, "jobs_failed": jobs_failed,
                     "llm_calls": llm_rows, "llm_errors": llm_errors,
@@ -1132,8 +1149,10 @@ def health_report():
 
 
 def _calibration() -> dict:
-    """judge 校准披露（P1：读 eval_kappa.py 产出的 kappa_report.json 实测值，
-    不再硬编码——报告没跑过/缺文件时如实标注「未评测」而非展示旧数字）。"""
+    """judge 校准披露（读 eval_kappa.py 产出的 kappa_report.json 实测值，
+    不再硬编码——报告没跑过/缺文件时如实标注「未评测」而非展示旧数字）。
+    P1 修订：披露必须带 n 与 95%CI（点估计 alone 是过度宣称），并明示
+    「正类来自管线自身产物、非独立人工标注」。"""
     report_path = Path(__file__).resolve().parents[2] / "scripts" / "kappa_report.json"
     try:
         d = json.loads(report_path.read_text(encoding="utf-8"))
@@ -1145,11 +1164,19 @@ def _calibration() -> dict:
         if not ok:
             note += "；未达标——校准进行中"
         return {"judge_kappa": kj, "pipeline_kappa": kp, "kappa_note": note,
+                "n": d.get("n_evaluated"),
+                "judge_ci95": d.get("kappa_ci95"),
+                "pipeline_ci95": d.get("pipeline_kappa_ci95"),
+                "ci_note": d.get("ci_note", ""),
+                "caveat": "正类来自管线自身产物，非独立人工标注——负类为构造校准口径",
                 "evaluated_at": d.get("time", ""),
                 "grounded_note": "回答可信=claims 四态口径；supported 已附逐字原文引文"}
     except Exception:  # noqa: BLE001 —— 无报告=未评测，如实披露
         return {"judge_kappa": None, "pipeline_kappa": None,
                 "kappa_note": "评测未运行（scripts/eval_kappa.py 无报告产出）——如实披露，不展示历史数字",
+                "n": None, "judge_ci95": None, "pipeline_ci95": None,
+                "ci_note": "",
+                "caveat": "正类来自管线自身产物，非独立人工标注——负类为构造校准口径",
                 "evaluated_at": "",
                 "grounded_note": "回答可信=claims 四态口径；supported 已附逐字原文引文"}
 
@@ -1157,7 +1184,7 @@ def _calibration() -> dict:
 def _eval_trend() -> list[dict]:
     """金标评测轮次趋势（docs/acceptance 下全部 eval_gold.json 按 mtime 升序）。"""
     try:
-        acc = Path(__file__).resolve().parents[3] / "docs" / "acceptance"
+        acc = _acceptance_dir()
         out = []
         for path in sorted(list(acc.glob("*/eval_gold.json")) + list(acc.glob("*/*/eval_gold.json")),
                            key=lambda x: x.stat().st_mtime):

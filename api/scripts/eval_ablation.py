@@ -20,7 +20,6 @@ import argparse
 import json
 import math
 import os
-import queue
 import sys
 import time
 from pathlib import Path
@@ -34,10 +33,10 @@ os.environ.setdefault("RATE_LIMIT_PER_MIN", "0")
 # 注意：EMBEDDING/LLM 凭据**不屏蔽**——消融的 dense/rerank/生成类掉分
 # 只在真引擎下有信息量（BM25-only 环境里 no-dense/no-rerank 与 full 恒等）。
 
-from app import db
-from app.main import app  # noqa: E402
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
+from app import db
+from app.main import app
 
 # 金标检索题（与 eval_gold 同源，10 题）
 _EN_FACTS = [
@@ -111,7 +110,6 @@ def recall_mrr(indexing, pid: str) -> dict:
 # ---------- 生成指标（LLM，可选） ----------
 
 def generative_metrics(client: TestClient, pid: str, n: int = 5) -> dict:
-    from app.rag.verify import verify_claims
     qs = ["How many GPUs were the base models trained on?",
           "What BLEU score did the big model achieve on EN-DE?",
           "How long did the big model train for?",
@@ -176,8 +174,6 @@ class _Patch:
         self.applied: list[tuple] = []
 
     def __enter__(self):
-        import app.rag.answering as answering
-        import app.agents.nodes as nodes
         for obj, attr, repl in self.patches:
             old = getattr(obj, attr)
             self.applied.append((obj, attr, old))
@@ -194,9 +190,8 @@ MISSING = object()
 
 
 def run_config(name: str, client: TestClient, pid: str, do_generative: bool) -> dict:
-    from app.rag import indexing
-    from app.rag import answering
     from app.agents import nodes as nodes_mod
+    from app.rag import answering, indexing
 
     def _empty(*a, **k):
         return []

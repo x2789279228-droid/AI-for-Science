@@ -17,8 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import db  # noqa: E402
-from app.rag.indexing import _embed_texts, _pack  # noqa: E402
+from app import db
+from app.rag.indexing import _embed_texts, _pack
 
 
 def main() -> int:

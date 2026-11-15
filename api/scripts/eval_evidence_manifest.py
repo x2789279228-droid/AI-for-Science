@@ -11,11 +11,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _git_dirty() -> str:
+    """工作区脏文件列表（py+c 核心证据必须来自干净 commit——manifest 记录的
+    hash 要能被「checkout 该 commit 后重跑」复核，dirty 状态下生成无意义）。"""
+    try:
+        r = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT.parent,
+                           capture_output=True, text=True, timeout=10, check=False)
+        return r.stdout.strip()
+    except Exception:  # noqa: BLE001 —— 非 git 环境如实标注
+        return "?"
+
+
+def _git_head() -> str:
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT.parent,
+                           capture_output=True, text=True, timeout=10, check=False)
+        return r.stdout.strip()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def sha256_of(path: Path) -> str:
@@ -27,6 +48,14 @@ def sha256_of(path: Path) -> str:
 
 
 def main() -> int:
+    if "--allow-dirty" not in sys.argv:
+        dirty = _git_dirty()
+        if dirty and dirty != "?":
+            print("工作区有未提交改动——证据 manifest 必须在干净 commit 后生成")
+            print("(复核语义：checkout 该 commit → 重跑脚本 → hash 应逐条一致)")
+            for ln in dirty.splitlines()[:10]:
+                print(f"  dirty: {ln}")
+            return 1
     acc = ROOT.parent / "docs" / "acceptance"
     targets: list[Path] = []
     if acc.exists():
@@ -55,6 +84,8 @@ def main() -> int:
     manifest = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "algorithm": "sha256",
+        "git_head": _git_head(),
+        "dirty": _git_dirty() or "",
         "note": "评测证据包：报告数字 ← 这些脚本 × 这份源码 × 这些数据。复核=逐条比对 sha256。",
         "files": entries,
     }

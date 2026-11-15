@@ -12,8 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import db  # noqa: E402
-from app.rag.version_diff import load_docir_for  # noqa: E402
+from app import db
+from app.rag.version_diff import load_docir_for
 
 
 def pick_v7() -> str:

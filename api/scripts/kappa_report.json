@@ -17,7 +17,7 @@
     "fp": 0,
     "fn": 1
   },
-  "kappa_note": "构造真值口径：真实 supported + 程序负类（数值/实体/错配）；judge-only κ 读 semantic_status，pipeline κ 读 final status",
+  "kappa_note": "构造真值口径：真实 supported + 程序负类（数值/实体/错配）；judge-only κ 读 semantic_status，pipeline κ 读 final status。正类来自管线自身产物，非独立人工标注——负类为构造校准口径",
   "batches": 5,
   "samples": [
     {
@@ -376,5 +376,14 @@
       "pipeline_status": "unsupported",
       "quote_status": "verified"
     }
-  ]
+  ],
+  "kappa_ci95": [
+    0.632,
+    1.0
+  ],
+  "pipeline_kappa_ci95": [
+    0.774,
+    1.0
+  ],
+  "ci_note": "95%CI bootstrap 2000 次重采样（固定种子），n=28"
 }

@@ -13,8 +13,9 @@ install:            ## 安装后端 + 前端依赖
 api:                ## 本地起 API（uvicorn :8100）
 	cd api && uv run uvicorn app.main:app --port 8100 --reload
 
-web:                ## 本地起前端（:3000）
+web:                ## 本地起前端 dev（:3005；3000 留给 Docker/compose，见 demo）
 	cd web && pnpm dev
+	@echo "→ http://localhost:3005  （dev；docker demo 才是 :3000）"
 
 demo:               ## 演示环境：恢复 data-real 快照（对比语料 v7/BERT/PreLN/GPT-2 + UDL）+ docker 起全栈
 	@if [ -d data-real ] && [ ! -f data/.demo_loaded ]; then mkdir -p data && cp -r data-real/. data/ && touch data/.demo_loaded; echo '已恢复 data-real 演示快照'; fi

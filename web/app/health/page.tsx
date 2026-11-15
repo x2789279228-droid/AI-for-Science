@@ -217,7 +217,10 @@ export default function HealthPage() {
                 <div className="h-detail-block">
                   <b>样本与口径</b>
                   <p className="kv num">
-                    生产轨迹 {report.samples.traces} 条（failed {report.samples.failed}）·
+                    生产轨迹 {report.samples.traces} 条（failed {report.samples.failed}
+                    {(report.samples.resumable ?? 0) > 0
+                      ? ` · 可恢复中断 ${report.samples.resumable}（不计可靠性失败，断点可续跑）`
+                      : ""}）·
                     有论断 {report.samples.answered} / 无答案 {report.samples.no_answer}
                   </p>
                   <p className="kv num">
@@ -364,6 +367,8 @@ export default function HealthPage() {
                         }}>
                           {report.calibration.judge_kappa}
                         </b>
+                        {report.calibration.judge_ci95
+                          ? ` [${report.calibration.judge_ci95[0]}, ${report.calibration.judge_ci95[1]}]` : ""}
                         {" "}· pipeline κ（L2-L4 端到端）
                         {" "}
                         <b style={{
@@ -372,12 +377,18 @@ export default function HealthPage() {
                         }}>
                           {report.calibration.pipeline_kappa}
                         </b>
-                        {" "}· 目标 ≥0.60
+                        {report.calibration.pipeline_ci95
+                          ? ` [${report.calibration.pipeline_ci95[0]}, ${report.calibration.pipeline_ci95[1]}]` : ""}
+                        {" "}· n={report.calibration.n ?? "—"} · 目标 ≥0.60
                       </p>
                       <p className="kv muted">
                         {report.calibration.kappa_note}
+                        {report.calibration.ci_note ? ` · ${report.calibration.ci_note}` : ""}
                         {report.calibration.evaluated_at
                           ? ` · 评测于 ${report.calibration.evaluated_at}` : ""}
+                      </p>
+                      <p className="kv muted">
+                        口径声明：{report.calibration.caveat}
                       </p>
                     </>
                   ) : (

@@ -650,7 +650,8 @@ export interface HealthReport {
   missing: string[];
   scores: Record<string, HealthScore>;
   samples: {
-    traces: number; failed: number; answered: number; no_answer: number;
+    traces: number; failed: number; resumable?: number; answered: number;
+    no_answer: number;
     modes: Record<string, number>; jobs: number; jobs_failed: number;
     llm_calls: number; llm_errors: number; llm_error_rate: number | null;
   };
@@ -679,6 +680,11 @@ export interface HealthReport {
     judge_kappa: number | null;
     pipeline_kappa: number | null;
     kappa_note: string;
+    n?: number | null;
+    judge_ci95?: [number, number] | null;
+    pipeline_ci95?: [number, number] | null;
+    ci_note?: string;
+    caveat?: string;
     evaluated_at: string;
     grounded_note: string;
   };

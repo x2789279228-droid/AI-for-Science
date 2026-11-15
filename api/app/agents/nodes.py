@@ -44,7 +44,6 @@ from ..rag.answering import (
     validate_citations,
 )
 from ..rag.verify import verify_claims
-from .tools import is_boilerplate_hit
 from .state import (
     AGENT_INTENT,
     AGENT_LABEL,
@@ -57,6 +56,7 @@ from .state import (
     Step,
     trace_card,
 )
+from .tools import is_boilerplate_hit
 
 _GREETINGS = {"你好", "您好", "hi", "hello", "在吗", "你是谁", "测试", "hello world", "ping"}
 _SUMMARY_HINTS = ("总结", "综述", "概括", "summary", "summarize", "主要讲", "讲了什么")

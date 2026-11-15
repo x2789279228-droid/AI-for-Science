@@ -26,9 +26,7 @@ _DATA = Path(__file__).parent.parent / "tests" / f"_r6_{int(time.time())}"
 os.environ.setdefault("SCHOLAR_DATA_DIR", str(_DATA))
 os.environ.setdefault("MINERU_ENABLED", "off")
 
-from app import db
 from app.parsing import pipeline
-from app.rag.version_diff import load_docir_for
 
 _DL = Path(__file__).resolve().parents[3] / "downloads"
 RESULTS: dict = {}
