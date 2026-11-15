@@ -4,10 +4,11 @@ from __future__ import annotations
 import queue as queue_mod
 import threading
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from .. import db, translate
+from ..api_routes.routes import _etag_json
 
 router = APIRouter(prefix="/api")
 
@@ -123,9 +124,11 @@ def translate_paper_sse(paper_id: str, body: TranslateBody):
 
 
 @router.get("/papers/{paper_id}/translation")
-def get_translation(paper_id: str, lang: str = "zh", mode: str = "academic"):
-    return {"lang": lang, "mode": mode,
+def get_translation(paper_id: str, request: Request, lang: str = "zh", mode: str = "academic"):
+    """已缓存译文拉取：ETag 重验证（译文落库后内容稳定，304 免重复下载）。"""
+    data = {"lang": lang, "mode": mode,
             "blocks": translate.cached_translations(paper_id, lang, mode)}
+    return _etag_json(data, request)
 
 
 @router.post("/translate/selection")

@@ -38,8 +38,19 @@ def _prune_old_sessions() -> None:
 _prune_old_sessions()
 
 # 导入 app 触发 config 求 env（在唯一目录下建 data 结构）
+import pytest
+
+from app import cache as _cache
 from app import db as _db
 from app.config import DATA_DIR as _DATA_DIR
 
 assert str(_DATA_DIR).startswith(str(_SESSION_DIR)), "数据目录隔离失效"
 _db.init_db()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_app_caches():
+    """每个测试前清空进程内 TTL 缓存：部分测试直接经 db.tx 改库（绕过端点的
+    revision bump），缓存跨测试存活会把陈旧载荷漏给后续断言。生产无影响。"""
+    _cache.clear_all()
+    yield

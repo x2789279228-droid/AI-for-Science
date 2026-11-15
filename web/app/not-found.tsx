@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { RisoIllust } from "@/components/Illustrations";
+import ThemeIllust from "@/components/ThemeIllust";
 
-/** 海报式 404(riso 皮肤为版画风;classic 下同样成立,只是少了油墨味)。 */
+/** 海报式 404(riso 版画风;majorelle 花砖工坊;wuxia 雕版匠人+退隐江湖配文)。 */
 export default function NotFound() {
   return (
     <div className="page">
       <div className="notfound-poster">
-        <RisoIllust name="press-house" size={190} />
+        <ThemeIllust name="press-house" size={190} />
         <div className="notfound-num">404</div>
         <p className="notfound-caption">此页尚未印出</p>
         <p className="kv" style={{ color: "var(--ink-2)" }}>

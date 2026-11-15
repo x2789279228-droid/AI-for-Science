@@ -11,9 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
-        {/* 防主题闪烁:首帧同步读取皮肤存档(ShellContext 挂载后会接管) */}
+        {/* 防主题闪烁:首帧同步读取皮肤存档(classic 不写 data-theme,ShellContext 挂载后接管) */}
         <script dangerouslySetInnerHTML={{ __html:
-          "try{if(localStorage.getItem('meridian:theme')==='riso')document.documentElement.dataset.theme='riso'}catch(e){}" }} />
+          "try{var t=localStorage.getItem('meridian:theme');if(t==='riso'||t==='majorelle'||t==='wuxia')document.documentElement.dataset.theme=t}catch(e){}" }} />
         <AppShell>{children}</AppShell>
       </body>
     </html>

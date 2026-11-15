@@ -31,7 +31,7 @@ DATA = Path(os.environ["SCHOLAR_DATA_DIR"])
 
 # A(2017 Transformer) ← B(2018) ← D(2024)；C(2020) ← A、D
 PAPERS = {
-    "pA": {"title": "IG-Attention Core", "arxiv_id": "1706.03762v7", "year": 2017},
+    "pA": {"title": "IG-Attention Core", "arxiv_id": "1706.99999v1", "year": 2017},
     "pB": {"title": "Universal Transformers", "arxiv_id": "1801.00001v1", "year": 2018},
     "pC": {"title": "Longformer", "arxiv_id": "2001.00001v1", "year": 2020},
     "pD": {"title": "Mamba survey", "arxiv_id": "2401.00001v1", "year": 2024},

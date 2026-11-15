@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 
-from ..rag.answering import COMPARE_REFUSAL
+from ..rag.answering import COMPARE_REFUSAL, COMPARE_REFUSAL_GENERAL
 from .state import AgentState, trace_card
 from .tools import call_tool
 
@@ -52,6 +52,8 @@ def reader_entry_node(state: AgentState, config=None) -> dict:
 def compare_entry_node(state: AgentState, config=None) -> dict:
     """Compare Agent 入口：单篇拒绝 Guardrail——不足 2 篇时不冒充对比，拒绝并转介。"""
     paper_ids = state.get("paper_ids", [])
+    refusal = (COMPARE_REFUSAL_GENERAL if state.get("doc_mode") == "general"
+               else COMPARE_REFUSAL)
     card: dict
     if len(paper_ids) < 2:
         card = trace_card("compare_entry", "Compare Agent · 拒绝",
@@ -59,7 +61,7 @@ def compare_entry_node(state: AgentState, config=None) -> dict:
                           {"agent": "compare", "refused": True, "paper_count": len(paper_ids)})
         from .nodes import _emit
         _emit(config, card)
-        return {"mode": "refusal", "answer": COMPARE_REFUSAL.format(n=len(paper_ids)),
+        return {"mode": "refusal", "answer": refusal.format(n=len(paper_ids)),
                 "claims": [],
                 "handoffs": [_handoff("compare", f"仅 {len(paper_ids)} 篇 → 拒绝并建议转 Reader")],
                 "guardrails": ["compare_scope_refusal"],
@@ -207,17 +209,27 @@ VIZ_NO_TABLE = (
     "> 我只把真实表格变成图表，不做数据脑补。"
 )
 
+VIZ_NO_TABLE_GENERAL = (
+    "【Viz Agent · 数据校验】所选文档的解析结果中**没有可图表化的表格数据**，我拒绝凭空出图。\n\n"
+    "建议：\n"
+    "- 上传/选择含数据表格的文档（解析后表格会出现在 Document IR 的 tables 中）；\n"
+    "- 或改用 **Reader Agent** 就文档文字内容提问。\n"
+    "> 我只把真实表格变成图表，不做数据脑补。"
+)
+
 
 def viz_entry_node(state: AgentState, config=None) -> dict:
     """Viz Agent 入口：校验有已解析论文可选，否则拒绝（不冒充出图）。"""
     paper_ids = state.get("paper_ids", [])
+    no_table = (VIZ_NO_TABLE_GENERAL if state.get("doc_mode") == "general"
+                else VIZ_NO_TABLE)
     if not paper_ids:
         card = trace_card("viz_entry", "Viz Agent · 拒绝",
                           "未选择论文 → 拒绝出图", {"agent": "viz", "refused": True})
         from .nodes import _emit
         _emit(config, card)
         return {"mode": "refusal",
-                "answer": VIZ_NO_TABLE,
+                "answer": no_table,
                 "handoffs": [_handoff("viz", "无选中论文 → 拒绝")],
                 "guardrails": ["viz_scope_refusal"], "trace": [card]}
     card = trace_card("viz_entry", "Viz Agent 接手",
@@ -257,7 +269,9 @@ def viz_extract_node(state: AgentState, config=None) -> dict:
     if not all_tables:
         card = trace_card("viz_extract", "表格抽取", "0 张表 → 拒绝出图", {"tables": 0})
         _emit(config, card)
-        return {"mode": "refusal", "answer": VIZ_NO_TABLE,
+        return {"mode": "refusal",
+                "answer": VIZ_NO_TABLE_GENERAL if state.get("doc_mode") == "general"
+                else VIZ_NO_TABLE,
                 "guardrails": ["viz_no_tables"],
                 "failures": failures, "trace": [card]}
 
@@ -282,7 +296,9 @@ def viz_extract_node(state: AgentState, config=None) -> dict:
                           f"{len(all_tables)} 张表均无可解析数值列 → 拒绝出图",
                           {"tables": len(all_tables), "reasons": reasons[:3]})
         _emit(config, card)
-        return {"mode": "refusal", "answer": VIZ_NO_TABLE,
+        return {"mode": "refusal",
+                "answer": VIZ_NO_TABLE_GENERAL if state.get("doc_mode") == "general"
+                else VIZ_NO_TABLE,
                 "guardrails": ["viz_no_numeric_columns"],
                 "failures": failures, "trace": [card]}
 

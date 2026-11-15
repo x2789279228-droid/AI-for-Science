@@ -1,0 +1,26 @@
+{
+  "elapsed_s": 168.7,
+  "within_3min": true,
+  "peak_rss_mb": 739.3,
+  "page_count": 541,
+  "blocks": 11270,
+  "headings": 158,
+  "toc_entries": 181,
+  "toc_depth": 2,
+  "formulas": 0,
+  "tables": 19,
+  "figures": 403,
+  "references": 1891,
+  "engine": null,
+  "parse_quality": null,
+  "toc_l1_sample": [
+    "Preface",
+    "Acknowledgements",
+    "Introduction",
+    "Supervised learning",
+    "Shallow neural networks",
+    "Deep neural networks",
+    "Loss functions",
+    "Fitting models"
+  ]
+}

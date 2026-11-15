@@ -25,7 +25,9 @@ from ..log import logger
 from ..rag import indexing
 from ..rag.answering import (
     NO_EVIDENCE,
+    NO_EVIDENCE_GENERAL,
     REFUSAL_CHITCHAT,
+    REFUSAL_CHITCHAT_GENERAL,
     WRITER_MIN_EVIDENCE,
     WRITER_REFUSAL,
     build_anchors,
@@ -45,6 +47,7 @@ from ..rag.verify import verify_claims
 from .state import (
     AGENT_INTENT,
     AGENT_LABEL,
+    GENERAL_INTENTS,
     INTENT_AGENT,
     MAX_RECOVER,
     MAX_REGEN,
@@ -93,38 +96,84 @@ def _rule_intent(question: str, paper_ids: list[str]) -> dict:
     return {"type": "qa_single", "aspects": [question], "language": "zh"}
 
 
+def _is_fast_question(question: str) -> bool:
+    """TTFT 快路径条件（router+planner 两次串行 LLM 实测占首 token 前 4.1s/6.1s）：
+    - 短问题（6~100 字符），排除寒暄（短问候语走既有 chitchat 拒答语义）；
+    - ASCII 为主（英文）——中文问题保留 Planner 的跨语言改写（zh_top8 1.0 不冒进）；
+    - 无对比/综述触发词（qa_compare/summarize 需要 Planner 多面拆解）。
+    命中即判 qa_single：短英文事实题=单文档细节问答，与库内文档数无关
+    （隐式全库时 _rule_intent 的「多篇→qa_compare」启发式不适用）。"""
+    q = question.strip()
+    if not q or len(q) < 6 or len(q) >= 100:
+        return False
+    if q.lower() in _GREETINGS:
+        return False
+    if any(h in question for h in _SUMMARY_HINTS):
+        return False
+    low = q.lower()
+    if any(w in low for w in ("compare", "difference", "versus", " vs ", "contrast",
+                              "citation", "references", "引用")):
+        return False
+    if any(w in question for w in ("对比", "差异", "异同", "比较", "综述")):
+        return False
+    ascii_ratio = sum(1 for c in q if ord(c) < 128) / len(q)
+    return ascii_ratio > 0.8
+
+
 def router_node(state: AgentState, config=None) -> dict:
     question = state["question"]
     paper_ids = state["paper_ids"]
     forced = (state.get("forced_agent") or "").strip().lower()
     forced_agent = forced if forced in AGENT_INTENT else ""
+    # 双模式：普通文档收窄意图枚举（无 graph_query 引用图谱 / writing 学术写作）
+    is_general = state.get("doc_mode") == "general"
+    allowed_intents = GENERAL_INTENTS if is_general else \
+        {"qa_single", "qa_compare", "summarize", "graph_query", "writing", "viz", "chitchat"}
 
     intent: dict | None = None
-    if forced_agent:
+    fast_path = False
+    # TTFT 快路径：英文短事实题 + auto/reader → 规则意图直判 qa_single，
+    # 跳过 Router LLM（实测省 ~3.0s）；Planner 侧同步跳过改写（见 planner_node）。
+    # 复用 _rule_intent 全部规则语义（寒暄/综述词不进快路径），检索/Verifier/
+    # 引用校验/拒答链路全部保留——只裁前置 LLM，不裁质量防线。
+    if (not forced_agent or forced_agent == "reader") and _is_fast_question(question):
+        intent = {"type": "qa_single", "aspects": [question], "language": "zh",
+                  "source": "rule-fast"}
+        fast_path = True
+    if intent is None and forced_agent:
         # UI 强制指定：确定性路由，免 LLM 分类（现场演示有手动兜底）
-        intent = {"type": AGENT_INTENT[forced_agent], "aspects": [question],
-                  "language": "zh", "source": "forced"}
-    elif llm.available():
+        itype = AGENT_INTENT[forced_agent]
+        if is_general and itype not in GENERAL_INTENTS:
+            itype = "qa_single"   # 纵深防御：白名单已拦，此处兜 checkpoint 异常路径
+        intent = {"type": itype, "aspects": [question], "language": "zh", "source": "forced"}
+    if intent is None and llm.available():
+        router_prompt = \
+            ("你是意图路由器。把用户问题分类为以下之一：qa_single(单文档细节问答)、"
+             "qa_compare(多文档对比)、summarize(总结/概括)、"
+             "viz(把文档中的数据表格画成图表)、chitchat(寒暄/无关)。"
+             '输出 JSON：{"type":"...","aspects":["面向检索的子问题1","子问题2"]}。'
+             "aspects 为 2~4 个可独立检索的子问题（chitchat 时为空数组），使用与问题相同的语言。"
+             "库内是教材/报告等普通文档，不存在引用关系与学术写作场景。"
+             if is_general else
+             "你是意图路由器。把用户问题分类为以下之一：qa_single(单篇细节问答)、qa_compare(多论文对比)、"
+             "summarize(总结/综述)、graph_query(引用关系/研究脉络)、writing(写作请求)、"
+             "viz(把论文中的数据画成图表)、chitchat(寒暄/无关)。"
+             '输出 JSON：{"type":"...","aspects":["面向检索的子问题1","子问题2"]}。'
+             "aspects 为 2~4 个可独立检索的子问题（chitchat 时为空数组），使用与问题相同的语言。")
         res = llm.chat(
-            [{"role": "system", "content":
-                "你是意图路由器。把用户问题分类为以下之一：qa_single(单篇细节问答)、qa_compare(多论文对比)、"
-                "summarize(总结/综述)、graph_query(引用关系/研究脉络)、writing(写作请求)、"
-                "viz(把论文中的数据画成图表)、chitchat(寒暄/无关)。"
-                '输出 JSON：{"type":"...","aspects":["面向检索的子问题1","子问题2"]}。'
-                "aspects 为 2~4 个可独立检索的子问题（chitchat 时为空数组），使用与问题相同的语言。"},
+            [{"role": "system", "content": router_prompt},
              {"role": "user", "content": f"库内论文数：{len(paper_ids)}\n问题：{question}"}],
             json_mode=True, temperature=0.0, module="router", audit_prompt=question[:200],
         )
         data = llm.parse_json(res.get("text", ""))
-        if data and data.get("type") in {"qa_single", "qa_compare", "summarize",
-                                         "graph_query", "writing", "viz", "chitchat"}:
+        if data and data.get("type") in allowed_intents:
             aspects = [a for a in (data.get("aspects") or []) if isinstance(a, str) and a.strip()]
             if data["type"] != "chitchat" and not aspects:
                 aspects = [question]
             intent = {"type": data["type"], "aspects": aspects, "language": "zh",
                       "source": "llm"}
         else:
-            intent = None  # 解析失败 → 规则兜底
+            intent = None  # 解析失败/越界意图 → 规则兜底
     if intent is None:
         intent = _rule_intent(question, paper_ids)
 
@@ -139,15 +188,20 @@ def router_node(state: AgentState, config=None) -> dict:
         agent = "reader"
     if agent != "none":
         note = ("UI 强制指定" if forced_agent else
-                {"llm": "LLM 意图分类", "" : "规则兜底分类"}.get(intent.get("source", ""), "规则分类"))
+                {"llm": "LLM 意图分类", "rule-fast": "快路径规则分类",
+                 "": "规则兜底分类"}.get(intent.get("source", ""), "规则分类"))
+        if fast_path:
+            note += " · TTFT 快路径（跳过前置 LLM）"
         handoffs.append({"from": "router", "to": agent,
                          "note": f"{intent['type']} → {AGENT_LABEL[agent]}（{note}）"})
 
     card = trace_card("router", "意图识别 + Agent 分发",
-                      f"{intent['type']} → {AGENT_LABEL[agent]} · {len(intent['aspects'])} 个检索面",
-                      {"intent": intent, "agent": agent})
+                      f"{intent['type']} → {AGENT_LABEL[agent]} · {len(intent['aspects'])} 个检索面"
+                      + (" · 快路径" if fast_path else ""),
+                      {"intent": intent, "agent": agent, "fast_path": fast_path})
     _emit(config, card)
     return {"intent": intent, "agent": agent, "language": intent.get("language", "zh"),
+            "fast_path": fast_path,
             "trace": [card], "handoffs": handoffs, "guardrails": guardrails}
 
 
@@ -197,10 +251,13 @@ def planner_node(state: AgentState, config=None) -> dict:
 
     # 对比模式检索面下限（P0 修订）：aspects<2 会让对比表退化成单行——
     # 补一个"两文差异"检索面（不引入固定维度表，仅保证对比检索面数量 ≥2）
+    is_general = state.get("doc_mode") == "general"
     if intent.get("type") == "qa_compare":
         aspects = [a for a in aspects if (a or "").strip()]
         if len(aspects) < 2:
-            aspects.append("key methodological differences between the two papers")
+            aspects.append("key differences between the two documents"
+                           if is_general else
+                           "key methodological differences between the two papers")
 
     # 默认规则计划
     steps = _rule_steps(question, paper_ids, aspects)
@@ -208,14 +265,31 @@ def planner_node(state: AgentState, config=None) -> dict:
            "summary" if intent.get("type") == "summarize" else "single"
     guardrails: list[str] = []
 
-    # LLM 可用时：把 aspects 细化为更可检索的子查询（重规划时换温度求变体）
-    if llm.available() and len(paper_ids) > 0:
+    # LLM 可用时：把 aspects 细化为更可检索的子查询（重规划时换温度求变体）。
+    # 快路径（router 判定，见 router_node）跳过本次 LLM 改写——原问题直检
+    # （省 ~1.1s；英文短事实题的改写近似原问题，strict R@5 0.80 本就来自直检）。
+    if state.get("fast_path"):
+        guardrails.append("fast_path_plan")
+    elif llm.available() and len(paper_ids) > 0:
         temp = 0.3 if retries > 0 else 0.0
+        # 对比题维度拆解（Round6）：泛问题面检索不到「预训练目标」这类专用证据
+        # ——要求 planner 逐维度拆面，对齐表才有每格的针对性证据
+        compare_hint = ("这是对比题：把问题拆成**逐维度的可比较检索面**"
+                        "（如 预训练目标、上下文表示方式、训练数据规模——每个维度一面），"
+                        "不要只保留泛泛的整体问题面。"
+                        if intent.get("type") == "qa_compare" else "")
+        planner_prompt = \
+            ("你是检索规划器。把每个检索面改写为更适合文档全文检索的英文子查询"
+             "（保留原意、补全术语，如 神经网络训练 → neural network training）。"
+             + compare_hint +
+             '输出 JSON：{"queries":["..."]}，数量与输入检索面一一对应。'
+             if is_general else
+             "你是检索规划器。把每个检索面改写为更适合学术 PDF 全文检索的英文子查询"
+             "（保留原意、补全术语，如 GPU/训练 → training hardware GPUs）。"
+             + compare_hint +
+             '输出 JSON：{"queries":["..."]}，数量与输入检索面一一对应。')
         res = llm.chat(
-            [{"role": "system", "content":
-                "你是检索规划器。把每个检索面改写为更适合学术 PDF 全文检索的英文子查询"
-                "（保留原意、补全术语，如 GPU/训练 → training hardware GPUs）。"
-                '输出 JSON：{"queries":["..."]}，数量与输入检索面一一对应。'},
+            [{"role": "system", "content": planner_prompt},
              {"role": "user", "content": "检索面：\n" + "\n".join(f"- {a}" for a in aspects)}],
             json_mode=True, temperature=temp, module="planner", audit_prompt=question[:200],
         )
@@ -476,14 +550,19 @@ _REGEN_FEEDBACK = (
 )
 
 
-def _rewrite_aspects(missing: list[str], question: str) -> dict[str, str]:
+def _rewrite_aspects(missing: list[str], question: str, doc_mode: str = "paper") -> dict[str, str]:
     """策略①：为零命中检索面生成替换查询（LLM 换措辞补术语；失败回退原检索面文本）。"""
     if llm.available() and missing:
+        rewrite_prompt = \
+            ("你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
+             "换一种措辞、使用文档正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
+             '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。'
+             if doc_mode == "general" else
+             "你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
+             "换一种措辞、使用论文正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
+             '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。')
         res = llm.chat(
-            [{"role": "system", "content":
-                "你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
-                "换一种措辞、使用论文正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
-                '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。'},
+            [{"role": "system", "content": rewrite_prompt},
              {"role": "user", "content": "检索面：\n" + "\n".join(f"- {m}" for m in missing) +
               f"\n原问题：{question}"}],
             json_mode=True, temperature=0.5, module="recover", audit_prompt=question[:200],
@@ -512,7 +591,8 @@ def recover_node(state: AgentState, config=None) -> dict:
         # ---- 策略①：证据不足重检索 ----
         missing = [m for m in pend.get("missing", []) if m]
         re_retrieve = state.get("re_retrieve_count", 0) + 1
-        rewrites = _rewrite_aspects(missing, state.get("question", ""))
+        rewrites = _rewrite_aspects(missing, state.get("question", ""),
+                                    doc_mode=state.get("doc_mode", "paper"))
         old_aspects = list(dict.fromkeys(
             s.get("aspect", "") for s in state.get("plan", {}).get("steps", []))) or missing
         steps = [{"paper_id": pid, "query": rewrites.get(a, a), "aspect": a}
@@ -623,6 +703,9 @@ def responder_node(state: AgentState, config=None) -> dict:
     prev_answer = state.get("answer", "")
     guardrails: list[str] = []
     is_compare = agent == "compare"
+    is_general = state.get("doc_mode") == "general"
+    refusal_chitchat = REFUSAL_CHITCHAT_GENERAL if is_general else REFUSAL_CHITCHAT
+    no_evidence = NO_EVIDENCE_GENERAL if is_general else NO_EVIDENCE
 
     def finish(answer: str, claims: list[dict], mode: str, summary: str) -> dict:
         card = trace_card("responder", "生成回答", summary,
@@ -637,7 +720,7 @@ def responder_node(state: AgentState, config=None) -> dict:
         return out
 
     if intent_type == "chitchat":
-        return finish(REFUSAL_CHITCHAT, [], "refusal", "寒暄拒答（范围外）")
+        return finish(refusal_chitchat, [], "refusal", "寒暄拒答（范围外）")
 
     # Agent 范围 Guardrail 拒绝（compare_entry 单篇转介 / viz 无表拒绝等）：透传收尾
     if state.get("mode") == "refusal" and prev_answer and not retry_prompt:
@@ -647,7 +730,7 @@ def responder_node(state: AgentState, config=None) -> dict:
     if agent == "viz":
         spec = state.get("chart_spec") or {}
         if not spec:
-            return finish(NO_EVIDENCE, [], "none", "无图表数据")
+            return finish(no_evidence, [], "none", "无图表数据")
         prov = spec.get("provenance") or {}
         n_points = len(spec.get("data") or [])
         answer = (f"已生成 **{spec.get('type', 'bar')} 图**（{n_points} 个数据点）："
@@ -673,7 +756,7 @@ def responder_node(state: AgentState, config=None) -> dict:
 
     hits = state.get("evidence", [])
     if not hits and agent != "graph":
-        return finish(NO_EVIDENCE, [], "none", "无证据 → 明确拒答")
+        return finish(no_evidence, [], "none", "无证据 → 明确拒答")
 
     # Writer Guardrail：证据池不足不开写（Evidence-First）
     if agent == "writer" and len(hits) < WRITER_MIN_EVIDENCE:
@@ -718,16 +801,20 @@ def responder_node(state: AgentState, config=None) -> dict:
                       f"抽取式降级 · {len(claims)} 条论断")
 
     # 生成式（含策略③重生成）：按 Agent 选合成通道 → 流式输出 → 引用后验 → ClaimTrace
+    # 双模式：普通文档走 *_general 提示词槽位（与学术槽位并存、互不覆盖）
     language = state.get("language") or "zh"   # 语言边界 guardrail（4.5）
-    _slot_by_module = {"compare": ("compare", "system_compare"),
+    _slot_by_module = {"compare": ("compare", "system_compare_general" if is_general
+                                   else "system_compare"),
                        "writer": ("writer", "system_writer"),
                        "graph": ("graph", "system_graph")}
     pv_module, pv_slot = _slot_by_module.get(agent if not is_compare else "compare",
-                                             ("qa", "system_qa"))
+                                             ("qa", "system_qa_general" if is_general
+                                              else "system_qa"))
     prompt_version = prompts.prompt_version(pv_module, pv_slot)
     if is_compare:
         messages = build_compare_messages(question, state.get("compare_table"), hits,
-                                          language=language)
+                                          language=language,
+                                          doc_mode=state.get("doc_mode", "paper"))
     elif agent == "writer":
         # Writer：大纲先行（artifact 下发），正文随后按同一大纲流式生成
         aspects = list(dict.fromkeys(
@@ -740,7 +827,8 @@ def responder_node(state: AgentState, config=None) -> dict:
         messages = build_graph_messages(state.get("graph_data", {}).get("metrics", {}),
                                         question, hits, language=language)
     else:
-        messages = build_qa_messages(question, hits, language=language)
+        messages = build_qa_messages(question, hits, language=language,
+                                     doc_mode=state.get("doc_mode", "paper"))
     if retry_prompt and prev_answer:
         # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
         messages += [{"role": "assistant", "content": prev_answer},

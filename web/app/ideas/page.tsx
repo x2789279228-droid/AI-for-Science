@@ -104,7 +104,7 @@ export default function IdeasPage() {
                   )}
                 </div>
               ))}
-              {ideas.solved.length === 0 && <EmptyState title="暂无已解决方向" desc="库内后续文献尚未覆盖这些方向——分析完成后这里会如实展示。" />}
+              {ideas.solved.length === 0 && <EmptyState illust="magnify" title="暂无已解决方向" desc="库内后续文献尚未覆盖这些方向——分析完成后这里会如实展示。" />}
             </div>
 
             <div className="card card-in" style={{ ["--i" as string]: 1 }}>
@@ -115,7 +115,7 @@ export default function IdeasPage() {
               {ideas.open.map((x, i) => (
                 <GapFlipCard key={x.id} x={x} idx={i} titleOf={titleOf} />
               ))}
-              {ideas.open.length === 0 && <EmptyState title="暂无 open 缝隙" desc="本次分析未发现值得做的方向——可扩大语料后重试。" />}
+              {ideas.open.length === 0 && <EmptyState illust="observatory" title="暂无 open 缝隙" desc="本次分析未发现值得做的方向——可扩大语料后重试。" />}
             </div>
           </div>
         )}

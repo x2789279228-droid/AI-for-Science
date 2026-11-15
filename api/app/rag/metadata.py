@@ -278,7 +278,12 @@ def extract_and_store_metadata(paper_id: str, docir: dict) -> dict:
     标题为 stem 退化形时用 arXiv/LLM title 回填（细粒度 P0-2）。
     """
     meta = docir.setdefault("meta", {})
-    arxiv_base = _base_of(meta.get("arxiv_id", ""))
+    # 双模式：普通文档（doc_type=general）跳过 arXiv API / DOI 合成 / Crossref 等
+    # 学术外呼增强——教材/报告的 arXiv 样式编号不参与学术身份识别；
+    # LLM 首页抽取与启发式摘要保留（教材标题/作者提取仍有价值）。
+    _rows = db.query("SELECT doc_type FROM papers WHERE id=?", (paper_id,))
+    is_general = bool(_rows) and (_rows[0]["doc_type"] or "paper") == "general"
+    arxiv_base = "" if is_general else _base_of(meta.get("arxiv_id", ""))
 
     api_meta = None
     cached = _load_cache(paper_id, arxiv_base)
@@ -315,9 +320,10 @@ def extract_and_store_metadata(paper_id: str, docir: dict) -> dict:
     if not doi and arxiv_base:
         doi = f"10.48550/arXiv.{arxiv_base}"
     # Crossref 兜底（用户选定外呼方案）：venue/doi 仍空且有可用标题时按题名查
+    # （普通文档跳过：教材名与论文题名的 0.6 相似误配毫无消费价值）
     cr_meta = None
     lookup_title = (api_meta or {}).get("title") or (llm_meta or {}).get("title", "")
-    if (not venue or not doi.startswith("10.48550/")) and lookup_title:
+    if (not venue or not doi.startswith("10.48550/")) and lookup_title and not is_general:
         cr_meta = _fetch_crossref(lookup_title, paper_id)
     if cr_meta:
         venue = venue or cr_meta.get("venue", "")

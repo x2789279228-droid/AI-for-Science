@@ -59,11 +59,20 @@ _AGENT_ENTRY = {"reader": "reader_entry", "compare": "compare_entry",
                 "graph": "graph_entry", "writer": "writer_entry", "viz": "viz_entry"}
 
 
+def _mode_agent(state: AgentState) -> str:
+    """普通模式（doc_mode=general）下把学术专属 Agent 改道 reader——纵深防御：
+    router 意图收窄与 routes 层白名单已拦，此处兜底 checkpoint 续跑等图外路径。"""
+    agent = state.get("agent", "reader")
+    if state.get("doc_mode") == "general" and agent in ("graph", "writer"):
+        return "reader"
+    return agent
+
+
 def _after_router(state: AgentState) -> str:
     """分发：chitchat 直达 responder；其余按 router 选定的 Agent 走专属入口。"""
     if state.get("intent", {}).get("type") == "chitchat":
         return "responder"
-    return _AGENT_ENTRY.get(state.get("agent", "reader"), "reader_entry")
+    return _AGENT_ENTRY.get(_mode_agent(state), "reader_entry")
 
 
 def _after_specialist_entry(state: AgentState) -> str:
@@ -80,7 +89,7 @@ def _specialist_exit(state: AgentState) -> str:
 
 
 def _after_verifier(state: AgentState) -> str:
-    agent = state.get("agent", "reader")
+    agent = _mode_agent(state)
     if _check_sufficiency(state):
         return "align" if agent == "compare" else \
                "graph_build" if agent == "graph" else "responder"

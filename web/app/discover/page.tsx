@@ -16,7 +16,7 @@ import {
   trackingApi, TrackingSub, TrackedItem, MultiEntry,
 } from "@/lib/api";
 import { useIsland } from "@/lib/island";
-import { RisoIllust } from "@/components/Illustrations";
+import ThemeIllust from "@/components/ThemeIllust";
 import type { Paper } from "@/lib/api";
 
 type Phase = "idle" | "searching" | "done" | "error";
@@ -400,7 +400,7 @@ export default function DiscoverPage() {
             {phase === "idle" && (
               <div className="card card-in" style={{ display: "flex", gap: "var(--space-4)",
                 alignItems: "center", flexWrap: "wrap" }}>
-                <RisoIllust name="paper-sea" size={170} />
+                <ThemeIllust name="paper-sea" size={170} />
                 <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column",
                   gap: 8, alignItems: "flex-start" }}>
                   <p className="kv">

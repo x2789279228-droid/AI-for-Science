@@ -83,6 +83,13 @@ def route(probe: dict) -> dict:
         engine = "qwen-vl"
     else:
         engine = "pymupdf"
+    # 长文档 text-native 强制 PyMuPDF 快路径（性能优化，实测对照）：
+    # UDL 541 页 MinerU CPU 推理 6843s（官方用例 3.2b 时长断言 FAIL），
+    # PyMuPDF 168.7s（≤3min 优秀线）且结构质量持平——toc 181=181、
+    # 公式均 0、RSS 739MB<2GB（scripts/feas_pymupdf_udl.json）。
+    # MinerU 仍服务于 scanned/gray 长文档（OCR/复杂版式才需要它）。
+    if long and mode == "native":
+        engine = "pymupdf"
     return {"mode": mode, "engine": engine, "long": long}
 
 

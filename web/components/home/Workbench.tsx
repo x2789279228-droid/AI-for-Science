@@ -8,11 +8,14 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Graph } from "@antv/g6";
+import type { Graph as G6Graph } from "@antv/g6";
+import { loadG6 } from "@/lib/g6-loader";
 import {
   fetchGraph, fetchHealth, fetchQaRecent, FullGraph, Health, QaRecentItem,
 } from "@/lib/api";
-import { RisoIllust } from "@/components/Illustrations";
+import ThemeIllust from "@/components/ThemeIllust";
+import { useShell } from "@/components/ShellContext";
+import { canvasTheme } from "@/lib/theme-palettes";
 
 function relTimeClient(ts: number): string {
   const s = Date.now() / 1000 - ts;
@@ -25,16 +28,16 @@ function relTimeClient(ts: number): string {
 /* ================= 数据带 ================= */
 
 export function WorkbenchStats({ paperCount }: { paperCount: number }) {
-  const [stats, setStats] = useState<{ edges: number; external: number; q: number | null } | null>(
-    () => {
-      try {
-        const raw = sessionStorage.getItem("meridian:stats");
-        return raw ? JSON.parse(raw) : null;
-      } catch { return null; }
-    });
+  // 初值固定 null（SSR/客户端一致），挂载后再读 sessionStorage 缓存——
+  // 初始化器里读缓存会先于水合产生 "—" vs 数值 的文本不匹配（dev 下抛 hydration error）
+  const [stats, setStats] = useState<{ edges: number; external: number; q: number | null } | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("meridian:stats");
+      if (raw) setStats(JSON.parse(raw));          // 命中缓存即时上屏
+    } catch { /* 忽略 */ }
     fetchHealth().then(setHealth).catch(() => {});
     // graph 计数拉一次并缓存(sessionStorage)——侧栏 refs 行也读这份缓存
     fetchGraph().then((g: FullGraph) => {
@@ -135,13 +138,16 @@ export function WorkbenchPulse() {
 /** G6 只读缩略卡：关交互/无标签/无动画;失败降级插画。 */
 function GraphThumbCard() {
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const { theme } = useShell();
   const [state, setState] = useState<"loading" | "ok" | "fail">("loading");
   const [meta, setMeta] = useState<{ nodes: number; edges: number; q: number | null } | null>(null);
 
   useEffect(() => {
     let dead = false;
-    let inst: Graph | null = null;
-    fetchGraph().then((g) => {
+    let inst: G6Graph | null = null;
+    const pal = canvasTheme(theme);          // 缩略图色随皮肤切换
+    // G6 动态加载（性能修复：约 500kB 库不进首页首包），与图谱数据并行取
+    Promise.all([fetchGraph(), loadG6()]).then(([g, { Graph }]) => {
       if (dead || !boxRef.current) return;
       setMeta({ nodes: g.nodes.length, edges: g.edge_count, q: g.modularity ?? null });
       inst = new Graph({
@@ -159,18 +165,18 @@ function GraphThumbCard() {
               const n = (d as { data?: { pagerank?: number } }).data;
               return 6 + Math.min(16, (n?.pagerank ?? 0) * 90);
             },
-            fill: "#5B8FF9",
+            fill: pal.community[0],
             labelText: "",                       // 缩略图隐藏标签
           },
         },
-        edge: { style: { stroke: "#94a3b8", lineWidth: 0.8, endArrow: false } },
+        edge: { style: { stroke: pal.edgeMid, lineWidth: 0.8, endArrow: false } },
         layout: { type: "d3-force", linkDistance: 60, nodeStrength: -180 },
         behaviors: [],                           // 只读
       });
       inst.render().then(() => setState("ok")).catch(() => setState("fail"));
     }).catch(() => !dead && setState("fail"));
     return () => { dead = true; inst?.destroy(); };
-  }, []);
+  }, [theme]);
 
   return (
     <Link className="card wb-card wb-graph" href="/graph" data-testid="wb-graph">
@@ -184,7 +190,7 @@ function GraphThumbCard() {
         {state === "loading" && <div className="skeleton" style={{ height: 150 }} />}
         {state === "fail" && (
           <div className="wb-empty" style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
-            <RisoIllust name="lighthouse" size={120} />
+            <ThemeIllust name="lighthouse" size={120} />
             <p className="kv">图谱暂不可用——去图谱页重试。</p>
           </div>
         )}

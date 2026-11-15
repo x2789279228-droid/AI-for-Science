@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Anchor, ChartSpec, Claim, CompareCell, CompareTable, FinalEvent, GraphData, Hit,
-  Outline, Paper, TLEvent, TraceCard, listPapers, resumeChat, streamChat,
+  Outline, Paper, TLEvent, TraceCard, getPaper, listPapers, resumeChat, streamChat,
 } from "@/lib/api";
 import { ChevronRight, Spark } from "@/components/icons";
+import { useShell } from "@/components/ShellContext";
 import { useIsland } from "@/lib/island";
 import Stamp from "@/components/Stamp";
 import TracePanel from "@/components/chat/TracePanel";
@@ -110,11 +111,31 @@ export default function ChatPage() {
   const [agent, setAgent] = useState("auto");          // UI 强制指定 Agent（auto=自动路由）
   const [evidence, setEvidence] = useState<EvidenceLoc | null>(null);  // 引用点击 → 原文浮层
   const island = useIsland();
+  const { docMode, setDocMode } = useShell();
+  const isGeneral = docMode === "general";
+  const docModeParam = isGeneral ? "general" as const : "paper" as const;
   const msgsRef = useRef<HTMLDivElement>(null);
   const convRef = useRef<string>("");
 
+  /** 普通模式 Agent 子集（与后端 GENERAL_FORCED_AGENTS 对齐：无 Graph/Writer）。 */
+  const agentOptions = useMemo(
+    () => (isGeneral
+      ? AGENT_OPTIONS.filter((o) => ["auto", "reader", "compare", "viz"].includes(o.value))
+      : AGENT_OPTIONS),
+    [isGeneral]);
+
+  // 模式切换时若残留学术专属 Agent 强制值 → 回自动路由（与后端白名单一致）
+  useEffect(() => {
+    setAgent((a) => (isGeneral && ["graph", "writer"].includes(a) ? "auto" : a));
+  }, [isGeneral]);
+
   /** §4.1 演示问题卡:按当前选中论文动态选择(Attention→专属三题;多篇→对比题优先)。 */
   const demoQuestions = useMemo(() => {
+    if (isGeneral) {
+      return selected.size > 1
+        ? ["对比这两份文档的异同", "哪一份更适合入门？", "两份文档的术语有何差异？"]
+        : ["这份文档的核心内容是什么？", "第一章讲了哪些关键概念？", "帮我总结这份文档的结构"];
+    }
     if (selected.size > 1) {
       return ["对比这几篇论文的核心差异", "这些论文共同引用了哪些方法？", "哪一篇的实验设置最完整？"];
     }
@@ -124,7 +145,7 @@ export default function ChatPage() {
     return isAttention
       ? ["模型用了多少块 GPU？", "BLEU 分数是多少？", "对比这篇论文的预训练目标"]
       : ["这篇论文的核心方法是什么？", "实验用了什么数据集和指标？", "主要结论和局限是什么？"];
-  }, [selected, papers]);
+  }, [selected, papers, isGeneral]);
 
   /** 打开原文溯源浮层：anchor 缺失（无锚点数据）时静默忽略。 */
   const showEvidence = (eid?: string, anchor?: Anchor, quote?: string) => {
@@ -141,16 +162,26 @@ export default function ChatPage() {
     return convRef.current;
   };
 
+  // 深链自动切模式只处理一次：防止与用户手动切换模式互相拉扯
+  const handledPaperRef = useRef<string | null>(null);
   useEffect(() => {
-    listPapers().then((ps) => {
+    // 双模式：只列当前模式的文档；?paper= 指向另一类型文档时跟随其类型切模式（深链兼容）
+    listPapers(false, docModeParam).then((ps) => {
+      const fromUrl = new URLSearchParams(window.location.search).get("paper");
+      const inList = !!fromUrl && ps.some((p) => p.id === fromUrl);
+      if (fromUrl && !inList && handledPaperRef.current !== fromUrl) {
+        handledPaperRef.current = fromUrl;
+        getPaper(fromUrl).then((p) => {
+          if (p?.doc_type === "general" && !isGeneral) setDocMode("general");
+          else if (p?.doc_type !== "general" && isGeneral) setDocMode("scholar");
+        }).catch(() => { /* 文档不存在时保持现状 */ });
+      }
       setPapers(ps);
       const parsed = ps.filter((p) => p.parsed);
-      const fromUrl = new URLSearchParams(window.location.search).get("paper");
-      const init = fromUrl && parsed.some((p) => p.id === fromUrl)
-        ? [fromUrl] : parsed.slice(0, 1).map((p) => p.id);
+      const init = fromUrl && inList ? [fromUrl] : parsed.slice(0, 1).map((p) => p.id);
       setSelected(new Set(init));
     });
-  }, []);
+  }, [docModeParam, isGeneral, setDocMode]);
 
   useEffect(() => {
     msgsRef.current?.scrollTo({ top: msgsRef.current.scrollHeight });
@@ -206,7 +237,7 @@ export default function ChatPage() {
               detail: `论断 ${d.claims?.length ?? 0} 条已逐条校验` });
           return c;
         }),
-      }, conversationId(), agent);
+      }, conversationId(), agent, docModeParam);
     } catch (e) {
       island.emit({ key: "qa", kind: "error", title: "问答请求失败",
         detail: e instanceof Error ? e.message : String(e) });
@@ -282,10 +313,10 @@ export default function ChatPage() {
 
   const lastTurn = turns[turns.length - 1];
   const scopeTitle = selected.size === 0
-    ? "未选择论文"
+    ? (isGeneral ? "未选择文档" : "未选择论文")
     : selected.size === 1
-      ? papers.find((p) => selected.has(p.id))?.title.slice(0, 24) ?? "1 篇论文"
-      : `${selected.size} 篇论文`;
+      ? papers.find((p) => selected.has(p.id))?.title.slice(0, 24) ?? (isGeneral ? "1 份文档" : "1 篇论文")
+      : isGeneral ? `${selected.size} 份文档` : `${selected.size} 篇论文`;
 
   return (
     <div className={`chat-shell ${showTrace ? "with-trace" : ""}`}>
@@ -306,7 +337,9 @@ export default function ChatPage() {
             zIndex: 20, background: "var(--surface)", border: "1px solid var(--line)",
             borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-md)",
             padding: "var(--space-3) var(--space-4)", minWidth: 260 }}>
-            <p className="kv" style={{ marginBottom: "var(--space-2)" }}>选择参与检索的论文</p>
+            <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
+              {isGeneral ? "选择参与检索的文档" : "选择参与检索的论文"}
+            </p>
             {papers.filter((p) => p.parsed).map((p) => (
               <label key={p.id} style={{ display: "flex", gap: "var(--space-2)",
                 alignItems: "center", padding: "4px 0", fontSize: "var(--text-sm)", cursor: "pointer" }}>
@@ -332,7 +365,7 @@ export default function ChatPage() {
               </label>
             ))}
             {papers.filter((p) => p.parsed).length === 0 && (
-              <p className="kv">文献库为空，先去上传 PDF。</p>
+              <p className="kv">{isGeneral ? "文档库为空，先去上传 PDF。" : "文献库为空，先去上传 PDF。"}</p>
             )}
           </div>
         )}
@@ -345,7 +378,7 @@ export default function ChatPage() {
               {turns.length === 0 && (
                 <div className="chat-hero" data-testid="chat-empty">
                   <p className="chat-hero-title">
-                    <Spark size={16} /> 向文献提问 —— 每个论断都带证据
+                    <Spark size={16} /> {isGeneral ? "向文档提问 —— 每个论断都带证据" : "向文献提问 —— 每个论断都带证据"}
                   </p>
                   <div className="chat-demo-cards">
                     {demoQuestions.map((q, i) => (
@@ -431,16 +464,18 @@ export default function ChatPage() {
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && ask()}
-                  placeholder={busy ? "Agent 执行中…" : "对选中的论文提问，每句回答可溯源到原文…"}
+                  placeholder={busy ? "Agent 执行中…"
+                    : isGeneral ? "对选中的文档提问，每句回答可溯源到原文…"
+                    : "对选中的论文提问，每句回答可溯源到原文…"}
                   disabled={busy}
                 />
                 <button className="send-btn" onClick={() => ask()} disabled={busy || !selected.size}
                   aria-label="发送">↑</button>
               </div>
               <div className="dock-tools">
-                <span className="chip">检索范围 {selected.size} 篇</span>
+                <span className="chip">{isGeneral ? `检索范围 ${selected.size} 份` : `检索范围 ${selected.size} 篇`}</span>
                 <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                  {AGENT_OPTIONS.map((o) => (
+                  {agentOptions.map((o) => (
                     <button key={o.value} className={`chip ${agent === o.value ? "accent" : ""}`}
                       style={{ cursor: "pointer" }}
                       title={o.ready ? `强制使用 ${o.label} Agent`

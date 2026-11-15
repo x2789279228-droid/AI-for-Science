@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import json
 import re
+import math
 import statistics
 from pathlib import Path
 
-from .. import db
+from .. import cache, db
+from ..cache import TTLCache
 from ..config import DOCIR_DIR, settings
 from ..llm import client as llm
 from ..llm.prompts import resolve as _resolve
@@ -58,6 +60,79 @@ def _year_of(paper: dict) -> int | None:
 
 
 # ---------- 图谱增强：社区 / 时间 / 角色 ----------
+
+_S2_CIT_TTL = 7 * 86400.0   # 外部被引缓存 7 天（S2 共享池限速，必须缓存）
+
+
+def _external_citation_counts(arxiv_ids: list[str]) -> dict[str, int]:
+    """arXiv id → S2 外部被引数（S2 Graph batch API；meta_json 缓存 7 天）。
+
+    用途：库内 20 篇的引用图统计意义稀疏（边只来自互相引用），基石判定需
+    外部被引量做语义锚（BERT ~13 万 vs XLNet ~1 万，一档即换位）。
+    失败/断网静默返回空 dict（角色判定回退纯库内信号，不阻塞）。"""
+    import json as _json
+    import time as _time
+
+    import httpx as _httpx
+
+    want = [a for a in dict.fromkeys(a.strip() for a in arxiv_ids if a and a.strip())]
+    if not want:
+        return {}
+    out: dict[str, int] = {}
+    need: list[str] = []
+    rows = db.query("SELECT id, arxiv_id, meta_json FROM papers WHERE arxiv_id IN "
+                    f"({','.join('?' * len(want))})", tuple(want))
+    now = _time.time()
+    for r in rows:
+        try:
+            meta = _json.loads(r["meta_json"] or "{}")
+        except ValueError:
+            continue
+        cached = meta.get("s2_citations") or {}
+        entry = cached.get("counts") or {}
+        if cached.get("ts") and now - cached["ts"] < _S2_CIT_TTL:
+            for aid, cnt in entry.items():
+                out[aid] = int(cnt)
+        else:
+            need.append(r["arxiv_id"])
+    fetch_ids = [a for a in want if a not in out and a not in need]
+    need.extend(fetch_ids)
+    if not need:
+        return out
+    try:
+        resp = _httpx.post(
+            "https://api.semanticscholar.org/graph/v1/paper/batch",
+            params={"fields": "externalIds,citationCount"},
+            json={"ids": [f"ARXIV:{a}" for a in need]},
+            timeout=25,
+        )
+        resp.raise_for_status()
+        by_arxiv = {}
+        for item in resp.json() or []:
+            if not item:
+                continue
+            aid = ((item.get("externalIds") or {}).get("ArXiv") or "").strip()
+            if aid:
+                by_arxiv[aid] = int(item.get("citationCount") or 0)
+        out.update(by_arxiv)
+        # 回写缓存：每个命中的论文行更新 meta_json.s2_citations
+        if by_arxiv:
+            for r in rows:
+                aid = r["arxiv_id"]
+                if aid in by_arxiv:
+                    try:
+                        meta = _json.loads(r["meta_json"] or "{}")
+                    except ValueError:
+                        meta = {}
+                    meta["s2_citations"] = {"ts": now, "counts": {aid: by_arxiv[aid]}}
+                    with db.tx() as c:
+                        c.execute("UPDATE papers SET meta_json=? WHERE id=?",
+                                  (_json.dumps(meta, ensure_ascii=False), r["id"]))
+    except Exception as e:  # noqa: BLE001 —— S2 失败静默降级（纯库内信号兜底）
+        logger.warning(f"S2 外部被引查询失败 → 纯库内信号: {type(e).__name__}: {e}",
+                       module="insights")
+    return out
+
 
 def enrich(graph: dict) -> dict:
     """在 _citation_graph 产物上补 community/year/time_rank/role/modularity。"""
@@ -112,6 +187,13 @@ def enrich(graph: dict) -> dict:
     p70_in = _percentile(in_vals, 0.70)
     p30_in = _percentile(in_vals, 0.30)
 
+    # 外部被引信号（Round6）：库内引用图边稀疏（仅互相引用），统计意义有限——
+    # S2 外部被引量 ≥5000 的论文即便库内 PageRank 未达 P70 也具备基石的学术事实地位。
+    arxiv_by_pid = {pid: (papers.get(pid, {}) or {}).get("arxiv_id") or ""
+                    for pid in {n["id"] for n in nodes}}
+    ext_cit = _external_citation_counts(list(arxiv_by_pid.values()))
+    EXT_CIT_BASELINE = 5000
+
     out_nodes = []
     for m in metrics.get("nodes", []):
         pid = m["paper_id"]
@@ -120,19 +202,29 @@ def enrich(graph: dict) -> dict:
         role = ""
         role_reason = ""
         med = median_year.get(cid)
+        ext_n = ext_cit.get(arxiv_by_pid.get(pid, ""), 0)
         if med is not None and year is not None:
             if year <= med and m["pagerank"] >= p70_pr and m["in_degree"] >= p70_in:
                 role = "cornerstone"     # 基石论文：早期 + 高 PageRank + 高被引
                 role_reason = (f"{year} 年发表（早于社区中位年 {med}）· "
                                f"PageRank {m['pagerank']:.3f} ≥ P70({p70_pr:.3f}) · "
                                f"被引 {m['in_degree']} ≥ P70({p70_in}) → 基石")
+            elif (year <= med and ext_n >= EXT_CIT_BASELINE
+                  and m["in_degree"] >= p70_in):
+                role = "cornerstone"     # 外部证据通道：S2 被引量远超库内图的稀疏统计
+                role_reason = (f"{year} 年发表（早于社区中位年 {med}）· "
+                               f"库内 PageRank {m['pagerank']:.3f}（引用图边稀疏）· "
+                               f"外部被引 {ext_n} ≥ {EXT_CIT_BASELINE}（S2）→ 基石")
             elif year > med and m["in_degree"] <= p30_in and cross_ratio.get(pid, 0) >= 0.5:
                 role = "peripheral"      # 边缘衍生：新 + 低被引 + 跨社区桥接
                 role_reason = (f"{year} 年发表（晚于社区中位年 {med}）· "
                                f"被引 {m['in_degree']} ≤ P30({p30_in}) · "
                                f"跨社区邻居占比 {cross_ratio.get(pid, 0):.0%} → 边缘衍生")
+        fused = round(m["pagerank"] * math.log10(2 + ext_n), 4) if ext_n else m["pagerank"]
         out_nodes.append({**m, "year": year, "community": cid, "role": role,
                           "role_reason": role_reason,
+                          "external_citations": ext_n,
+                          "fused_score": fused,
                           "time_rank": _time_rank(pid, members_by_comm.get(cid, []), years)})
 
     return {
@@ -178,13 +270,31 @@ def _rule_class(sentence: str, section: str) -> str:
     return "perfunctory"
 
 
-def classify_citations(paper_ids: list[str]) -> dict:
+# 引用含金量缓存（LLM 分类昂贵）：键 = sorted(paper_ids)+data_revision，10min TTL。
+# 上传/解析完成 bump revision → 批次内容变化自然失效。
+_cite_cls_cache: TTLCache | None = None
+
+
+def _cite_cache() -> TTLCache:
+    global _cite_cls_cache
+    if _cite_cls_cache is None:
+        _cite_cls_cache = TTLCache(maxsize=16, ttl=600.0)
+    return _cite_cls_cache
+
+
+def classify_citations(paper_ids: list[str], graph: dict | None = None) -> dict:
     """扫描每篇论文正文中的 [n] 标记 → 句子级分类 → 边含金量加权。
 
     产出：citations[{paper_id, n, target, mentions:[{sentence, section, cls, w}]}]、
     edge_weights{"src|dst": Σw}、class_stat 计数。LLM 可用时批量增强分类（失败走规则）。
+    graph 可传入外部已建的引用图（/graph 复用，避免重复建图）；缺省自建。
+    结果按 (sorted ids, data_revision) 缓存 10min——重复导航不再触发 LLM 分类。
     """
-    graph = _citation_graph(paper_ids)
+    ids_key = tuple(sorted(paper_ids))
+    cached = _cite_cache().get(cache.rev_key("cite_cls", ids_key))
+    if cached is not None:
+        return cached[0]
+    graph = graph if graph is not None else _citation_graph(paper_ids)
     # ref idx → 库内目标（与 _citation_graph 相同的匹配规则）
     papers = {r["id"]: dict(r) for r in db.query("SELECT id,title,arxiv_id FROM papers WHERE status='active'")}
     by_arxiv = {p["arxiv_id"]: pid for pid, p in papers.items() if p.get("arxiv_id")}
@@ -273,9 +383,11 @@ def classify_citations(paper_ids: list[str]) -> dict:
                     examples.append(best)
         weighted_edges.append({**e, "weight": weight, "examples": examples[:2]})
 
-    return {"edges": weighted_edges, "edge_weights": edge_weights,
-            "class_stat": class_stat, "mention_count": len(mentions),
-            "enriched": enriched}
+    result = {"edges": weighted_edges, "edge_weights": edge_weights,
+              "class_stat": class_stat, "mention_count": len(mentions),
+              "enriched": enriched}
+    _cite_cache().set(cache.rev_key("cite_cls", ids_key), result)
+    return result
 
 
 def reference_quality(paper_id: str) -> dict:

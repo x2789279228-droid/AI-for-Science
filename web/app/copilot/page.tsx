@@ -17,6 +17,8 @@ import {
   generateDiagram, listPapers, streamWriting, zh2enTranslate,
 } from "@/lib/api";
 import type { Paper } from "@/lib/api";
+import { useShell } from "@/components/ShellContext";
+import { canvasTheme } from "@/lib/theme-palettes";
 
 type Tab = "write" | "viz" | "translate" | "diagram";
 
@@ -24,6 +26,7 @@ type Tab = "write" | "viz" | "translate" | "diagram";
 function EChart({ spec }: { spec: ChartOut["spec"] }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const instRef = useRef<EChartsType | null>(null);
+  const { theme } = useShell();
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -33,7 +36,8 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
       instRef.current?.dispose();
       const chart = echarts.init(ref.current);
       instRef.current = chart;
-      const common = { tooltip: {}, legend: { top: 4 } };
+      const pal = canvasTheme(theme);   // 画布色随皮肤切换
+      const common = { tooltip: {}, legend: { top: 4 }, color: pal.community };
       if (spec.type === "line" || spec.type === "bar") {
         chart.setOption({
           ...common,
@@ -57,7 +61,7 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
         chart.setOption({
           tooltip: {},
           visualMap: s3.visual_dim
-            ? { show: true, dimension: 3, inRange: { color: ["#5B8FF9", "#61DDAA", "#F6BD16", "#E5484D"] } }
+            ? { show: true, dimension: 3, inRange: { color: pal.visualMap } }
             : undefined,
           xAxis3D: { type: "value", name: s3.axes[0] },
           yAxis3D: { type: "value", name: s3.axes[1] },
@@ -68,20 +72,22 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
       }
     })();
     return () => { alive = false; instRef.current?.dispose(); instRef.current = null; };
-  }, [spec]);
+  }, [spec, theme]);
   return <div ref={ref} style={{ width: "100%", height: 360 }} />;
 }
 
-/** mermaid 源码预览（render 通过才显示，语法校验可视化）。 */
+/** mermaid 源码预览（render 通过才显示，语法校验可视化）。
+ *  主题随皮肤映射（v1.4 深色适配条款①）：wuxia 玄墨底用 dark，浅色皮肤用 neutral。 */
 function MermaidPreview({ code }: { code: string }) {
   const [svg, setSvg] = useState("");
   const [err, setErr] = useState("");
+  const { theme } = useShell();
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+        mermaid.initialize({ startOnLoad: false, theme: theme === "wuxia" ? "dark" : "neutral" });
         const { svg } = await mermaid.render(`mmd-${Date.now()}`, code);
         if (alive) { setSvg(svg); setErr(""); }
       } catch (e) {
@@ -89,7 +95,7 @@ function MermaidPreview({ code }: { code: string }) {
       }
     })();
     return () => { alive = false; };
-  }, [code]);
+  }, [code, theme]);
   if (err) return <p className="kv" style={{ color: "var(--warn)" }}>mermaid 校验失败：{err.slice(0, 120)}</p>;
   return svg ? <div dangerouslySetInnerHTML={{ __html: svg }} /> : <p className="kv">渲染中…</p>;
 }

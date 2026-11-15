@@ -30,6 +30,15 @@ AGENT_LABEL: dict[str, str] = {
 }
 FORCED_AGENT_VALUES = {"auto", "reader", "compare", "graph", "writer", "viz"}
 
+# ---- 双模式（doc_mode）：general=普通文档（教材/报告等），学术专属能力关闭 ----
+# 普通模式意图枚举：去 graph_query（引用图谱）/writing（学术写作）
+GENERAL_INTENTS: set[str] = {"qa_single", "qa_compare", "summarize", "viz", "chitchat"}
+# 普通模式 UI 可强制指定的 Agent 子集（graph/writer 由条件边改道 reader）
+GENERAL_FORCED_AGENTS = {"auto", "reader", "compare", "viz"}
+# 普通模式禁用工具（assert_allowed 硬兜底，防 forced_agent/图外路径绕过）
+GENERAL_DISABLED_TOOLS = {"arxiv_search", "paper_download", "citation_graph",
+                          "graph_metrics", "github_repro"}
+
 
 class Intent(TypedDict, total=False):
     type: IntentType
@@ -53,6 +62,8 @@ class AgentState(TypedDict, total=False):
     # 输入
     question: str
     paper_ids: list[str]
+    doc_mode: str                                             # paper（学术）| general（普通文档）
+    fast_path: bool                                           # TTFT 快路径：跳过 Router/Planner 前置 LLM
     # 路由 / 规划
     intent: Intent
     plan: Plan

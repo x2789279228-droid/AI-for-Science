@@ -1,0 +1,49 @@
+{
+  "ocr_cer": {
+    "cer": 0.003,
+    "pages": 12,
+    "within_0.08": true,
+    "within_0.03": true,
+    "per_page_worst": [
+      {
+        "page": 4,
+        "cer": 0.014
+      },
+      {
+        "page": 1,
+        "cer": 0.004
+      },
+      {
+        "page": 2,
+        "cer": 0.003
+      },
+      {
+        "page": 6,
+        "cer": 0.002
+      },
+      {
+        "page": 8,
+        "cer": 0.002
+      }
+    ]
+  },
+  "structure_f1": {
+    "UDL-541p": {
+      "truth_entries": 155,
+      "pred_entries": 181,
+      "precision": 0.856,
+      "recall": 1.0,
+      "f1": 0.922,
+      "within_0.75": true,
+      "within_0.90": true
+    }
+  },
+  "ref_jump_top1": {
+    "body_marks": 32,
+    "resolvable_top1": 1.0,
+    "valid_marks": 32,
+    "within_0.90": true,
+    "within_0.98": true,
+    "unresolved": []
+  }
+}

@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import combinations
@@ -29,7 +30,7 @@ from ..config import DATA_DIR, settings
 from ..rag import indexing
 from ..translate import cached_translations as _cached_translations_impl
 from ..translate import translate_blocks as _translate_blocks_impl
-from .state import trace_card
+from .state import GENERAL_DISABLED_TOOLS, trace_card
 
 
 class ToolDenied(PermissionError):
@@ -144,13 +145,48 @@ def _citation_graph(paper_ids: list[str]) -> dict:
     自环剔除；外部引用记入 external_count 但不成边（不编造节点）。返回 nodes/edges 原料。
     """
     papers = {r["id"]: dict(r) for r in db.query(
-        "SELECT id,title,arxiv_id FROM papers WHERE status= 'active'") if r["id"]}
-    by_arxiv = {p["arxiv_id"]: pid for pid, p in papers.items() if p.get("arxiv_id")}
-    by_title = {p["title"].strip().lower(): pid for pid, p in papers.items() if p.get("title")}
+        "SELECT id,title,arxiv_id,created_at FROM papers WHERE status= 'active'") if r["id"]}
+    # 同族 canonical 合并（Round6 修复「同论文多版本/副本在图里各成节点、引用边
+    # 分裂、外部被引错位」）：同 arXiv 基 id 或同标题归一 → 只保留最新一行，
+    # 其余行的节点/边全部重映射到 canonical。
+    base_canon: dict[str, str] = {}      # arXiv 基 id → canonical pid
+    title_canon: dict[str, str] = {}     # 归一标题 → canonical pid
+    # 同 base/同标题：**最新 created_at 胜出**（canonical=最新版本代表整族，
+    # 与家族视图 canonical 语义一致）
+    for p in sorted(papers.values(), key=lambda x: (x["created_at"], x["id"])):
+        base = jobs._split_arxiv(p.get("arxiv_id") or "")[0]
+        tl = (p.get("title") or "").strip().lower()
+        if base:
+            prev = papers.get(base_canon.get(base, ""))
+            if prev is None or p["created_at"] >= prev.get("created_at", 0):
+                base_canon[base] = p["id"]
+        if tl:
+            prev_t = papers.get(title_canon.get(tl, ""))
+            if prev_t is None or p["created_at"] >= prev_t.get("created_at", 0):
+                title_canon[tl] = p["id"]
+    node_map: dict[str, str] = {}        # 任意行 pid → canonical pid
+    canonical_pids: list[str] = []
+    for p in papers.values():
+        base = jobs._split_arxiv(p.get("arxiv_id") or "")[0]
+        tl = (p.get("title") or "").strip().lower()
+        target = base_canon.get(base) if base else None
+        target = target or title_canon.get(tl) or p["id"]
+        node_map[p["id"]] = target
+        if target == p["id"] and p["id"] not in canonical_pids:
+            canonical_pids.append(p["id"])
+
+    by_arxiv = {}
+    by_title = {}
+    for p in papers.values():
+        canon = node_map[p["id"]]
+        if p.get("arxiv_id"):
+            by_arxiv[p["arxiv_id"]] = canon
+        if p.get("title"):
+            by_title[p["title"].strip().lower()] = canon
 
     nodes = [{"id": pid, "title": papers[pid].get("title") or pid,
               "arxiv_id": papers[pid].get("arxiv_id") or ""}
-             for pid in papers]
+             for pid in canonical_pids]
     edges: list[dict] = []
     external_count = 0
     for pid in paper_ids:
@@ -170,8 +206,11 @@ def _citation_graph(paper_ids: list[str]) -> dict:
                     target = by_title[ref["title"].strip().lower()]
             if target is None:
                 external_count += 1
-            elif target != pid:  # 自环剔除
-                edges.append({"source": pid, "target": target})
+            else:
+                src = node_map.get(pid, pid)
+                tgt = node_map.get(target, target)
+                if tgt != src:  # 自环剔除（含 canonical 合并后的自环）
+                    edges.append({"source": src, "target": tgt})
     # 去重边（无向键）
     seen: set[tuple[str, str]] = set()
     unique_edges: list[dict] = []
@@ -598,6 +637,17 @@ TOOLS: dict[str, ToolSpec] = {spec.name: spec for spec in [
 ]}
 
 
+# ---- 双模式硬兜底（doc_mode 上下文）：普通文档禁学术专属工具 ----
+# runner 在图执行线程置值；LangGraph 同步 invoke 的节点同线程执行，ContextVar 天然传播。
+# 路由层白名单/条件边已拦，此处防 forced_agent 绕过与图外路径（REST 复用 call_tool）。
+_doc_mode_ctx: ContextVar[str] = ContextVar("doc_mode", default="paper")
+
+
+def set_doc_mode(doc_mode: str) -> None:
+    """设置当前执行线程的文档模式（run_stream/resume_stream 入口调用）。"""
+    _doc_mode_ctx.set("general" if doc_mode == "general" else "paper")
+
+
 def assert_allowed(agent: str, tool: str) -> None:
     spec = TOOLS.get(tool)
     if spec is None:
@@ -605,6 +655,9 @@ def assert_allowed(agent: str, tool: str) -> None:
     if agent not in spec.allowed_agents:
         raise ToolDenied(f"agent '{agent}' not allowed for tool '{tool}'"
                          f" (allowed: {sorted(spec.allowed_agents)})")
+    if _doc_mode_ctx.get() == "general" and tool in GENERAL_DISABLED_TOOLS:
+        raise ToolDenied(f"tool '{tool}' disabled in general doc mode"
+                         f" (paper-only: {sorted(GENERAL_DISABLED_TOOLS)})")
 
 
 def call_tool(agent: str, name: str, config: dict | None, *,

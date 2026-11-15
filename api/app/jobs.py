@@ -20,7 +20,7 @@ from pathlib import Path
 
 import psutil
 
-from . import db
+from . import cache, db
 from .config import DOCIR_DIR, UPLOAD_DIR, settings
 from .log import logger
 from .parsing._types import ParseCancelled
@@ -112,6 +112,8 @@ def _run_parse(job_id: str, paper_id: str) -> None:
         db.update_job(job_id, status="error", message="paper not found")
         return
     paper = papers[0]
+    # 双模式：general（普通文档）跳过学术专属的签名/版本推导/语义去重三段
+    is_general = (paper["doc_type"] or "paper") == "general"
     proc = psutil.Process()
     mem_curve: list[list[float]] = []
     stop_sampler = threading.Event()
@@ -154,8 +156,10 @@ def _run_parse(job_id: str, paper_id: str) -> None:
             return
 
         # 论文级签名：title+abstract 向量（语义去重）+ 正文 MinHash（内容重合）+ family_id
-        db.update_job(job_id, progress=0.90, message="计算论文指纹")
-        _store_paper_signature(paper_id, docir)
+        # 普通文档跳过：无版本族概念，语义去重会把主题相近的教材/报告误报为重复
+        if not is_general:
+            db.update_job(job_id, progress=0.90, message="计算论文指纹")
+            _store_paper_signature(paper_id, docir)
 
         db.update_job(job_id, progress=0.92, message="切块与索引")
         index_docir = docir
@@ -190,28 +194,40 @@ def _run_parse(job_id: str, paper_id: str) -> None:
                            r.get("venue", ""), r.get("title_norm", "")))
 
         with db.tx() as c:
-            # arxiv_id 存基础 id（剥离 vN）；版本号单独入 version 列（去重文案/版本演进用）
-            base_arxiv, ver_int = _split_arxiv(docir["meta"].get("arxiv_id", ""))
-            ver = f"v{ver_int}" if ver_int else \
-                _version_from_name(paper["meta_json"] and json.loads(paper["meta_json"] or "{}")
-                                   .get("orig_filename", ""))
-            c.execute("UPDATE papers SET title=?, arxiv_id=?, version=?, page_count=?, docir_path=?"
-                      " WHERE id=?",
-                      (docir["meta"].get("title", ""), base_arxiv, ver,
-                       docir["meta"].get("page_count", 0),
-                       str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
+            if is_general:
+                # 普通文档：无 arXiv/版本治理——只写标题/页数/DocIR 路径，
+                # 显式清空 arxiv_id（首页正则误抓的编号不落入学术字段）
+                c.execute("UPDATE papers SET title=?, arxiv_id='', version='',"
+                          " page_count=?, docir_path=? WHERE id=?",
+                          (docir["meta"].get("title", ""),
+                           docir["meta"].get("page_count", 0),
+                           str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
+            else:
+                # arxiv_id 存基础 id（剥离 vN）；版本号单独入 version 列（去重文案/版本演进用）
+                base_arxiv, ver_int = _split_arxiv(docir["meta"].get("arxiv_id", ""))
+                ver = f"v{ver_int}" if ver_int else \
+                    _version_from_name(paper["meta_json"] and json.loads(paper["meta_json"] or "{}")
+                                       .get("orig_filename", ""))
+                c.execute("UPDATE papers SET title=?, arxiv_id=?, version=?, page_count=?, docir_path=?"
+                          " WHERE id=?",
+                          (docir["meta"].get("title", ""), base_arxiv, ver,
+                           docir["meta"].get("page_count", 0),
+                           str(DOCIR_DIR / f"{paper_id}.json"), paper_id))
 
         # 内容级去重先于置 done（官方用例 3.1：done 的瞬间 dedup_alert 必须已在；
         # P0-2 根因之二——旧顺序先 done 后去重，前端拿到 done 时预警尚不存在）
-        try:
-            post_parse_dedup(paper_id)
-        except Exception as e:  # noqa: BLE001 —— 去重失败不影响 parse 成功，job message 如实标注
-            logger.warning(f"post_parse_dedup 失败（不阻塞 parse）: {type(e).__name__}: {e}",
-                           module="dedup")
+        # 普通文档不做语义去重（见上方签名段注释）
+        if not is_general:
+            try:
+                post_parse_dedup(paper_id)
+            except Exception as e:  # noqa: BLE001 —— 去重失败不影响 parse 成功，job message 如实标注
+                logger.warning(f"post_parse_dedup 失败（不阻塞 parse）: {type(e).__name__}: {e}",
+                               module="dedup")
 
         empty_note = ""
         if docir["meta"].get("parse_empty"):
             empty_note = " · ⚠ 解析产出为空（扫描页识别全部失败，内容缺失已如实标注）"
+        cache.bump_revision()   # 解析落库（title/page_count/索引）→ 列表/图谱缓存失效
         db.update_job(job_id, status="done", progress=1.0,
                       message=f"完成：{len(chunks)} chunks{vec_note} / refs {len(docir.get('references', []))}"
                               f" · {docir['meta'].get('parse_engine', '')}{long_note}{empty_note}")
@@ -555,7 +571,8 @@ def dedup_scan(paper_id: str) -> dict | None:
     candidates: list[tuple[float, object, dict]] = []
     best_miss: tuple[float, object, dict] | None = None
     th = settings.dedup_threshold
-    for row in db.query("SELECT * FROM papers WHERE id != ?", (paper_id,)):
+    for row in db.query("SELECT * FROM papers WHERE id != ? AND COALESCE(doc_type,'paper')=?",
+                        (paper_id, new["doc_type"] or "paper")):
         if not _blocking_hit(new, row, band_keys, title_tokens):
             continue
         score, breakdown = _score_pair(new, row, rerank_budget=budget)
@@ -663,7 +680,8 @@ def rebuild_families() -> dict:
     （covered/kept/coexisted）。pending 分数对**不入边**——防一处错配经闭包传播
     （标准做法明示的局限，用「人工确认后才成簇」化解）。根选择：族内有 arXiv 基者
     取字典序最小（版本链的天然锚），否则按最早成员的标题重算 t_hash 键。仅写变化行。"""
-    rows = db.query("SELECT id,title,arxiv_id,doi,family_id,created_at FROM papers")
+    rows = db.query("SELECT id,title,arxiv_id,doi,family_id,created_at FROM papers "
+                    "WHERE COALESCE(doc_type,'paper')='paper'")  # 普通文档不入版本族
     if not rows:
         return {"papers": 0, "changed": 0, "families": 0}
     parent: dict[str, str] = {r["id"]: r["id"] for r in rows}
@@ -720,24 +738,29 @@ def rebuild_families() -> dict:
     return {"papers": len(rows), "changed": changed, "families": len(groups)}
 
 
-def upload_pdf(filename: str, content: bytes) -> dict:
+def upload_pdf(filename: str, content: bytes, doc_type: str = "paper") -> dict:
     """保存文件 → 查重 → 建 paper 记录 → 提交解析任务。
 
     hash 查重先于写文件（消灭孤儿文件）；插入+复用在 _dedup_lock 内串行，
-    file_hash 唯一索引作并发最后防线。
-    Round4 安全体检：入口魔数（%PDF-）+ 大小上限（100MB，与下载侧同口径）——
+    (file_hash, doc_type) 唯一索引作并发最后防线。
+    Round4 安全体检：入口魔数（%PDF-）+ 大小上限（200MB，与路由层同口径）——
     伪装 .pdf 后缀的任意文件不再进入解析管线。
+    双模式：doc_type=paper（学术文献，默认）| general（普通文档）——
+    精确去重按 doc_type 作用域（同一文件允许以两种类型各存一份）。
     """
     import hashlib
 
+    if doc_type not in ("paper", "general"):
+        raise ValueError(f"bad_doc_type:doc_type 仅支持 paper|general，收到 {doc_type!r}")
     if len(content) < 1024 or bytes(content[:5]) != b"%PDF-":
         raise ValueError("not_a_pdf:文件必须是以 %PDF- 开头的真实 PDF（≥1KB）")
-    if len(content) > 100 * 1024 * 1024:
-        raise ValueError("file_too_large:超过 100MB 上限")
+    if len(content) > 200 * 1024 * 1024:
+        raise ValueError("file_too_large:超过 200MB 上限")
     h = hashlib.sha256(content).hexdigest()
     with _dedup_lock:
-        exact = db.query("SELECT id,title FROM papers WHERE file_hash=?", (h,))
-        if exact:  # 文件级完全相同 → 直接复用
+        exact = db.query("SELECT id,title FROM papers WHERE file_hash=? AND doc_type=?",
+                         (h, doc_type))
+        if exact:  # 同类型内文件级完全相同 → 直接复用
             return {"paper_id": exact[0]["id"], "dedup": "exact_file",
                     "existing_title": exact[0]["title"], "job_id": None}
 
@@ -746,19 +769,22 @@ def upload_pdf(filename: str, content: bytes) -> dict:
         dest.write_bytes(content)
         try:
             with db.tx() as c:
-                c.execute("INSERT INTO papers(id,title,file_path,file_hash,created_at,meta_json)"
-                          " VALUES(?,?,?,?,?,?)",
+                c.execute("INSERT INTO papers(id,title,file_path,file_hash,created_at,"
+                          "meta_json,doc_type) VALUES(?,?,?,?,?,?,?)",
                           (paper_id, filename.rsplit(".", 1)[0], str(dest), h, db.now(),
-                           json.dumps({"orig_filename": filename}, ensure_ascii=False)))
+                           json.dumps({"orig_filename": filename}, ensure_ascii=False),
+                           doc_type))
         except Exception:
-            # 唯一索引兜底（跨进程并发同 hash）：复用既有记录并清理本进程孤儿文件
+            # 唯一索引兜底（跨进程并发同 hash+类型）：复用既有记录并清理本进程孤儿文件
             dest.unlink(missing_ok=True)
-            exact = db.query("SELECT id,title FROM papers WHERE file_hash=?", (h,))
+            exact = db.query("SELECT id,title FROM papers WHERE file_hash=? AND doc_type=?",
+                             (h, doc_type))
             if exact:
                 return {"paper_id": exact[0]["id"], "dedup": "exact_file",
                         "existing_title": exact[0]["title"], "job_id": None}
             raise
         job_id = submit_parse(paper_id)
+    cache.bump_revision()   # 新文献入库 → /papers 等列表缓存立即失效
     return {"paper_id": paper_id, "dedup": None, "job_id": job_id}
 
 
@@ -811,6 +837,7 @@ def apply_dedup_decision(new_paper_id: str, target_id: str, decision: str) -> di
                   "WHERE status='pending' AND new_paper_id=? AND existing_paper_id=?",
                   (decision, db.now(), old["id"], new["id"]))
     rebuild_families()   # 已决策对成为族边（L8）：决策即成簇，闭包立即生效
+    cache.bump_revision()   # 软归档/族变更 → 列表/族视图缓存失效
     return {"decision": decision, "new": dict(db.query(
         "SELECT id,title,status,supersedes,superseded_by,family_id FROM papers WHERE id=?",
         (new["id"],))[0]),
@@ -845,4 +872,5 @@ def delete_paper(paper_id: str) -> dict:
                 Path(path).unlink(missing_ok=True)
             except OSError:
                 logger.warning(f"删除文件失败（记录已清）: {path}", module="crud")
+    cache.bump_revision()   # 级联删除 → 列表/详情/图谱缓存失效
     return {"deleted": paper_id, "title": paper["title"]}

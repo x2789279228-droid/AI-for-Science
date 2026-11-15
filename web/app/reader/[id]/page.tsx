@@ -22,6 +22,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { API, Paper, getPaper } from "@/lib/api";
+import { fetchDocirOutline, fetchDocirPage, listPapers } from "@/lib/api";
 import {
   TranslationEntry, fetchTranslation, streamTranslate, translateSelection, addTerm,
   SearchHit, searchPaper,
@@ -110,7 +111,7 @@ function CitationChips({ text, onCite, highlightRef }: {
               style={{
                 cursor: "pointer", fontSize: 11, padding: "0 6px",
                 background: highlightRef === n ? "var(--accent, #2563eb)" : undefined,
-                color: highlightRef === n ? "#fff" : undefined,
+                color: highlightRef === n ? "var(--accent-contrast, #fff)" : undefined,
               }}
               title={`跳转到参考文献 [${n}]`}
               onClick={() => onCite(n)}>[{n}]</span>
@@ -149,8 +150,9 @@ function FormulaBlock({ latex, onLocate }: { latex: string; onLocate?: () => voi
   );
 }
 
-/** 解析报告面板：六指标 + 解析引擎 + 峰值内存（4.3）。 */
-function QualityPanel({ meta, paperId }: { meta: DocIRMeta; paperId?: string }) {
+/** 解析报告面板：六指标 + 解析引擎 + 峰值内存（4.3）。普通文档不渲染参考文献解析率。 */
+function QualityPanel({ meta, paperId, showRefs = true }:
+  { meta: DocIRMeta; paperId?: string; showRefs?: boolean }) {
   const [reparsing, setReparsing] = useState(false);
   const q = meta.quality ?? {};
   const row = (k: string, v: React.ReactNode) => (
@@ -169,7 +171,7 @@ function QualityPanel({ meta, paperId }: { meta: DocIRMeta; paperId?: string }) 
       {row("标题层级深度", q.toc_depth ?? "-")}
       {row("公式识别数", q.formula_count ?? 0)}
       {row("表格数", q.table_count ?? 0)}
-      {row("参考文献解析率",
+      {showRefs && row("参考文献解析率",
         q.reference_parse_rate != null ? `${Math.round(q.reference_parse_rate * 100)}%` : "无参考文献")}
       {row("扫描页占比", q.scanned_ratio ? `${Math.round(q.scanned_ratio * 100)}%` : "0%")}
       {meta.parse_memory && (
@@ -368,6 +370,8 @@ function ReaderInner() {
   const { immersive, setImmersive } = useShell();
   const island = useIsland();
   const [paper, setPaper] = useState<Paper | null>(null);
+  // 双模式：普通文档（doc_type=general）隐藏学术面板——References/引用跳转/阅读顺序演示
+  const isPaperDoc = (paper?.doc_type ?? "paper") !== "general";
   const [outline, setOutline] = useState<OutlinePayload | null>(null);
   const [pageData, setPageData] = useState<PagePayload | null>(null);
   const [pageLoading, setPageLoading] = useState(false);
@@ -450,12 +454,12 @@ function ReaderInner() {
       // 中文论文（标题 CJK≥2）默认中→英方向；英文论文默认英→中
       const cjk = ((p.title ?? "").match(/[\u4e00-\u9fff]/g) ?? []).length;
       setTransLang((cur) => (cjk >= 2 && !localStorage.getItem("trans_lang_manual") ? "en" : cur));
-    });
-    fetch(`${API}/api/papers/${id}/docir?outline=1`, { cache: "no-store" })
-      .then((r) => r.json()).then(setOutline);
-    fetch(`${API}/api/papers`, { cache: "no-store" }).then((r) => r.json()).then((d) => {
+    }).catch(() => { /* 详情失败不影响 outline 兜底链路 */ });
+    fetchDocirOutline<OutlinePayload>(id as string).then((d) => setOutline(d));
+    // 库内 arXiv id 集合（References「库内」标记）：走缓存版 listPapers，不再裸拉
+    listPapers().then((ps) => {
       const ids = new Set<string>();
-      for (const p of d.papers ?? []) {
+      for (const p of ps) {
         const a = (p.arxiv_id ?? "").replace(/v\d+$/, "");
         if (a) ids.add(a);
       }
@@ -471,9 +475,12 @@ function ReaderInner() {
 
   const fetchPage = useCallback((p: number) => {
     setPageLoading(true);
-    fetch(`${API}/api/papers/${id}/docir?page=${p - 1}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setPageData({ blocks: d.blocks ?? [], tables: d.tables ?? [], figures: d.figures ?? [] }))
+    fetchDocirPage<PagePayload>(id as string, p - 1)
+      .then((d) => {
+        setPageData({ blocks: d.blocks ?? [], tables: d.tables ?? [], figures: d.figures ?? [] });
+        // 相邻页预取（性能修复）：当前页渲染即后台拉下一页，翻页秒开
+        fetchDocirPage(id as string, p).catch(() => { /* 越界页预取失败静默 */ });
+      })
       .finally(() => setPageLoading(false));
   }, [id]);
 
@@ -721,7 +728,8 @@ function ReaderInner() {
   const rawOrder = outline?.meta?.demo_raw_order;
   const rawOrders = outline?.meta?.raw_orders;
   // E：text/compare 视图常驻开关；off 时三级还原——demo 素材 → 解析记录（真实）→ x0 模拟
-  const showOrderToggle = view === "text" || view === "compare";
+  // 普通文档不展示（双栏乱序重排是论文版式的演示功能）
+  const showOrderToggle = (view === "text" || view === "compare") && isPaperDoc;
   const orderOffMode: "demo" | "recorded" | "simulated" | null = useMemo(() => {
     if (orderOn || !showOrderToggle) return null;
     if (rawOrder && page === rawOrder.page && rawOrder.x0_order?.length) return "demo";
@@ -1131,7 +1139,8 @@ function ReaderInner() {
     ) : b.type === "heading" ? (
       <b>{b.text}</b>
     ) : (
-      <p>{cite ? <CitationChips text={b.text} onCite={gotoRef} highlightRef={highlightRef} /> : b.text}</p>
+      <p>{cite ? <CitationChips text={b.text} onCite={isPaperDoc ? gotoRef : undefined}
+        highlightRef={highlightRef} /> : b.text}</p>
     );
 
   const renderTextBlocks = (cite: boolean) => (
@@ -1156,8 +1165,8 @@ function ReaderInner() {
               Math.abs(b.bbox[1] - (urlBbox ?? focusBbox)![1]) < 0.02)
               ? { background: "var(--warn-soft)", borderRadius: "var(--radius-sm)" } : {}),
             ...(b.rawIdx != null
-              ? { borderLeft: `3px solid ${b.orderMode === "simulated" ? "#d97706" : "#dc2626"}`, paddingLeft: 8 }
-              : showOrderToggle ? { borderLeft: "3px solid #16a34a", paddingLeft: 8 } : {}),
+              ? { borderLeft: `3px solid ${b.orderMode === "simulated" ? "var(--warn)" : "var(--danger)"}`, paddingLeft: 8 }
+              : showOrderToggle ? { borderLeft: "3px solid var(--ok)", paddingLeft: 8 } : {}),
           }}>
           {renderBlockBody(b, cite)}
           <span className="block-anchor">
@@ -1297,7 +1306,8 @@ function ReaderInner() {
                           title="服务端导出：原页+译文页交替的双语 PDF">导出 PDF（双语）</button>
                         <hr />
                         <button onClick={() => { setShowMeta((v) => !v); setMoreOpen(false); }}
-                          title="作者+机构/摘要/venue·DOI">文献信息</button>
+                          title={isPaperDoc ? "作者+机构/摘要/venue·DOI" : "作者/摘要等文档信息"}>
+                          {isPaperDoc ? "文献信息" : "文档信息"}</button>
                         <button onClick={() => { setShowReport((s) => !s); setMoreOpen(false); }}
                           title="六指标+解析引擎+峰值内存">解析报告 {meta.parse_engine ?? ""}</button>
                       </div>
@@ -1360,7 +1370,7 @@ function ReaderInner() {
             )}
 
             {showMeta && <PaperMetaCard meta={meta} arxivId={meta.arxiv_id} />}
-            {showReport && <QualityPanel meta={meta} paperId={id as string} />}
+            {showReport && <QualityPanel meta={meta} paperId={id as string} showRefs={isPaperDoc} />}
 
             {view === "pdf" ? (
               <div className="card" style={{ marginBottom: 0, flex: 1, overflowY: "auto" }}>
@@ -1489,7 +1499,7 @@ function ReaderInner() {
               </div>
             )}
 
-            {(view !== "pdf" && refs.length > 0) && (
+            {(view !== "pdf" && isPaperDoc && refs.length > 0) && (
               <div className={`card acc${refsOpen ? " open" : ""}`} ref={refsPanelRef}
                 style={{ marginBottom: 0 }}>
                 <h2 className="acc-trigger" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}

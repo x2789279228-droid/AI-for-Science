@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS papers (
   version     TEXT DEFAULT '',
   supersedes  TEXT DEFAULT '',
   created_at  REAL NOT NULL,
-  meta_json   TEXT DEFAULT '{}'
+  meta_json   TEXT DEFAULT '{}',
+  doc_type    TEXT DEFAULT 'paper'     -- paper（学术文献）| general（普通文档）
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -275,6 +276,7 @@ def init_db() -> None:
         _migrate_qa_prompt_version(conn)
         _migrate_papers_module1(conn)
         _migrate_papers_dedup2(conn)
+        _migrate_papers_doc_type(conn)
         _migrate_references_rich(conn)
         _migrate_tracked_items_meta(conn)
         conn.commit()
@@ -332,9 +334,9 @@ def _migrate_papers_module1(conn: sqlite3.Connection) -> None:
     for name, decl in add.items():
         if name not in cols:
             conn.execute(f"ALTER TABLE papers ADD COLUMN {name} {decl}")
-    # file_hash 精确去重唯一性（TOCTOU 最后一道防线：并发插入撞唯一索引而失败的一方可安全重查复用）
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_file_hash ON papers(file_hash)")
+    # file_hash 精确去重唯一性（TOCTOU 最后一道防线）→ 已由 _migrate_papers_doc_type
+    # 的复合唯一索引 (file_hash, doc_type) 接管：双模式下同一文件允许两种类型各存一份，
+    # 单列唯一索引会与「同文件双类型」行冲突（建索引即因重复失败），故此处不再创建。
 
 
 def _migrate_papers_dedup2(conn: sqlite3.Connection) -> None:
@@ -351,6 +353,23 @@ def _migrate_papers_dedup2(conn: sqlite3.Connection) -> None:
     for name, decl in add.items():
         if name not in cols:
             conn.execute(f"ALTER TABLE papers ADD COLUMN {name} {decl}")
+
+
+def _migrate_papers_doc_type(conn: sqlite3.Connection) -> None:
+    """双模式：papers 加 doc_type 列——paper（学术文献，默认）| general（普通文档）。
+    存量库不加数据迁移：DEFAULT 'paper' 天然把全部既有文档归入专业模式。
+    file_hash 唯一索引升级为 (file_hash, doc_type) 复合唯一：同一文件允许
+    以两种类型各存一份，同类型内并发去重防线不变。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)")]
+    if not cols:
+        return
+    if "doc_type" not in cols:
+        conn.execute("ALTER TABLE papers ADD COLUMN doc_type TEXT DEFAULT 'paper'")
+    idx = {r[1] for r in conn.execute("PRAGMA index_list(papers)")}
+    if "idx_papers_file_hash" in idx:
+        conn.execute("DROP INDEX idx_papers_file_hash")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_file_type_hash "
+                 "ON papers(file_hash, doc_type)")
 
 
 def _migrate_qa_prompt_version(conn: sqlite3.Connection) -> None:

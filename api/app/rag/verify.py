@@ -48,6 +48,52 @@ def quote_coverage(quote: str, evidence_text: str) -> float:
     return matched / len(q)
 
 
+def trim_quote_to_evidence(quote: str, evidence_text: str) -> str | None:
+    """程序性引文修剪（Round6）：LLM 引文常见「转述/微调/跨句拼接」——L2 覆盖率
+    <0.85 时，在证据原文里按**句子粒度**找与 quote 匹配率最高的原句组合（1~3 句），
+    双向约束通过则返回该句组原文（逐字，不改写）：
+    - 句组→quote 匹配率 ≥0.55（引文主体确实来自这些句子）；
+    - quote→句组覆盖率 ≥0.75（句组基本被引文覆盖，不是随手抓的远句）。
+
+    诚实性：修剪后的引文仍是证据原文的逐字子串——把「转述引文」矫正回「原文引文」，
+    而非放宽校验。找不到高置信句组返回 None（保持 unverified，不硬凑）。"""
+    ev_text = str(evidence_text or "")
+    qn = _norm(quote)
+    if not qn or not ev_text or len(qn) < 12:
+        return None
+    sents = [s.strip() for s in re.split(r"(?<=[.!?。！？])\s+|\n+", ev_text) if s.strip()]
+    if not sents:
+        return None
+    best_span, best_ratio = None, 0.0
+    n = len(sents)
+    for span in (1, 2, 3):        # 1~3 连续句
+        for i in range(0, n - span + 1):
+            group = " ".join(sents[i:i + span])
+            sm = difflib.SequenceMatcher(None, qn, _norm(group), autojunk=False)
+            ratio = sum(b.size for b in sm.get_matching_blocks()) / len(qn)
+            if ratio > best_ratio:
+                best_ratio, best_span = ratio, group
+    if not best_span or best_ratio < 0.55:
+        return None
+    cov = quote_coverage(quote, best_span)
+    return best_span if cov >= 0.75 else None
+    words = ev_text.split()
+    if not words:
+        return None
+    # 以归一字符数估计词窗上下界（原文形式保持可读，词粒度滑窗）
+    avg_w = max(len(tn) / max(len(words), 1), 1.0)
+    w_lo = max(4, int(len(qn) / avg_w) - 3)
+    w_hi = min(len(words), int(len(qn) * 1.5 / avg_w) + 3)
+    best_sub, best_ratio = None, 0.0
+    for w in range(w_lo, w_hi + 1):
+        for i in range(0, len(words) - w + 1):
+            sub = " ".join(words[i:i + w])
+            ratio = difflib.SequenceMatcher(None, qn, _norm(sub), autojunk=False).ratio()
+            if ratio > best_ratio:
+                best_ratio, best_sub = ratio, sub
+    return best_sub if best_ratio >= 0.90 else None
+
+
 def extract_claims_numbers(claim_text: str) -> list[str]:
     """抽取 claim 中须逐字对回证据的数值/实体 token（归一化形式）。"""
     t = str(claim_text or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
@@ -112,6 +158,31 @@ def check_quotes(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dic
             c["quote_coverage"] = round(min_cov, 3)
         if not applied:
             break
+
+    # Round6 第三层：程序性引文修剪（零 API 成本）——LLM 重抽也修不好的转述型
+    # 失配，在证据原文里找匹配率 ≥0.90 的连续原文片段替换（引文仍为原文逐字子串，
+    # 是矫正不是放宽）；仍失败保持 unverified（诚实回退 chunk 级锚点）。
+    for c in claims:
+        if not c.get("support") or c.get("quote_status") == "verified":
+            continue
+        covs = c.get("quote_coverages") or []
+        for k, s in enumerate(c["support"]):
+            if covs and k < len(covs) and covs[k] >= QUOTE_COVERAGE_MIN:
+                continue
+            ev_text = _support_evidence_text(s, eid_map)
+            trimmed = trim_quote_to_evidence(s.get("quote", "") or "", ev_text)
+            if not trimmed:
+                continue
+            cov = round(quote_coverage(trimmed, ev_text), 3)
+            if cov > (covs[k] if k < len(covs) else 0.0):
+                s["quote"] = trimmed
+                if k < len(covs):
+                    covs[k] = cov
+        min_cov = min(covs) if covs else 0.0
+        if covs:
+            c["quote_coverages"] = covs
+            c["quote_status"] = "verified" if min_cov >= QUOTE_COVERAGE_MIN else "unverified"
+            c["quote_coverage"] = round(min_cov, 3)
 
     n_bad = sum(1 for c in claims if c.get("quote_status") == "unverified")
     if n_bad:

@@ -1,0 +1,178 @@
+{
+  "paper_id": "p_613554d85bcd",
+  "configs": {
+    "full": {
+      "config": "full",
+      "recall_at5": 1.0,
+      "mrr_at5": 0.83
+    },
+    "no-verifier": {
+      "config": "no-verifier",
+      "recall_at5": 1.0,
+      "mrr_at5": 0.83
+    },
+    "no-anchor": {
+      "config": "no-anchor",
+      "recall_at5": 1.0,
+      "mrr_at5": 0.83
+    },
+    "no-dense": {
+      "config": "no-dense",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "no-rerank": {
+      "config": "no-rerank",
+      "recall_at5": 1.0,
+      "mrr_at5": 0.83
+    },
+    "naive-baseline": {
+      "config": "naive-baseline",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    }
+  },
+  "wilcoxon": {
+    "full_vs_no-verifier": {
+      "p_value": 1.0,
+      "full_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "no-verifier_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-anchor": {
+      "p_value": 1.0,
+      "full_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "no-anchor_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-dense": {
+      "p_value": 0.3242,
+      "full_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "no-dense_mrr": [
+        1.0,
+        0.5,
+        0.5,
+        0.2,
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        0.0,
+        0.3333333333333333
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-rerank": {
+      "p_value": 1.0,
+      "full_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "no-rerank_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_naive-baseline": {
+      "p_value": 0.3242,
+      "full_mrr": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        0.3333333333333333
+      ],
+      "naive-baseline_mrr": [
+        1.0,
+        0.5,
+        0.5,
+        0.2,
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        0.0,
+        0.3333333333333333
+      ],
+      "significant_p<0.05": false
+    }
+  },
+  "time": "2026-11-15 10:42:36"
+}

@@ -1,0 +1,178 @@
+{
+  "paper_id": "p_39caee65b228",
+  "configs": {
+    "full": {
+      "config": "full",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "no-verifier": {
+      "config": "no-verifier",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "no-anchor": {
+      "config": "no-anchor",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "no-dense": {
+      "config": "no-dense",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "no-rerank": {
+      "config": "no-rerank",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    },
+    "naive-baseline": {
+      "config": "naive-baseline",
+      "recall_at5": 0.9,
+      "mrr_at5": 0.6
+    }
+  },
+  "wilcoxon": {
+    "full_vs_no-verifier": {
+      "p_value": 1.0,
+      "full_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "no-verifier_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-anchor": {
+      "p_value": 1.0,
+      "full_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "no-anchor_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-dense": {
+      "p_value": 1.0,
+      "full_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "no-dense_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_no-rerank": {
+      "p_value": 1.0,
+      "full_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "no-rerank_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "significant_p<0.05": false
+    },
+    "full_vs_naive-baseline": {
+      "p_value": 1.0,
+      "full_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "naive-baseline_recall": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "significant_p<0.05": false
+    }
+  },
+  "time": "2026-11-14 22:05:03"
+}

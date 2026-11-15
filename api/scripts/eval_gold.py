@@ -74,7 +74,7 @@ def pick_paper() -> str:
     假崩 0.2、rubric 1/8，均非检索/生成真实退化）。"""
     from app import db
     rows = db.query("SELECT id, title FROM papers WHERE docir_path IS NOT NULL AND docir_path != '' "
-                    "ORDER BY created_at DESC")
+                    "AND COALESCE(doc_type,'paper')='paper' ORDER BY created_at DESC")
     if not rows:
         raise SystemExit("库内无已解析论文：先上传或 make demo")
     for r in rows:
@@ -119,26 +119,40 @@ def retrieval_metrics(paper_id: str) -> dict:
     from app.rag.indexing import hybrid_search
 
     r5_hits, r5_strict, r5_rr, r5_detail = [], [], [], []
+    r10_hits, r10_rr, dcg_best, idcg_best = [], [], [], []
     for q, golds in _EN_FACTS:
-        res = hybrid_search([paper_id], q, top_k=5)
+        res = hybrid_search([paper_id], q, top_k=10)
         hits = res.get("hits", [])
-        ok = any(g.lower() in (h.get("text") or "").lower() for g in golds for h in hits)
+        ok5 = any(g.lower() in (h.get("text") or "").lower() for g in golds for h in hits[:5])
+        ok10 = any(g.lower() in (h.get("text") or "").lower() for g in golds for h in hits)
         strict = any(_strict_hit(golds, h.get("text") or "") for h in hits)
-        rank = next((i + 1 for i, h in enumerate(hits)
-                     if any(g.lower() in (h.get("text") or "").lower() for g in golds)), 0)
-        r5_hits.append(ok)
+        rank5 = next((i + 1 for i, h in enumerate(hits[:5])
+                      if any(g.lower() in (h.get("text") or "").lower() for g in golds)), 0)
+        rank10 = next((i + 1 for i, h in enumerate(hits)
+                       if any(g.lower() in (h.get("text") or "").lower() for g in golds)), 0)
+        r5_hits.append(ok5)
         r5_strict.append(strict)
-        r5_rr.append(1.0 / rank if rank else 0.0)
+        r5_rr.append(1.0 / rank5 if rank5 else 0.0)
+        r10_hits.append(ok10)
+        r10_rr.append(1.0 / rank10 if rank10 else 0.0)
+        # nDCG@10：金标命中块 relevance=1，其余 0
+        rels = [1.0 if any(g.lower() in (h.get("text") or "").lower() for g in golds) else 0.0
+                for h in hits[:10]]
+        ideal = sorted(rels, reverse=True)
+        dcg = sum(rel / (i + 1 if i else 1) ** 0.5 for i, rel in enumerate(rels))
+        idcg = sum(rel / (i + 1 if i else 1) ** 0.5 for i, rel in enumerate(ideal)) or 1.0
+        dcg_best.append(dcg / idcg)
+        idcg_best.append(idcg)
         r5_detail.append({
-            "question": q, "gold_keywords": list(golds), "hit": ok, "strict_hit": strict,
-            "first_hit_rank": rank,
-            "top5": [{"chunk_id": h.get("chunk_id"), "page": (h.get("page") or 0) + 1,
-                      "score": h.get("rrf") or h.get("score"),
-                      "kind": h.get("kind"),
-                      "table_boosted": bool(h.get("table_boosted")),
-                      "text": (h.get("text") or "")[:160]} for h in hits],
+            "question": q, "gold_keywords": list(golds), "hit": ok5, "strict_hit": strict,
+            "first_hit_rank": rank5, "first_hit_rank_at10": rank10,
+            "top10": [{"chunk_id": h.get("chunk_id"), "page": (h.get("page") or 0) + 1,
+                       "score": h.get("rrf") or h.get("score"),
+                       "kind": h.get("kind"),
+                       "table_boosted": bool(h.get("table_boosted")),
+                       "text": (h.get("text") or "")[:160]} for h in hits],
         })
-        print(f"  [R@5] {'✓' if ok else '✗'}{'+s' if strict else ''} r{rank} {q[:42]}")
+        print(f"  [R@5] {'✓' if ok5 else '✗'}{'+s' if strict else ''} r{rank5}/r10:{rank10} {q[:42]}")
     zh_hits, zh_detail = [], []
     zh_retried = 0
     for q, gold in _ZH_FACTS:
@@ -165,6 +179,9 @@ def retrieval_metrics(paper_id: str) -> dict:
     retrieval_detail = {"en": r5_detail, "zh": zh_detail}
     return {
         "recall_at5": round(sum(r5_hits) / len(r5_hits), 2),
+        "recall_at10": round(sum(r10_hits) / len(r10_hits), 2),
+        "ndcg_at10": round(sum(dcg_best) / len(dcg_best), 3),
+        "mrr_at10": round(sum(r10_rr) / len(r10_rr), 2),
         "strict_recall_at5": round(sum(r5_strict) / len(r5_strict), 2),
         "mrr_at5": round(sum(r5_rr) / len(r5_rr), 2),
         "recall_at5_detail": dict(zip((q for q, _ in _EN_FACTS),
@@ -181,8 +198,9 @@ def qa_round(client, paper_id: str, question: str, agent: str = "reader") -> tup
     final = None
     with client.stream("POST", "/api/chat",
                        json={"question": question, "paper_ids": [paper_id],
-                             "conversation_id": conv, "agent": agent}) as r:
-        assert r.status_code == 200, r.text
+                             "conversation_id": conv, "agent": agent,
+                             "doc_mode": "paper"}) as r:
+        assert r.status_code == 200, getattr(r, "request", None) and f"HTTP {r.status_code}"
         event = ""
         for line in r.iter_lines():
             if line.startswith("event: "):
@@ -548,7 +566,7 @@ def _compare_round(client, att: str, bert: str, question: str) -> dict:
     with client.stream("POST", "/api/chat",
                        json={"question": question, "paper_ids": [att, bert],
                              "conversation_id": conv, "agent": "compare"}) as r:
-        assert r.status_code == 200, r.text
+        assert r.status_code == 200, getattr(r, "request", None) and f"HTTP {r.status_code}"
         event = ""
         for line in r.iter_lines():
             if line.startswith("event: "):

@@ -10,7 +10,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Graph } from "@antv/g6";
+import type { Graph as G6Graph } from "@antv/g6";
+import { loadG6 } from "@/lib/g6-loader";
 import {
   FullGraph, FutureCheckItem, GraphNode, IdeaItem, fetchGraph, listPapers,
   streamCommunitySummary, streamFutureChecks, streamIdeas, streamSurvey, SurveySection,
@@ -18,10 +19,11 @@ import {
 import type { HullOptions } from "@antv/g6/lib/plugins/hull/index";
 import { useIsland } from "@/lib/island";
 import { useShell } from "@/components/ShellContext";
+import { canvasTheme } from "@/lib/theme-palettes";
 import { Maximize } from "@/components/icons";
 import type { Paper } from "@/lib/api";
 
-const PALETTE = ["#5B8FF9", "#61DDAA", "#F6BD16", "#7262fd", "#78D3F8", "#9661BC", "#F6903D", "#008685"];
+// 社区色板已按主题收敛至 lib/theme-palettes.ts（v1.3，design-tokens 使用规则 6）
 
 const ROLE_BADGE: Record<string, string> = { cornerstone: "🪨 基石", peripheral: "🌿 边缘衍生" };
 
@@ -66,19 +68,16 @@ function EvidenceText({ text, anchors }: { text: string; anchors: Record<string,
 
 export default function GraphPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const graphRef = useRef<Graph | null>(null);
+  const graphRef = useRef<G6Graph | null>(null);
   const [graph, setGraph] = useState<FullGraph | null>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [selectedEdges, setSelectedEdges] = useState<FullGraph["edges"]>([]);
   const [err, setErr] = useState("");
-  const { immersive, setImmersive } = useShell();
+  const { immersive, setImmersive, theme } = useShell();
   const island = useIsland();
-  // 沉浸切换 → 容器尺寸经 CSS 过渡后再重建画布(epoch 触发下方 G6 useEffect 重挂)
-  const [canvasEpoch, setCanvasEpoch] = useState(0);
-  useEffect(() => {
-    const t = window.setTimeout(() => setCanvasEpoch((c) => c + 1), 400);
-    return () => window.clearTimeout(t);
-  }, [immersive]);
+  // 沉浸切换的画布适配：原实现用 epoch +400ms 强制重建实例——但 G6 v5 的
+  // destroy() 是异步的，同步重建会导致旧实例渲染层残留（画布叠两幅图）。
+  // 改由 ResizeObserver 跟随容器尺寸变化 resize+fitView（见下方 G6 useEffect），不再重建。
 
   // 模块五 P0-1：批量选择（默认全库；2–50 护栏与后端一致）
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -118,13 +117,28 @@ export default function GraphPage() {
     setGraph(null);
     setSelected(null);
     fetchGraph(pickedIds.length ? pickedIds : undefined).then((g) => {
-      setGraph(g);
-      if (g.communities.length) setCommId(g.communities[0].id);
+      // 修复「主体图缩成小团」：无引用边的孤立节点（如普通文档/测试页）会被
+      // d3-force 的多体斥力推到几千像素外，撑爆包围盒——fitView 为装下它们
+      // 将缩放压到 ~0.23，主体图被缩成小团。引用图谱只展示有引用关系的节点。
+      const isolated = new Set(g.nodes
+        .filter((n) => !g.edges.some((e) => e.source === n.paper_id || e.target === n.paper_id))
+        .map((n) => n.paper_id));
+      const cleaned: FullGraph = isolated.size
+        ? { ...g, nodes: g.nodes.filter((n) => !isolated.has(n.paper_id)) }
+        : g;
+      setGraph(cleaned);
+      if (cleaned.communities.length) setCommId(cleaned.communities[0].id);
     }).catch((e) => setErr(String(e)));
   }, [pickedIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!graph || !containerRef.current) return;
+    let disposed = false;
+    let cleanup: () => void = () => {};
+    // G6 动态加载（性能修复：约 500kB 的库不进首包），就绪后再建画布
+    loadG6().then(({ Graph }) => {
+      if (disposed || !containerRef.current) return;
+    const pal = canvasTheme(theme);          // 画布色随皮肤切换（重建画布）
     // G6 v5 约定：业务字段放 data 挂载点，style 回调从 d.data 读取
     // §5.3 社区凸包：按 Louvain community 分组的 Hull 插件（fill=社区色 8% 透明度）。
     // 失败风险兜底：Hull options 类型不符会在 render 时报错并被下方 catch 捕获，
@@ -141,14 +155,27 @@ export default function GraphPage() {
           key: `hull-${cid}`,
           type: "hull",
           members,
-          fill: `${PALETTE[i % PALETTE.length]}14`,   // 8% 透明度
+          fill: `${pal.community[i % pal.community.length]}14`,   // 8% 透明度
           stroke: "transparent",
           corner: "rounded",
           padding: 18,
         } as HullOptions & { key: string; type: string }));
       } catch { return []; }
     })();
-    let g6: Graph;
+    let g6: G6Graph;
+    // 节点/画布点击事件（抽公共函数：主实例与降级重建实例都必须绑定——
+    // 此前降级实例未绑事件，重建后点节点无反应）
+    const bindEvents = (inst: G6Graph) => {
+      // G6 v5 IEvent 目标节点 id 在 evt.target.id（类型宽松处，见 G6 5.x 文档事件示例）
+      inst.on("node:click", (evt: any) => {
+        const id = evt?.target?.id as string | undefined;
+        if (!id) return;
+        const n = graph.nodes.find((x) => x.paper_id === id);
+        setSelected(n ?? null);
+        setSelectedEdges(graph.edges.filter((e) => e.source === id || e.target === id));
+      });
+      inst.on("canvas:click", () => setSelected(null));
+    };
     try {
       g6 = new Graph({
         container: containerRef.current,
@@ -168,25 +195,26 @@ export default function GraphPage() {
             const n = (d as { data?: GraphNode }).data;
             return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
           },
-          fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
+          fill: (d) => pal.community[((d as { data?: GraphNode }).data?.community ?? 0) % pal.community.length],
           labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
           labelPlacement: "bottom",
           labelFontSize: 11,
           labelFill: "#ffffff",
           labelBackground: true,
-          labelBackgroundFill: "rgba(23, 22, 26, 0.78)",
+          labelBackgroundFill: pal.labelBg,
           labelPadding: [1, 3],
           labelBackgroundRadius: 3,
           badges: (d): any => {
             const role = (d as { data?: GraphNode }).data?.role;
             return role === "cornerstone"
-              ? [{ text: "基", placement: "right-top", background: "#ff5f3c",
+              ? [{ text: "基", placement: "right-top", background: pal.cornerBadge,
                    color: "#ffffff", fontSize: 8, padding: [1, 3] }]
               : [];
           },
           stroke: (d) => {
             const role = (d as { data?: GraphNode }).data?.role;
-            return role === "cornerstone" ? "#cc0000" : role === "peripheral" ? "#00aa77" : "#ffffff";
+            return role === "cornerstone" ? pal.cornerStroke
+              : role === "peripheral" ? pal.peripheralStroke : pal.nodeStroke;
           },
           lineWidth: (d) => ((d as { data?: GraphNode }).data?.role ? 2.5 : 1),
         },
@@ -195,7 +223,7 @@ export default function GraphPage() {
         style: {
           stroke: (d) => {
             const w = (d as { data?: { weight?: number } }).data?.weight ?? 0;
-            return w >= 1.0 ? "#2563eb" : w > 0 ? "#94a3b8" : "#d4d4d8";
+            return w >= 1.0 ? pal.edgeStrong : w > 0 ? pal.edgeMid : pal.edgeWeak;
           },
           lineWidth: (d) => {
             const w = (d as { data?: { weight?: number } }).data?.weight ?? 0;
@@ -204,7 +232,7 @@ export default function GraphPage() {
           endArrow: true,
         },
       },
-      layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
+      layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400, animation: false },
       behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
       });
     } catch (e) {
@@ -225,34 +253,38 @@ export default function GraphPage() {
               const n = (d as { data?: GraphNode }).data;
               return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
             },
-            fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
+            fill: (d) => pal.community[((d as { data?: GraphNode }).data?.community ?? 0) % pal.community.length],
             labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
             labelPlacement: "bottom", labelFontSize: 11,
           },
         },
-        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
+        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400, animation: false },
         behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
       });
       graphRef.current = g6b;
-      g6b.render().catch(() => {});
-      return () => { try { g6b?.destroy(); } catch { /* 忽略 */ } graphRef.current = null; };
+      g6b.render().then(() => bindEvents(g6b)).catch(() => {});
+      cleanup = () => { try { g6b?.destroy(); } catch { /* 忽略 */ } graphRef.current = null; };
+      return;
     }
     graphRef.current = g6;
     const render = g6.render().then(() => {
-      // G6 v5 IEvent 目标节点 id 在 evt.target.id（类型宽松处，见 G6 5.x 文档事件示例）
-      g6.on("node:click", (evt: any) => {
-        const id = evt?.target?.id as string | undefined;
-        if (!id) return;
-        const n = graph.nodes.find((x) => x.paper_id === id);
-        setSelected(n ?? null);
-        setSelectedEdges(graph.edges.filter((e) => e.source === id || e.target === id));
-      });
-      g6.on("canvas:click", () => setSelected(null));
+      // 修复「图缩成小团」：autoFit 只作用于首帧，力导向把连通分量拉向质心
+      // 收敛后视口不跟随——布局完成时主动 fitView 一次。
+      try { g6.fitView(); } catch { /* 忽略 */ }
+      return bindEvents(g6);
     });
-    // Hull 插件降级路径(§5.3)：render 失败且本次启用了 hull → 去插件重建一次
+    // Hull 插件降级路径(§5.3)：render 失败且本次启用了 hull → 去插件重建一次。
+    // 修复「画布叠两幅图」：重建前必须销毁渲染失败的旧实例——否则其半成品
+    // canvas 残留在容器里，与重建实例同时显示。
     render.catch((e0) => {
       if (!hullPlugins.length) throw e0;
       if (!containerRef.current) throw e0;
+      try { g6.destroy(); } catch { /* 实例已失效则忽略 */ }
+      // destroy 对「render 中途失败」的实例可能清不干净（canvas 残留 →
+      // 重建后画布叠两幅相同的图）——无条件移除容器内全部残留画布。
+      try {
+        containerRef.current.querySelectorAll("canvas").forEach((c) => c.remove());
+      } catch { /* 忽略 */ }
       const g6b = new Graph({
         container: containerRef.current, autoFit: "view", padding: 20,
         data: {
@@ -268,22 +300,58 @@ export default function GraphPage() {
               const n = (d as { data?: GraphNode }).data;
               return 14 + Math.min(34, (n?.pagerank ?? 0) * 220);
             },
-            fill: (d) => PALETTE[((d as { data?: GraphNode }).data?.community ?? 0) % PALETTE.length],
+            fill: (d) => pal.community[((d as { data?: GraphNode }).data?.community ?? 0) % pal.community.length],
             labelText: (d) => nodeLabel(String((d as { data?: GraphNode }).data?.title ?? "")),
             labelPlacement: "bottom", labelFontSize: 11,
           },
         },
-        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400 },
+        layout: { type: "d3-force", linkDistance: 130, nodeStrength: -400, animation: false },
         behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
       });
       graphRef.current = g6b;
-      return g6b.render();
+      return g6b.render().then(() => { try { g6b.fitView(); } catch { /* 忽略 */ } return bindEvents(g6b); });
     }).catch((e) => setErr(`G6 渲染失败：${e}`));
-    return () => {
-      try { g6?.destroy(); } catch { /* 容器已随 HMR/卸载销毁等场景,忽略 */ }
+    cleanup = () => {
+      // 销毁「当前生效实例」而非闭包里的 g6：走降级重建路径后生效的是 g6b，
+      // 只杀 g6 会泄漏正在显示的实例（画布残留旧图）。
+      const doomed = graphRef.current;
+      let dp: any = null;
+      try { dp = doomed?.destroy(); } catch { /* 容器已随 HMR/卸载销毁等场景,忽略 */ }
+      // 根因修复「画布叠两幅图」：G6 v5 的 destroy() 是异步的（返回 Promise），
+      // 同步阶段不移除 canvas——旧实例的渲染层与新实例叠加显示，且旧实例的
+      // 事件监听残留导致面板触发两次。同步清一次 + destroy 完成后再兜底清一次。
+      if (containerRef.current) {
+        try { containerRef.current.querySelectorAll("canvas").forEach((c) => c.remove()); } catch { /* 忽略 */ }
+      }
+      if (dp && typeof dp.then === "function") {
+        dp.then(() => {
+          try { containerRef.current?.querySelectorAll("canvas").forEach((c) => c.remove()); } catch { /* 忽略 */ }
+        }).catch(() => { /* 忽略 */ });
+      }
       graphRef.current = null;
+      try { ro?.disconnect(); } catch { /* 忽略 */ }
     };
-  }, [graph, canvasEpoch]);
+    // 容器尺寸自适应（修复：节点详情面板开合会改变画布宽度，autoFit 只在
+    // 首次 render 生效——不跟随时图会缩成一小团挤在旧区域）。ResizeObserver
+    // 防抖 200ms 后 resize + fitView。
+    const ro = new ResizeObserver((entries) => {
+      const inst = graphRef.current;
+      const box = containerRef.current;
+      if (!inst || !box) return;
+      const { width, height } = entries[0].contentRect;
+      if (width < 50 || height < 50) return;   // 面板动画中间态忽略
+      clearTimeout((ro as any)._t);
+      (ro as any)._t = setTimeout(() => {
+        try {
+          inst.resize(Math.round(width), Math.round(height));
+          inst.fitView();
+        } catch { /* 实例已销毁则忽略 */ }
+      }, 200);
+    });
+    ro.observe(containerRef.current);
+    });
+    return () => { disposed = true; cleanup(); };
+  }, [graph, theme]);
 
   const runSummary = () => {
     if (summarizing || !graph) return;

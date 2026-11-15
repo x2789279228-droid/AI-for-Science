@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 import re
 import struct
+import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 import httpx
@@ -188,15 +190,56 @@ def _row_to_hit(r: Any, score: float) -> dict:
 
 # ---------- Dense（OpenAI 兼容 embeddings） ----------
 
+_query_vec_lock = threading.Lock()
+_query_vec_cache: OrderedDict[str, list[float]] = OrderedDict()   # LRU：查询向量复用
+_QUERY_VEC_MAX = 128
+
+
+_query_vec_inflight: dict[str, threading.Event] = {}   # 并发去重：同 key 等首个完成
+
+
+def _query_vector(q: str) -> list[float] | None:
+    """查询向量缓存：多路并行检索（Send 扇出）对同一查询文本各自调
+    _embed_texts → N 次冗余 embedding API 往返（实测 8 路 ×0.7s）。
+    按 (model, 文本) LRU 缓存 + in-flight 合并——并发同 key 只发一次
+    embedding API，其余线程等 Event 后读缓存；持有者失败则等待者重试。"""
+    key = f"{settings.embedding_model}::{q}"
+    while True:
+        with _query_vec_lock:
+            hit = _query_vec_cache.get(key)
+            if hit is not None:
+                _query_vec_cache.move_to_end(key)
+                return hit
+            ev = _query_vec_inflight.get(key)
+            if ev is None:
+                _query_vec_inflight[key] = threading.Event()
+                owner = True
+                break
+        ev.wait(timeout=15.0)   # 等持有者完成（超时兜底防悬挂）
+    try:
+        vecs = _embed_texts([q])
+        with _query_vec_lock:
+            if vecs:
+                _query_vec_cache[key] = vecs[0]
+                _query_vec_cache.move_to_end(key)
+                if len(_query_vec_cache) > _QUERY_VEC_MAX:
+                    _query_vec_cache.popitem(last=False)
+            return vecs[0] if vecs else None
+    finally:
+        with _query_vec_lock:
+            ev_done = _query_vec_inflight.pop(key, None)
+        if ev_done:
+            ev_done.set()   # 唤醒等待者（失败时等待者读到无缓存→自行重试）
+
 
 def dense_search(paper_ids: list[str], q: str, top_k: int = 20) -> list[dict]:
     """Dense 检索：query 向量 × 库内落库向量（索引时已算好，查询零重算）。"""
     if not paper_ids:
         return []
-    qvecs = _embed_texts([q])
-    if not qvecs:
+    qv_raw = _query_vector(q)
+    if qv_raw is None:
         return []
-    qv = np.asarray(qvecs[0], dtype="float32")
+    qv = np.asarray(qv_raw, dtype="float32")
     qv /= (np.linalg.norm(qv) + 1e-9)
 
     ph = ",".join("?" * len(paper_ids))

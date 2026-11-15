@@ -58,6 +58,64 @@
   --riso-line-strong: #c9b995;
   --riso-yellow: #ffd23f;          /* 海报黄点缀 */
 
+  /* ---------- 1. Primitive：MAJORELLE 马拉喀什色板（第三皮肤，母题见 docs/design-tokens.md §5 ----------
+     母题：马拉喀什 · 马约尔花园 —— 马约尔蓝墙 × 藏红花黄 × 沙色麦地那 × zellige 花砖。
+     工作皮肤：classic/majorelle 语义色互斥覆盖，业务组件照常只取 Semantic 层。 */
+  --maj-sand: #f6ecda;             /* 沙色底 */
+  --maj-sand-deep: #efe1c8;        /* 沙色暗部/嵌套 */
+  --maj-surface: #fffaf1;          /* 米白面板（卡片/侧栏） */
+  --maj-blue: #4a4ae8;             /* 马约尔蓝（主色） */
+  --maj-blue-deep: #3232c8;        /* 蓝深（hover） */
+  --maj-blue-soft: #e9e9fb;        /* 淡蓝印底（选中底） */
+  --maj-saffron: #e8b33c;          /* 藏红花黄（点缀/光源） */
+  --maj-saffron-deep: #a87516;     /* 可读藏红（文字级 warn） */
+  --maj-rose: #d96c8a;             /* 骆驼玫瑰（点缀） */
+  --maj-palm: #3f7d4e;             /* 棕榈绿（ok） */
+  --maj-palm-deep: #2f6440;        /* 绿深 */
+  --maj-terra: #c96f4a;            /* 陶土橙（danger） */
+  --maj-terra-deep: #a84e2e;       /* 陶深 */
+  --maj-ink: #33261a;              /* 椰枣褐墨 */
+  --maj-ink-2: #7a6a56;            /* 暖褐次级文字 */
+  --maj-ink-3: #a3947e;            /* 暖褐弱化 */
+  --maj-line: #e7d9bf;             /* 暖沙线 */
+  --maj-line-strong: #d4c19e;
+
+  /* ---------- 1. Primitive：WUXIA 玄墨色板（第四皮肤，母题见 docs/design-tokens.md §6 ----------
+     母题：武侠电影海报 —— 玄墨夜底 × 月白文字 × 鎏金线描侠客 × 朱砂点睛。
+     首个深色皮肤：accent hover 向亮走（深色惯例），文字/面板全部取自月白/浓墨阶。 */
+  --wx-night: #16130f;             /* 玄墨底 */
+  --wx-night-2: #1f1b16;           /* 浓墨面板 */
+  --wx-night-3: #2a241d;           /* 墨面暗部/嵌套 */
+  --wx-moon: #ede6d6;              /* 月白主文字 */
+  --wx-moon-2: #a89c86;            /* 淡墨次级 */
+  --wx-moon-3: #7a6f5c;            /* 弱化/占位 */
+  --wx-cinnabar: #e06448;          /* 朱砂亮部（accent） */
+  --wx-cinnabar-2: #eb7a62;        /* 朱砂 hover（深色主题向亮走） */
+  --wx-gold: #d9a93c;              /* 鎏金（题字/剑光） */
+  --wx-gold-2: #e8bd58;            /* 鎏金亮部 */
+  --wx-bamboo: #4fa97c;            /* 竹青（ok） */
+  --wx-bamboo-2: #7ccba4;          /* 竹青亮部 */
+  --wx-rouge: #e05a5a;             /* 胭脂（danger） */
+  --wx-rouge-2: #ec8080;           /* 胭脂亮部 */
+  --wx-line: #383026;              /* 墨面线 */
+  --wx-line-strong: #4a4136;       /* 强边 */
+
+  /* ---------- 1. Primitive：中性收敛层（v1.3：原散落硬编码色入册，各主题可覆盖） ---------- */
+  --island-bg: rgba(11, 18, 32, 0.92);           /* 动态岛深底 */
+  --island-ink: #f4f6fb;                         /* 动态岛文字 */
+  --island-ink-soft: rgba(244, 246, 251, 0.62);  /* 动态岛弱文字 */
+  --island-border: rgba(125, 211, 252, 0.28);    /* 动态岛描边 */
+  --island-shadow: rgba(11, 18, 32, 0.35);       /* 动态岛投影 */
+  --overlay: rgba(10, 12, 16, 0.32);             /* 全屏遮罩（抽屉） */
+  --overlay-soft: rgba(10, 12, 16, 0.28);        /* 全屏遮罩（浮层） */
+  --overlay-heavy: rgba(10, 12, 16, 0.55);       /* 全屏遮罩（模态） */
+  --sel: rgba(37, 99, 235, 0.25);                /* PDF 文本层选区 */
+  --diff-add: #2e8b57;                           /* DiffLens 新增语义 */
+  --diff-add-ink: #236b44;
+  --hl-insert: #d3f5ce;                          /* DiffLens 行内高亮三态 */
+  --hl-replace: #ffe89e;
+  --hl-delete: #ffd2d2;
+
   /* ---------- 2. Semantic：语义色（组件唯一取色层） ---------- */
   --bg: var(--gray-50);            /* 主区底色 */
   --surface: var(--gray-0);        /* 卡片/侧边栏 */
@@ -71,6 +129,7 @@
   --accent-hover: var(--blue-700);
   --accent-soft: var(--blue-50);   /* 选中/强调底 */
   --accent-border: var(--blue-200);
+  --accent-contrast: #ffffff;      /* 压在 accent 上的文字色（深色皮肤换玄墨，v1.4） */
   /* 渐变光感层（视觉识别层，功能色不占用） */
   --grad-brand: linear-gradient(135deg, var(--blue-600) 0%, var(--sky-400) 100%);
   --grad-brand-soft: linear-gradient(135deg, var(--blue-50) 0%, var(--sky-200) 100%);
@@ -145,6 +204,10 @@
   /* 纹理令牌（RISO 印刷语言） */
   --paper-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
   --halftone: radial-gradient(circle at center, currentColor 0.8px, transparent 1.3px);
+  /* zellige khatam 八角星花砖（两方连续，currentColor 不可用故 majorelle 专用） */
+  --zellige: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='52' viewBox='0 0 52 52'%3E%3Cg fill='none' stroke='%234a4ae8' stroke-width='1.1'%3E%3Crect x='13' y='13' width='26' height='26'/%3E%3Crect x='13' y='13' width='26' height='26' transform='rotate(45 26 26)'/%3E%3Ccircle cx='26' cy='26' r='3.5'/%3E%3C/g%3E%3Cg fill='%23e8b33c'%3E%3Ccircle cx='0' cy='0' r='2'/%3E%3Ccircle cx='52' cy='0' r='2'/%3E%3Ccircle cx='0' cy='52' r='2'/%3E%3Ccircle cx='52' cy='52' r='2'/%3E%3C/g%3E%3C/svg%3E");
+  /* ink-wash 月白山影（武侠皮肤：远山层叠 + 墨点，body::after 低透明度叠印） */
+  --ink-wash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='120' viewBox='0 0 280 120'%3E%3Cg fill='%23ede6d6'%3E%3Cpath d='M0 120 L34 74 L58 96 L92 52 L124 92 L150 66 L184 108 L216 78 L248 100 L280 64 L280 120 Z' opacity='0.10'/%3E%3Cpath d='M0 120 L48 96 L84 112 L128 88 L170 112 L212 94 L252 114 L280 98 L280 120 Z' opacity='0.06'/%3E%3Ccircle cx='236' cy='28' r='14' opacity='0.08'/%3E%3Ccircle cx='52' cy='30' r='1.6' opacity='0.14'/%3E%3Ccircle cx='96' cy='20' r='1.2' opacity='0.12'/%3E%3Ccircle cx='150' cy='34' r='1.4' opacity='0.10'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ============================================================
@@ -178,4 +241,106 @@
   --radius-md: 4px;
   --radius-lg: 5px;                              /* 版画直角 */
   --font-display: "Playfair Display", "Noto Serif SC", "Segoe UI", "PingFang SC", serif;
+}
+
+/* ============================================================
+ * MAJORELLE 主题（第三皮肤）：Semantic 层整体覆盖 —— 组件零改动换肤
+ * 母题见 docs/design-tokens.md v1.3 §5；classic（无 data-theme）不受影响
+ * ============================================================ */
+[data-theme="majorelle"] {
+  --bg: var(--maj-sand);
+  --surface: var(--maj-surface);
+  --surface-2: var(--maj-sand-deep);
+  --ink: var(--maj-ink);
+  --ink-2: var(--maj-ink-2);
+  --ink-3: var(--maj-ink-3);
+  --line: var(--maj-line);
+  --line-strong: var(--maj-line-strong);
+  --accent: var(--maj-blue);
+  --accent-hover: var(--maj-blue-deep);
+  --accent-soft: var(--maj-blue-soft);
+  --accent-border: #c5c5f0;
+  --ok: var(--maj-palm-deep);
+  --ok-soft: #e2ede1;
+  --warn: var(--maj-saffron-deep);
+  --warn-soft: #f7ecd0;
+  --danger: var(--maj-terra-deep);
+  --danger-soft: #f6e0d3;
+  --grad-brand: linear-gradient(135deg, var(--maj-blue) 0%, var(--maj-saffron) 100%);
+  --grad-brand-soft: linear-gradient(135deg, var(--maj-blue-soft) 0%, #f7ecd2 100%);
+  --glow: rgba(232, 179, 60, 0.42);
+  --glow-soft: rgba(232, 179, 60, 0.15);
+
+  /* 中性收敛层换装：动态岛 = 蓝深底 + 藏红花描边；遮罩 = 椰枣褐；选区 = 马约尔蓝 */
+  --island-bg: rgba(35, 35, 148, 0.94);
+  --island-ink: #fdf6e8;
+  --island-ink-soft: rgba(253, 246, 232, 0.62);
+  --island-border: rgba(232, 179, 60, 0.45);
+  --island-shadow: rgba(26, 24, 66, 0.4);
+  --overlay: rgba(51, 38, 26, 0.32);
+  --overlay-soft: rgba(51, 38, 26, 0.28);
+  --overlay-heavy: rgba(51, 38, 26, 0.55);
+  --sel: rgba(74, 74, 232, 0.22);
+  --diff-add: var(--maj-palm);
+  --diff-add-ink: #27573a;
+  --hl-insert: #ddeed9;
+  --hl-replace: #f6e7b8;
+  --hl-delete: #f6d9cd;
+
+  /* 印章语义随皮肤换墨（语义不变：证=已验证，基=基石） */
+  --stamp-verified: var(--maj-blue-deep);
+  --stamp-cornerstone: var(--maj-terra-deep);
+  --stamp-bg: var(--maj-surface);
+}
+
+/* ============================================================
+ * WUXIA 主题（第四皮肤 · 首个深色）：Semantic 层整体覆盖 —— 组件零改动换肤
+ * 母题见 docs/design-tokens.md v1.4 §6；深色惯例：hover 向亮走
+ * ============================================================ */
+[data-theme="wuxia"] {
+  --bg: var(--wx-night);
+  --surface: var(--wx-night-2);
+  --surface-2: var(--wx-night-3);
+  --ink: var(--wx-moon);
+  --ink-2: var(--wx-moon-2);
+  --ink-3: var(--wx-moon-3);
+  --line: var(--wx-line);
+  --line-strong: var(--wx-line-strong);
+  --accent: var(--wx-cinnabar);
+  --accent-hover: var(--wx-cinnabar-2);
+  --accent-soft: rgba(224, 100, 72, 0.14);
+  --accent-border: rgba(224, 100, 72, 0.42);
+  --accent-contrast: var(--wx-night);            /* 朱砂亮部上压玄墨字 */
+  --ok: var(--wx-bamboo-2);
+  --ok-soft: rgba(79, 169, 124, 0.16);
+  --warn: var(--wx-gold-2);
+  --warn-soft: rgba(217, 169, 60, 0.14);
+  --danger: var(--wx-rouge-2);
+  --danger-soft: rgba(224, 90, 90, 0.16);
+  --grad-brand: linear-gradient(135deg, var(--wx-gold) 0%, var(--wx-cinnabar) 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(217, 169, 60, 0.16) 0%, rgba(224, 100, 72, 0.16) 100%);
+  --glow: rgba(217, 169, 60, 0.4);
+  --glow-soft: rgba(217, 169, 60, 0.14);
+  --claim-absent: #8a7f6a;
+
+  /* 中性收敛层换装：岛底墨黑不变（吉祥物通用）+ 鎏金描边；遮罩/选区/高亮全暗底化 */
+  --island-bg: rgba(15, 13, 10, 0.94);
+  --island-ink: var(--wx-moon);
+  --island-ink-soft: rgba(237, 230, 214, 0.6);
+  --island-border: rgba(217, 169, 60, 0.45);
+  --island-shadow: rgba(0, 0, 0, 0.5);
+  --overlay: rgba(8, 7, 5, 0.45);
+  --overlay-soft: rgba(8, 7, 5, 0.38);
+  --overlay-heavy: rgba(8, 7, 5, 0.62);
+  --sel: rgba(224, 100, 72, 0.32);
+  --diff-add: var(--wx-bamboo);
+  --diff-add-ink: var(--wx-bamboo-2);
+  --hl-insert: rgba(79, 169, 124, 0.22);
+  --hl-replace: rgba(217, 169, 60, 0.22);
+  --hl-delete: rgba(224, 90, 90, 0.22);
+
+  /* 印章语义随肤换墨（语义不变） */
+  --stamp-verified: var(--wx-cinnabar);
+  --stamp-cornerstone: var(--wx-gold);
+  --stamp-bg: var(--wx-night-2);
 }

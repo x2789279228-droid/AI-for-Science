@@ -1,0 +1,182 @@
+{
+  "question": "How many GPUs were the base models trained on?",
+  "answer": "The base models were trained on one machine with 8 NVIDIA P100 GPUs[E1].",
+  "mode": "generative",
+  "claims": [
+    {
+      "text": "The base models were trained on one machine with 8 NVIDIA P100 GPUs.",
+      "status": "supported",
+      "support": [
+        {
+          "eid": "E1",
+          "page": 7,
+          "section_path": "5.2 Hardware and Schedule",
+          "chunk_id": "c_da465caeaaa8",
+          "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
+          "block_id": "b73",
+          "block_bbox": [
+            0.1732,
+            0.1907,
+            0.8252,
+            0.2614
+          ]
+        }
+      ],
+      "quote_coverages": [
+        1.0
+      ],
+      "quote_status": "verified",
+      "quote_coverage": 1.0
+    }
+  ],
+  "anchors": {
+    "E1": {
+      "page": 7,
+      "section_path": "5.2 Hardware and Schedule",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1732,
+        0.1907,
+        0.8252,
+        0.2614
+      ],
+      "chunk_id": "c_da465caeaaa8",
+      "block_ids": [
+        "b73"
+      ]
+    },
+    "E2": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_84babc03f80d",
+      "block_ids": [
+        "b88",
+        "b89"
+      ]
+    },
+    "E3": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_675dcf2d5565",
+      "block_ids": [
+        "b87",
+        "b88"
+      ]
+    },
+    "E4": {
+      "page": 6,
+      "section_path": "5 Training",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.8699,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_59a4abd460cc",
+      "block_ids": [
+        "b70",
+        "b71"
+      ]
+    },
+    "E5": {
+      "page": 6,
+      "section_path": "5 Training",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.8699,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_adf1bf92510c",
+      "block_ids": [
+        "b70",
+        "b71",
+        "t1"
+      ]
+    },
+    "E6": {
+      "page": 1,
+      "section_path": "_front",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1879,
+        0.2323,
+        0.3529,
+        0.2753
+      ],
+      "chunk_id": "c_5ec8f1270891",
+      "block_ids": [
+        "b11"
+      ]
+    },
+    "E7": {
+      "page": 7,
+      "section_path": "6 Results",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.827,
+        0.8252,
+        0.9116
+      ],
+      "chunk_id": "c_6371c06edfe2",
+      "block_ids": [
+        "b89",
+        "b90"
+      ]
+    },
+    "E8": {
+      "page": 1,
+      "section_path": "1 Introduction",
+      "paper_id": "p_a19a95dbf468",
+      "paper_label": "",
+      "bbox": [
+        0.1748,
+        0.7172,
+        0.8252,
+        0.7866
+      ],
+      "chunk_id": "c_872cf5d5ba5c",
+      "block_ids": [
+        "b15",
+        "b16",
+        "b17"
+      ]
+    }
+  },
+  "guardrails": [
+    "fast_path_plan"
+  ],
+  "elapsed_s": 3.5,
+  "conversation_id": "gold_00c4555f",
+  "thread_id": "gold_00c4555f:1",
+  "model": "doubao-seed-2.1-lite",
+  "usage": {
+    "prompt_tokens": 1942,
+    "completion_tokens": 87,
+    "latency_ms": 1708
+  }
+}

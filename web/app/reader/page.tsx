@@ -11,7 +11,8 @@ import Link from "next/link";
 import { listPapers } from "@/lib/api";
 import type { Paper } from "@/lib/api";
 import { Library, Reader } from "@/components/icons";
-import { RisoIllust } from "@/components/Illustrations";
+import { useShell } from "@/components/ShellContext";
+import ThemeIllust from "@/components/ThemeIllust";
 
 interface ShelfBook {
   paper: Paper;
@@ -29,9 +30,12 @@ export default function ReaderShelfPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [books, setBooks] = useState<ShelfBook[]>([]);
   const [loading, setLoading] = useState(true);
+  const { docMode } = useShell();
+  const isGeneral = docMode === "general";
 
   useEffect(() => {
-    listPapers().then((ps) => {
+    // 双模式：书架只摆当前模式的文档
+    listPapers(false, isGeneral ? "general" : "paper").then((ps) => {
       setPapers(ps);
       // 续读进度在客户端 localStorage(模块三 C 存档),挂载后读取避免水合不一致
       setBooks(ps.map((p) => {
@@ -42,7 +46,7 @@ export default function ReaderShelfPage() {
       }));
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [isGeneral]);
 
   const parsed = books.filter((b) => b.paper.parsed);
   const parsing = books.filter((b) => !b.paper.parsed);
@@ -60,7 +64,7 @@ export default function ReaderShelfPage() {
         {!loading && books.length === 0 && (
           <div className="card card-in" style={{ display: "flex", gap: "var(--space-5)",
             alignItems: "center", flexWrap: "wrap" }}>
-            <RisoIllust name="night-reader" size={190} />
+            <ThemeIllust name="night-reader" size={190} />
             <div>
               <p style={{ fontWeight: 600, marginBottom: 4 }}>书架空空</p>
               <p className="kv">先到「文献库」上传一份 PDF,解析完成后这里会摆上你的第一本书。</p>
@@ -79,10 +83,12 @@ export default function ReaderShelfPage() {
                   style={{ background: COVER_STYLES[i % COVER_STYLES.length],
                     ["--i" as string]: i }}
                   title={`${p.title || p.id} · 共 ${total} 页`}>
-                  <span className="book-badge">{p.version || p.year || "PDF"}</span>
+                  <span className="book-badge">
+                    {isGeneral ? "PDF" : (p.version || p.year || "PDF")}</span>
                   <span className="book-title">{p.title || "(未命名)"}</span>
                   <span className="book-meta num">
-                    {p.arxiv_id ? `arXiv:${p.arxiv_id.split("v")[0]} · ` : ""}{total} 页
+                    {/* 双模式：arXiv id 仅学术文献渲染 */}
+                    {!isGeneral && p.arxiv_id ? `arXiv:${p.arxiv_id.split("v")[0]} · ` : ""}{total} 页
                   </span>
                   {frac > 0 ? (
                     <>

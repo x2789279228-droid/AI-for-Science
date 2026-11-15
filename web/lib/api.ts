@@ -1,5 +1,12 @@
 export const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8100";
 
+import { cachedJSON, invalidate as _invalidate } from "@/lib/data-cache";
+
+/** 写操作后失效数据缓存（上传/删除/改名等成功路径调用；prefix 见 data-cache.ts）。 */
+export function invalidateApiCache(prefix?: string): void {
+  _invalidate(prefix);
+}
+
 /** 去重预警（双向 pending；direction=new 为新上传侧 / existing 为库中既有侧）。 */
 export interface DedupAlert {
   id: string;
@@ -14,6 +21,9 @@ export interface DedupAlert {
   duplicate_of: string;
   title: string;
 }
+
+/** 双模式：paper=学术文献（专业模式）| general=普通文档（普通模式，教材/报告等）。 */
+export type DocType = "paper" | "general";
 
 export interface Paper {
   id: string;
@@ -31,6 +41,7 @@ export interface Paper {
   year?: number;
   doi?: string;
   meta_source?: string;
+  doc_type?: DocType;      // 缺省视为 paper（旧数据兼容）
   parsed: boolean;
   docir_path: string;
   created_at: number;
@@ -205,14 +216,20 @@ export interface Health {
 }
 
 export async function fetchHealth(): Promise<Health> {
-  const r = await fetch(`${API}/api/health`, { cache: "no-store" });
-  return r.json();
+  return cachedJSON<Health>(`${API}/api/health`, 5000);
 }
 
-export async function listPapers(includeArchived = false): Promise<Paper[]> {
-  const q = includeArchived ? "?include_archived=1" : "";
-  const r = await fetch(`${API}/api/papers${q}`, { cache: "no-store" });
-  return (await r.json()).papers;
+export async function listPapers(
+  includeArchived = false, docType?: DocType
+): Promise<Paper[]> {
+  const p = new URLSearchParams();
+  if (includeArchived) p.set("include_archived", "1");
+  if (docType) p.set("doc_type", docType);
+  const q = p.toString() ? `?${p.toString()}` : "";
+  // TTL 4s：AppShell 6s 轮询与首页/图谱页/阅读器共享一份内存数据，
+  // 过期后经服务端 ETag 重验证（no-cache，304 免下载）
+  const d = await cachedJSON<{ papers: Paper[] }>(`${API}/api/papers${q}`, 4000);
+  return d.papers;
 }
 
 /** 族视图（union-find 版本链）：canonical=族内最新 active；versions 按版本号升序。 */
@@ -237,15 +254,33 @@ export interface FamilyGroup {
 }
 
 export async function fetchFamilies(): Promise<FamilyGroup[]> {
-  const r = await fetch(`${API}/api/families`, { cache: "no-store" });
-  if (!r.ok) return [];                       // 旧后端/降级时端点可能不存在
-  const d = await r.json().catch(() => null);
-  return Array.isArray(d?.families) ? d.families : [];
+  try {
+    const d = await cachedJSON<{ families?: FamilyGroup[] }>(`${API}/api/families`, 15000);
+    return Array.isArray(d?.families) ? d.families : [];
+  } catch {
+    return [];                                // 旧后端/降级时端点可能不存在
+  }
 }
 
 export async function getPaper(id: string): Promise<Paper> {
-  const r = await fetch(`${API}/api/papers/${id}`, { cache: "no-store" });
-  return r.json();
+  return cachedJSON<Paper>(`${API}/api/papers/${id}`, 20000);
+}
+
+// ---------------- DocIR 按需读取（阅读器页缓存 + 相邻页预取的数据底座） ----------------
+// TTL 10min：DocIR 仅在 reparse 时变化（reparsePaper 已失效本组缓存）；
+// 服务端另有 mtime 键缓存与 ETag 重验证，翻页不再全量读盘/下载。
+// 载荷类型由调用方（reader 页本地 DocIR 类型）实例化泛型给出。
+
+/** 阅读器大纲载荷（meta/toc/references/figures/pages，几 KB）。 */
+export async function fetchDocirOutline<T>(paperId: string): Promise<T> {
+  return cachedJSON<T>(
+    `${API}/api/papers/${encodeURIComponent(paperId)}/docir?outline=1`, 600000);
+}
+
+/** 按页正文（page 为 0 基页码，与后端一致）。 */
+export async function fetchDocirPage<T>(paperId: string, page0: number): Promise<T> {
+  return cachedJSON<T>(
+    `${API}/api/papers/${encodeURIComponent(paperId)}/docir?page=${page0}`, 600000);
 }
 
 // ---------------- 模块一：CRUD / 批量上传 / 去重决策 / DiffLens ----------------
@@ -257,11 +292,11 @@ export interface UploadResult {
   existing_title?: string;
 }
 
-/** 单文件上传（XHR 带字节进度，onProgress 0~1）。 */
+/** 单文件上传（XHR 带字节进度，onProgress 0~1）。docType 决定文档归属模式。 */
 export function uploadPaperWithProgress(
-  file: File, onProgress: (frac: number) => void
+  file: File, onProgress: (frac: number) => void, docType: DocType = "paper"
 ): Promise<UploadResult> {
-  return new Promise((resolve, reject) => {
+  return new Promise<UploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API}/api/papers`);
     xhr.upload.onprogress = (e) => {
@@ -279,7 +314,12 @@ export function uploadPaperWithProgress(
     xhr.onerror = () => reject(new Error("网络错误"));
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("doc_type", docType);
     xhr.send(fd);
+  }).then((res) => {
+    _invalidate("api/papers");               // 新文献入库 → 列表/族视图缓存失效
+    _invalidate("api/families");
+    return res;
   });
 }
 
@@ -292,24 +332,32 @@ export interface BatchItemResult {
   error?: string;
 }
 
-/** 批量上传（后端逐文件独立处理，单个失败不影响其他）。 */
+/** 批量上传（后端逐文件独立处理，单个失败不影响其他）。docType 决定文档归属模式。 */
 export async function batchUploadPapers(
-  files: File[], onProgress?: (done: number, total: number, item: BatchItemResult) => void
+  files: File[], onProgress?: (done: number, total: number, item: BatchItemResult) => void,
+  docType: DocType = "paper"
 ): Promise<BatchItemResult[]> {
   const fd = new FormData();
   for (const f of files) fd.append("files", f);
+  fd.append("doc_type", docType);
   const r = await fetch(`${API}/api/papers/batch`, { method: "POST", body: fd });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
   const data = await r.json();
   data.results.forEach((item: BatchItemResult, i: number) =>
     onProgress?.(i + 1, data.results.length, item));
+  _invalidate("api/papers");
+  _invalidate("api/families");
   return data.results;
 }
 
 export async function deletePaper(id: string): Promise<{ deleted: string; title: string }> {
   const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  const out = await r.json();
+  _invalidate("api/papers");                // 级联删除 → 全部列表/详情缓存失效
+  _invalidate("api/families");
+  _invalidate("api/graph");
+  return out;
 }
 
 export async function renamePaper(id: string, title: string): Promise<{ id: string }> {
@@ -319,19 +367,27 @@ export async function renamePaper(id: string, title: string): Promise<{ id: stri
     body: JSON.stringify({ title }),
   });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
-  return r.json();
+  const out = await r.json();
+  _invalidate("api/papers");
+  return out;
 }
 
 export async function restorePaper(id: string): Promise<{ id: string; status: string }> {
   const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}/restore`, { method: "POST" });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  const out = await r.json();
+  _invalidate("api/papers");
+  _invalidate("api/families");
+  return out;
 }
 
 export async function reparsePaper(id: string): Promise<{ paper_id: string; job_id: string }> {
   const r = await fetch(`${API}/api/papers/${encodeURIComponent(id)}/reparse`, { method: "POST" });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
-  return r.json();
+  const out = await r.json();
+  _invalidate("docir");                     // DocIR 将被重写 → 页缓存/大纲缓存失效
+  _invalidate("api/papers");
+  return out;
 }
 
 export async function cancelJob(jobId: string): Promise<Job> {
@@ -359,7 +415,10 @@ export async function dedupDecision(
     body: JSON.stringify({ decision, target_id: targetId }),
   });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
-  return r.json();
+  const out = await r.json();
+  _invalidate("api/papers");               // 软归档/族变更 → 列表/族视图失效
+  _invalidate("api/families");
+  return out;
 }
 
 // ---------------- DiffLens：版本差异总结 ----------------
@@ -473,13 +532,15 @@ async function consumeSSE(resp: Response, on: SSEHandlers): Promise<void> {
 }
 
 /** POST SSE 流式问答。conversationId 可选：断点续跑按会话归属，缺省由后端生成。
- * agent 为 UI 强制指定的 Agent（auto/reader/…），最高路由优先级，缺省 auto。 */
+ * agent 为 UI 强制指定的 Agent（auto/reader/…），最高路由优先级，缺省 auto。
+ * docMode：paper（学术文献）| general（普通文档）——决定后端工具/意图白名单。 */
 export async function streamChat(
   question: string,
   paperIds: string[],
   on: SSEHandlers,
   conversationId?: string,
-  agent: string = "auto"
+  agent: string = "auto",
+  docMode: "paper" | "general" = "paper"
 ): Promise<void> {
   const resp = await fetch(`${API}/api/chat`, {
     method: "POST",
@@ -489,6 +550,7 @@ export async function streamChat(
       paper_ids: paperIds,
       conversation_id: conversationId ?? "",
       agent,
+      doc_mode: docMode,
     }),
   });
   if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
@@ -682,15 +744,17 @@ export async function streamTranslate(
   }
 }
 
-/** 拉取已缓存译文（可中断续译：重进页面秒出已完成块）。 */
+/** 拉取已缓存译文（可中断续译：重进页面秒出已完成块）。TTL 60s：译文落库后稳定。 */
 export async function fetchTranslation(
   paperId: string, lang = "zh"
 ): Promise<Record<string, TranslationEntry>> {
-  const r = await fetch(
-    `${API}/api/papers/${encodeURIComponent(paperId)}/translation?lang=${lang}`,
-    { cache: "no-store" });
-  if (!r.ok) return {};
-  return (await r.json()).blocks ?? {};
+  try {
+    const d = await cachedJSON<{ blocks?: Record<string, TranslationEntry> }>(
+      `${API}/api/papers/${encodeURIComponent(paperId)}/translation?lang=${lang}`, 60000);
+    return d.blocks ?? {};
+  } catch {
+    return {};
+  }
 }
 
 /** 划词翻译：上下文感知短译 + 术语命中。 */
@@ -969,9 +1033,8 @@ export interface FullGraph {
 
 export async function fetchGraph(paperIds?: string[]): Promise<FullGraph> {
   const q = paperIds?.length ? `?paper_ids=${paperIds.join(",")}` : "";
-  const r = await fetch(`${API}/api/graph${q}`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  // TTL 120s：图谱是重计算载荷（服务端另有 300s TTL），批次切换在客户端收敛
+  return cachedJSON<FullGraph>(`${API}/api/graph${q}`, 120000);
 }
 
 // ---- 模块五：整批领域综述 / 外部进展核查 ----

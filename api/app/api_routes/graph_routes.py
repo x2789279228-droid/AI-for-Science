@@ -5,10 +5,11 @@ import json
 import queue as queue_mod
 import threading
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from .. import cache
 from ..agents.insights import (
     _idea_sig,
     classify_citations,
@@ -20,8 +21,11 @@ from ..agents.insights import (
     survey,
 )
 from ..agents.tools import _citation_graph
+from ..api_routes.routes import _etag_json
 
 router = APIRouter(prefix="/api")
+
+_graph_cache = cache.TTLCache(maxsize=8, ttl=300.0)   # 图谱重计算（建图+Louvain+LLM分类）5min TTL
 
 
 @router.get("/papers/{paper_id}/ref-quality")
@@ -31,6 +35,9 @@ def get_ref_quality(paper_id: str):
 
     if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
         raise HTTPException(404, "论文不存在")
+    row = db.query("SELECT doc_type FROM papers WHERE id=?", (paper_id,))[0]
+    if (row["doc_type"] or "paper") == "general":
+        raise HTTPException(400, "普通文档不支持引用含金量分析——该能力仅对学术文献开放")
     return reference_quality(paper_id)
 
 
@@ -47,14 +54,25 @@ def _db_all_papers():
 
 
 @router.get("/graph")
-def get_graph(paper_ids: str | None = None, weighted: bool = True):
-    """构图 + 指标 + 社区 + 角色 +（可选）引用含金量加权边。"""
+def get_graph(request: Request, paper_ids: str | None = None, weighted: bool = True):
+    """构图 + 指标 + 社区 + 角色 +（可选）引用含金量加权边。
+
+    缓存：300s TTL，键 = sorted(paper_ids)+weighted+data_revision——
+    建图/Louvain/LLM 引用分类都是重计算，二次进入应命中（响应带 cached/cache_age）。
+    顺带修双建图：此前 enrich 与 classify_citations 各建一次引用图，现复用同一份。"""
     ids = _parse_paper_ids(paper_ids)
     if not ids:
         raise HTTPException(400, "文献库为空")
-    g = enrich(_citation_graph(ids))
+    key = cache.rev_key("graph", tuple(sorted(ids)), weighted)
+    g, age, hit = _graph_cache.get_or_build(key, lambda: _build_graph(ids, weighted))
+    return _etag_json({**g, "cached": hit, "cache_age": round(age, 2)}, request)
+
+
+def _build_graph(ids: list[str], weighted: bool) -> dict:
+    graph = _citation_graph(ids)
+    g = enrich(graph)
     if weighted:
-        w = classify_citations(ids)
+        w = classify_citations(ids, graph=graph)   # 复用已建图（此前内部重复建一遍）
         weight_map = {f"{e['source']}|{e['target']}": e for e in w["edges"]}
         g["edges"] = [weight_map.get(f"{e['source']}|{e['target']}",
                                      {"source": e["source"], "target": e["target"],

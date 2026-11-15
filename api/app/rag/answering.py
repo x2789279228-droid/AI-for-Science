@@ -33,7 +33,8 @@ SYSTEM_QA = (
 SYSTEM_CLAIMS = (
     "你是论断拆解器。将答案拆成原子论断数组，每个论断标注其支撑证据与原文引句。\n"
     "输出 JSON：{\"claims\":[{\"text\":\"论断原文\",\"evidence_ids\":[支撑证据编号数组],"
-    "\"quote\":\"论断依据的原文片段，逐字摘自对应证据文本，不超过200字\"}]}。"
+    "\"quote\":\"论断依据的原文片段，**必须从对应证据文本中逐字复制**（可截取连续片段，"
+    "禁止改写时态、合并多句、省略或替换任何词——宁可只引短的一个分句，也不要转述）\"}]}。"
     "仅依据答案与证据标签判断；证据编号必须来自 <context> 标签，"
     "论断在证据中无出处时 evidence_ids 给空数组。"
 )
@@ -53,6 +54,33 @@ COMPARE_REFUSAL = (
     "> 我不会用单篇内容冒充对比结论。"
 )
 
+# ---- 普通模式（doc_mode=general）专用文案：与学术版并存、互不覆盖 ----
+# 规则约束与学术版逐条同构，仅角色框架/措辞去论文语境（两套提示词并存，专业零回归）
+SYSTEM_QA_GENERAL = (
+    "你是一名严谨的文档问答助手，服务对象是库内的任意 PDF 文档（教材/讲义/报告/手册/合同等）。回答规则：\n"
+    "1. 只允许使用 <context> 中提供的证据片段作答，禁止使用任何外部知识。\n"
+    "2. 每个事实性论断后必须紧跟引用标记，格式：[E编号]，编号取自证据片段的方括号标签"
+    "（如 [E1]、[E3]），禁止引用 <context> 中不存在的编号。\n"
+    "3. 若 <context> 不足以回答，必须整体回答：「【未找到依据】检索到的片段无法回答该问题。」"
+    "并给出建议（换关键词/指定文档）。\n"
+    "4. 不确定的内容宁可不写；禁止编造数字、结论与引用；数值必须逐字来自证据原文。"
+)
+
+REFUSAL_CHITCHAT_GENERAL = (
+    "我是 Meridian 文档问答助手，只回答与库内文档相关的问题。"
+    "请先在文档库上传 PDF，然后就该文档内容向我提问。"
+)
+
+NO_EVIDENCE_GENERAL = "【未找到依据】检索到的片段无法回答该问题。建议：换关键词重问，或确认已选中相关文档。"
+
+COMPARE_REFUSAL_GENERAL = (
+    "【Compare Agent · 范围校验】多文档对比需要选中 **2 份及以上** 文档，当前只有 {n} 份。\n\n"
+    "建议：\n"
+    "- 在文档库中再勾选一份文档后重新提问；\n"
+    "- 或改用 **Reader Agent（单篇精读）** 就当前文档提问。\n"
+    "> 我不会用单份内容冒充对比结论。"
+)
+
 SYSTEM_QA_COMPARE = (
     "你是一名严谨的跨论文对比分析助手。回答规则：\n"
     "1. 只允许使用 <context> 中的证据片段与 <compare_table> 对齐表作答，禁止使用任何外部知识。\n"
@@ -62,6 +90,19 @@ SYSTEM_QA_COMPARE = (
     "禁止引用 <context> 中不存在的编号。\n"
     "4. 两个论文在同一维度结论冲突时，必须双侧并列呈现，禁止擅自合并或替用户裁决。\n"
     "5. 对齐表中某篇某维度标记「未找到」时，如实写明该篇未检索到相关内容，禁止脑补。\n"
+    "6. 不确定的内容宁可不写；禁止编造数字、结论与引用；数值必须逐字来自证据原文。"
+)
+
+# 普通模式 Compare：同为文档对比（教材/报告等），规则同构、措辞去论文语境
+SYSTEM_QA_COMPARE_GENERAL = (
+    "你是一名严谨的多文档对比分析助手（面向教材/报告/手册等任意 PDF 文档）。回答规则：\n"
+    "1. 只允许使用 <context> 中的证据片段与 <compare_table> 对齐表作答，禁止使用任何外部知识。\n"
+    "2. 按维度组织回答：每个维度一行/一段，行内明确标注结论来自哪份文档"
+    "（用证据标签中的文档代号 P1/P2 或标题）。\n"
+    "3. 每个事实性论断后必须紧跟引用标记 [E编号]，编号取自证据片段标签，"
+    "禁止引用 <context> 中不存在的编号。\n"
+    "4. 两份文档在同一维度结论冲突时，必须双侧并列呈现，禁止擅自合并或替用户裁决。\n"
+    "5. 对齐表中某份文档某维度标记「未找到」时，如实写明该份未检索到相关内容，禁止脑补。\n"
     "6. 不确定的内容宁可不写；禁止编造数字、结论与引用；数值必须逐字来自证据原文。"
 )
 
@@ -101,6 +142,9 @@ REFUSAL_CHITCHAT, _ = _resolve("qa", "refusal_chitchat", REFUSAL_CHITCHAT)
 NO_EVIDENCE, _ = _resolve("qa", "no_evidence", NO_EVIDENCE)
 COMPARE_REFUSAL, _ = _resolve("compare", "compare_refusal", COMPARE_REFUSAL)
 WRITER_REFUSAL, _ = _resolve("writer", "writer_refusal", WRITER_REFUSAL)
+REFUSAL_CHITCHAT_GENERAL, _ = _resolve("qa", "refusal_chitchat_general", REFUSAL_CHITCHAT_GENERAL)
+NO_EVIDENCE_GENERAL, _ = _resolve("qa", "no_evidence_general", NO_EVIDENCE_GENERAL)
+COMPARE_REFUSAL_GENERAL, _ = _resolve("compare", "compare_refusal_general", COMPARE_REFUSAL_GENERAL)
 
 
 def build_writer_messages(question: str, outline: dict, hits: list[dict],
@@ -128,11 +172,14 @@ def build_graph_messages(metrics: dict, question: str, hits: list[dict],
 
 
 def build_compare_messages(question: str, table: dict | None, hits: list[dict],
-                           language: str = "") -> list[dict]:
-    """Compare Agent 专属消息：上下文 + 维度对齐表。"""
+                           language: str = "", doc_mode: str = "paper") -> list[dict]:
+    """Compare Agent 专属消息：上下文 + 维度对齐表。doc_mode=general 时选用普通模式槽位。"""
     context, _ = format_context(hits)
     table_txt = json.dumps(table, ensure_ascii=False) if table else "（无对齐表）"
-    system, _ = _resolve("compare", "system_compare", SYSTEM_QA_COMPARE)
+    if doc_mode == "general":
+        system, _ = _resolve("compare", "system_compare_general", SYSTEM_QA_COMPARE_GENERAL)
+    else:
+        system, _ = _resolve("compare", "system_compare", SYSTEM_QA_COMPARE)
     return [{"role": "system", "content": _with_language(system, language)},
             {"role": "user", "content":
                 f"<context>\n{context}\n</context>\n\n<compare_table>\n{table_txt}\n</compare_table>"
@@ -310,9 +357,15 @@ def llm_claims(answer: str, hits: list[dict]) -> tuple[list[dict], dict[int, dic
     return out, eid_map
 
 
-def build_qa_messages(question: str, hits: list[dict], language: str = "") -> list[dict]:
+def build_qa_messages(question: str, hits: list[dict], language: str = "",
+                      doc_mode: str = "paper") -> list[dict]:
+    """QA 消息组装。doc_mode=general 时选用普通模式槽位（system_qa_general）——
+    两套提示词并存：学术槽位文本与版本不受普通模式影响。"""
     context, _ = format_context(hits)
-    system, _ = _resolve("qa", "system_qa", SYSTEM_QA)
+    if doc_mode == "general":
+        system, _ = _resolve("qa", "system_qa_general", SYSTEM_QA_GENERAL)
+    else:
+        system, _ = _resolve("qa", "system_qa", SYSTEM_QA)
     return [{"role": "system", "content": _with_language(system, language)},
             {"role": "user", "content": f"<context>\n{context}\n</context>\n\n问题：{question}"}]
 

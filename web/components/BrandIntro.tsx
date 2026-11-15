@@ -28,8 +28,8 @@ const PLAY_MS = T_ACT1 + (WORD.length - 1) * STAGGER + T_RIPPLE + T_SETTLE;
 export default function BrandIntro() {
   const { setIntroDone } = useShell();
   const [phase, setPhase] = useState<"hidden" | "play" | "leave">("hidden");
-  const [risoMode, setRisoMode] = useState(false);       // RISO 皮肤播放分支
-  const [stampIn, setStampIn] = useState(false);         // riso 落版盖章
+  const [altTheme, setAltTheme] = useState<"riso" | "majorelle" | "wuxia" | null>(null); // 皮肤播放分支
+  const [stampIn, setStampIn] = useState(false);         // 落版盖章/星徽旋入
   const wordRef = useRef<HTMLDivElement | null>(null);
   const subRef = useRef<HTMLParagraphElement | null>(null);
   const lineRef = useRef<HTMLElement | null>(null);
@@ -67,8 +67,10 @@ export default function BrandIntro() {
     try { sessionStorage.setItem("meridian:intro", "1"); } catch { /* 隐私模式忽略 */ }
     try {
       const qTheme = new URLSearchParams(window.location.search).get("theme");
-      setRisoMode(qTheme === "riso"
-        || (qTheme !== "classic" && localStorage.getItem("meridian:theme") === "riso"));
+      const saved = localStorage.getItem("meridian:theme");
+      // ?theme= 优先(不落盘);classic/未知 → 无换装分支
+      const eff = qTheme && qTheme !== "classic" ? qTheme : saved;
+      setAltTheme(eff === "riso" || eff === "majorelle" || eff === "wuxia" ? eff : null);
     } catch { /* 隐私模式忽略 */ }
     setPhase("play");
   }, [setIntroDone]);
@@ -113,7 +115,7 @@ export default function BrandIntro() {
     }
     timers.current.push(window.setTimeout(() => subRef.current?.classList.add("in"),
       settleStart - 180));
-    if (risoMode) {
+    if (altTheme) {
       timers.current.push(window.setTimeout(() => setStampIn(true), settleStart + 60));
     }
 
@@ -134,8 +136,8 @@ export default function BrandIntro() {
       timers.current.forEach((t) => window.clearTimeout(t));
       timers.current = [];
     };
-    // risoMode 与 phase 同批置位(setState 批处理),只会触发一次编排;入 deps 消除 exhaustive-deps
-  }, [phase, risoMode, finish]);
+    // altTheme 与 phase 同批置位(setState 批处理),只会触发一次编排;入 deps 消除 exhaustive-deps
+  }, [phase, altTheme, finish]);
 
   // 播放中按 Esc 跳过(点击由 overlay onClick 承担)
   useEffect(() => {
@@ -154,9 +156,25 @@ export default function BrandIntro() {
       </div>
       <p className="intro-sub" ref={subRef}>循证 · 可审计的科研证据系统</p>
       <div className="intro-line"><i ref={lineRef} /></div>
-      {risoMode && (
+      {altTheme === "riso" && (
         <span className={`intro-stamp${stampIn ? " in" : ""}`}
           style={{ fontFamily: "var(--font-serif-cn)", fontWeight: 900 }}>证</span>
+      )}
+      {altTheme === "majorelle" && (
+        <span className={`intro-star${stampIn ? " in" : ""}`} aria-hidden>
+          <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
+            <rect x="22" y="22" width="44" height="44"
+              stroke="var(--maj-blue,#4a4ae8)" strokeWidth="3.5" />
+            <rect x="22" y="22" width="44" height="44" transform="rotate(45 44 44)"
+              stroke="var(--maj-blue,#4a4ae8)" strokeWidth="3.5" />
+            <circle cx="44" cy="44" r="7" fill="var(--maj-saffron,#e8b33c)" />
+          </svg>
+        </span>
+      )}
+      {altTheme === "wuxia" && (
+        <span className={`intro-seal${stampIn ? " in" : ""}`} aria-hidden>
+          <span className="seal-char">证</span>
+        </span>
       )}
       <span className="intro-skip" data-testid="intro-skip">跳过 ›</span>
     </div>

@@ -1,19 +1,73 @@
 """REST + SSE 路由（方案 §8 MVP 子集）。"""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from .. import db, jobs, threads_store, trace_store
+from .. import cache, db, jobs, threads_store, trace_store
 from ..config import UPLOAD_DIR, settings
 from ..llm import client as llm
 from ..llm import prompts as prompts_mod
 
 router = APIRouter(prefix="/api")
+
+# ---- 热点只读载荷缓存（写路径 bump revision 整体失效，见 app/cache.py） ----
+_papers_cache = cache.TTLCache(maxsize=32, ttl=5.0)
+_paper_detail_cache = cache.TTLCache(maxsize=64, ttl=10.0)
+_families_cache = cache.TTLCache(maxsize=8, ttl=15.0)
+_docir_file_cache = cache.TTLCache(maxsize=16, ttl=120.0)
+
+
+def _etag_json(data: Any, request: Request) -> Response:
+    """热点 GET 统一出口：ETag + Cache-Control: no-cache + If-None-Match → 304。
+
+    选 no-cache 而非 max-age：写操作（上传/删除）后浏览器若用 max-age 缓存会
+    脏读 30s 陈旧列表；no-cache 强制每次重验证，304 命中时零下载——
+    永不脏读，且配合前端内存缓存层把重复请求收敛为一次 HEAD 级往返。
+    ETag 排除 cached/cache_age 等命中元信息（否则 hit/miss 翻转会让 ETag 抖动，
+    重验证永远 miss）；body 只序列化一次（Response 直发，不经 JSONResponse 二次编码）。
+    """
+    volatile: dict[str, Any] = {}
+    if isinstance(data, dict):
+        for k in ("cached", "cache_age"):
+            if k in data:
+                volatile[k] = data.pop(k)   # data 为端点新建的包装 dict，弹出安全
+    body = json.dumps(data, ensure_ascii=False, default=str)
+    etag = f'"{hashlib.md5(body.encode("utf-8")).hexdigest()}"'
+    headers = {"ETag": etag, "Cache-Control": "no-cache",
+               "X-Data-Revision": str(cache.get_revision())}   # 数据版本可见（审计/演示）
+    inm = request.headers.get("if-none-match")
+    if inm and etag in inm:   # 容忍多值/弱ETag形式
+        return Response(status_code=304, headers=headers)
+    if volatile:   # 命中元信息只进响应体，不进 ETag（第二次序列化仅热点小载荷）
+        body = json.dumps({**data, **volatile}, ensure_ascii=False, default=str)
+    return Response(content=body, media_type="application/json", headers=headers)
+
+
+# ---------- 双模式（paper=学术文献 | general=普通文档） ----------
+
+DOC_TYPES = ("paper", "general")
+
+
+def _doc_type_of(row) -> str:
+    """行内 doc_type 安全读取（旧库迁移前列缺失或空值时归为 paper）。"""
+    try:
+        return row["doc_type"] if row["doc_type"] else "paper"
+    except (IndexError, KeyError):
+        return "paper"
+
+
+def _require_paper_doc(paper_id: str, action: str) -> None:
+    """学术专属端点守卫：普通文档不参与版本治理/去重决策/软归档链。"""
+    rows = db.query("SELECT doc_type FROM papers WHERE id=?", (paper_id,))
+    if rows and _doc_type_of(rows[0]) == "general":
+        raise HTTPException(400, f"普通文档不支持「{action}」——该能力仅对学术文献开放")
 
 
 # ---------- 请求体模型 ----------
@@ -34,10 +88,16 @@ class VersionDiffBody(BaseModel):
 # ---------- papers ----------
 
 @router.get("/families")
-def list_families():
+def list_families(request: Request):
     """族视图（L8/L9）：family 分组 + 版本链排序。canonical=族内最新 active；
     versions 按 _ver_int 升序；pending_alerts 为该族关联的双向待决策预警数。
-    archived 成员包含在内（版本链完整性），前端自行折叠。"""
+    archived 成员包含在内（版本链完整性），前端自行折叠。
+    缓存：15s TTL，键含 data_revision（写路径 bump 即失效）。"""
+    data, age, hit = _families_cache.get_or_build(cache.rev_key("families"), _build_families)
+    return _etag_json({**data, "cached": hit, "cache_age": round(age, 2)}, request)
+
+
+def _build_families() -> dict:
     rows = db.query("SELECT id,title,version,arxiv_id,family_id,status,page_count,"
                     "created_at FROM papers WHERE family_id!=''")
     if not rows:
@@ -75,22 +135,30 @@ def list_families():
 
 
 @router.post("/papers")
-async def upload_paper(file: UploadFile = File(...)):  # noqa: B008 —— FastAPI 惯用法
+async def upload_paper(file: UploadFile = File(...),                       # noqa: B008 —— FastAPI 惯用法
+                       doc_type: str = Form("paper")):
+    """上传 PDF。doc_type=paper（学术文献，默认）| general（普通文档）——由前端
+    按当前模式（专业/普通）决定，同一文件允许以两种类型各存一份。"""
+    if doc_type not in DOC_TYPES:
+        raise HTTPException(400, f"doc_type 仅支持 {'|'.join(DOC_TYPES)}")
     if not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(400, "仅支持 PDF")
     content = await file.read()
     if len(content) > 200 * 1024 * 1024:
         raise HTTPException(413, "文件超过 200MB")
     try:
-        result = jobs.upload_pdf(file.filename, content)
+        result = jobs.upload_pdf(file.filename, content, doc_type=doc_type)
     except ValueError as e:   # Round4 安全体检：魔数/大小护栏 → 400（而非 500）
         raise HTTPException(400, str(e)) from e
     return result
 
 
 @router.post("/papers/batch")
-async def upload_papers_batch(files: list[UploadFile] = File(...)):  # noqa: B008
+async def upload_papers_batch(files: list[UploadFile] = File(...),         # noqa: B008
+                              doc_type: str = Form("paper")):
     """批量上传（P0）：逐文件独立处理，单个失败不影响其他；每文件返回独立结果。"""
+    if doc_type not in DOC_TYPES:
+        raise HTTPException(400, f"doc_type 仅支持 {'|'.join(DOC_TYPES)}")
     if not files:
         raise HTTPException(400, "未提供文件")
     if len(files) > settings.batch_upload_max:
@@ -105,7 +173,7 @@ async def upload_papers_batch(files: list[UploadFile] = File(...)):  # noqa: B00
             content = await f.read()
             if len(content) > 200 * 1024 * 1024:
                 raise HTTPException(413, "文件超过 200MB")
-            item.update(jobs.upload_pdf(name, content))
+            item.update(jobs.upload_pdf(name, content, doc_type=doc_type))
         except HTTPException as e:
             item["error"] = e.detail
         except Exception as e:  # noqa: BLE001 —— 单文件失败隔离（批量要求）
@@ -150,12 +218,30 @@ def _pending_alert_map(paper_ids: list[str]) -> dict[str, list[dict]]:
 
 
 @router.get("/papers")
-def list_papers(include_archived: bool = False):
-    """文献列表：默认只回 active（软归档过滤）；include_archived=1 时全量并带 status。"""
-    where = "" if include_archived else "WHERE status='active'"
+def list_papers(request: Request, include_archived: bool = False, doc_type: str | None = None):
+    """文献列表：默认只回 active（软归档过滤）；include_archived=1 时全量并带 status。
+    doc_type=paper|general 按模式过滤（缺省不过滤，返回全部并带 doc_type 字段）。
+    缓存：5s TTL，键含 data_revision（AppShell 6s 轮询/多页面共享由此收敛）。"""
+    if doc_type is not None and doc_type not in DOC_TYPES:
+        raise HTTPException(400, f"doc_type 仅支持 {'|'.join(DOC_TYPES)}")
+    data, age, hit = _papers_cache.get_or_build(
+        cache.rev_key("papers", include_archived, doc_type),
+        lambda: _build_papers(include_archived, doc_type))
+    return _etag_json({**data, "cached": hit, "cache_age": round(age, 2)}, request)
+
+
+def _build_papers(include_archived: bool, doc_type: str | None) -> dict:
+    conds = []
+    if not include_archived:
+        conds.append("status='active'")
+    if doc_type is not None:
+        conds.append("COALESCE(doc_type,'paper')=?")
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
+    params = (doc_type,) if doc_type is not None else ()
     rows = db.query("SELECT id,title,arxiv_id,page_count,version,supersedes,superseded_by,"
-                    "family_id,status,created_at,docir_path,abstract,authors_json,meta_source"
-                    f" FROM papers {where} ORDER BY created_at DESC")
+                    "family_id,status,created_at,docir_path,abstract,authors_json,meta_source,"
+                    "COALESCE(doc_type,'paper') AS doc_type"
+                    f" FROM papers {where} ORDER BY created_at DESC", params)
     alerts = _pending_alert_map([r["id"] for r in rows])
     out = []
     for r in rows:
@@ -174,10 +260,18 @@ def list_papers(include_archived: bool = False):
 
 
 @router.get("/papers/{paper_id}")
-def get_paper(paper_id: str):
+def get_paper(paper_id: str, request: Request):
+    data, age, hit = _paper_detail_cache.get_or_build(
+        cache.rev_key("paper", paper_id), lambda: _build_paper_detail(paper_id))
+    if data is None:
+        raise HTTPException(404, "not found")
+    return _etag_json({**data, "cached": hit, "cache_age": round(age, 2)}, request)
+
+
+def _build_paper_detail(paper_id: str) -> dict | None:
     rows = db.query("SELECT * FROM papers WHERE id=?", (paper_id,))
     if not rows:
-        raise HTTPException(404, "not found")
+        return None
     p = dict(rows[0])
     p.pop("meta_json", None)
     p.pop("content_sig", None)   # BLOB 不入 JSON（bytes 无法被 jsonable_encoder 编码）
@@ -205,10 +299,17 @@ def rename_paper(paper_id: str, body: PaperRename):
     if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
         raise HTTPException(404, "not found")
     from ..rag import fingerprint
-    base_arxiv = db.query("SELECT arxiv_id FROM papers WHERE id=?", (paper_id,))[0]["arxiv_id"]
-    fam = fingerprint.family_id((base_arxiv or "").split("v")[0], title)
-    with db.tx() as c:
-        c.execute("UPDATE papers SET title=?, family_id=? WHERE id=?", (title, fam, paper_id))
+    row = db.query("SELECT arxiv_id,doc_type FROM papers WHERE id=?", (paper_id,))[0]
+    fam = ""
+    if _doc_type_of(row) == "paper":
+        # 普通文档无版本族概念：只改名，不参与 family 归一
+        fam = fingerprint.family_id((row["arxiv_id"] or "").split("v")[0], title)
+        with db.tx() as c:
+            c.execute("UPDATE papers SET title=?, family_id=? WHERE id=?", (title, fam, paper_id))
+    else:
+        with db.tx() as c:
+            c.execute("UPDATE papers SET title=? WHERE id=?", (title, paper_id))
+    cache.bump_revision()   # 列表/详情缓存失效
     data = _resolve_paper_data(paper_id)
     if data is not None:
         data.setdefault("meta", {})["title"] = title
@@ -232,8 +333,10 @@ def restore_paper(paper_id: str):
     """归档恢复：archived → active（保留 supersedes/superseded_by 供版本链展示）。"""
     if not db.query("SELECT id FROM papers WHERE id=?", (paper_id,)):
         raise HTTPException(404, "not found")
+    _require_paper_doc(paper_id, "归档恢复（版本链）")
     with db.tx() as c:
         c.execute("UPDATE papers SET status='active', superseded_by='' WHERE id=?", (paper_id,))
+    cache.bump_revision()
     return {"id": paper_id, "status": "active"}
 
 
@@ -257,6 +360,8 @@ def dedup_decision(paper_id: str, body: DedupDecisionBody):
     cover=旧 archived+superseded_by→新；keep=新 archived（「仅归档 v1」）；
     coexist=双方 active+family 关联。幂等；决策后双向 pending alert 落终态。
     """
+    _require_paper_doc(paper_id, "去重三态决策")
+    _require_paper_doc(body.target_id, "去重三态决策")
     try:
         result = jobs.apply_dedup_decision(paper_id, body.target_id, body.decision)
     except ValueError as e:
@@ -276,6 +381,8 @@ def start_version_diff(paper_id: str, body: VersionDiffBody):
         raise HTTPException(404, "target not found")
     if not db.query("SELECT id,docir_path FROM papers WHERE id=?", (body.base_id,)):
         raise HTTPException(404, "base not found")
+    _require_paper_doc(paper_id, "版本差异（DiffLens）")
+    _require_paper_doc(body.base_id, "版本差异（DiffLens）")
     cached = db.get_version_diff(body.base_id, paper_id)
     if cached:
         return {"cached": True, "diff_id": cached["id"], "job_id": None,
@@ -315,6 +422,9 @@ def _resolve_paper_data(paper_id: str) -> dict | None:
 
     回退点是 write_docir 的确定落点 DOCIR_DIR/{paper_id}.json（与 /pdf 的 uploads 回退
     同一防御思想）。两处皆不存在返回 None（调用方 404）。
+    缓存：按 (路径, mtime_ns, size) 键缓存解析后的 dict——os.stat 极便宜，
+    命中免去整份 JSON 的 read_text+json.loads（541 页书每次翻页省几十 MB 读盘）；
+    reparse 覆盖写盘后 mtime 变化自动失效，无需手动失效。返回值视为只读。
     """
     from ..config import DOCIR_DIR
 
@@ -327,7 +437,14 @@ def _resolve_paper_data(paper_id: str) -> dict | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        st = path.stat()
+        key = (str(path), st.st_mtime_ns, st.st_size)
+        hit = _docir_file_cache.get(key)
+        if hit is not None:
+            return hit[0]
+        data = json.loads(path.read_text(encoding="utf-8"))
+        _docir_file_cache.set(key, data)
+        return data
     except (OSError, ValueError):   # 文件损坏视同未解析
         return None
 
@@ -350,24 +467,30 @@ def get_paper_figure(paper_id: str, figure_id: str):
 
 
 @router.get("/papers/{paper_id}/docir")
-def get_docir(paper_id: str, page: int | None = None, outline: bool = False):
+def get_docir(paper_id: str, request: Request, page: int | None = None, outline: bool = False):
+    """DocIR 按需读取（outline 大纲级 / page 按页）。底层文件缓存见 _resolve_paper_data；
+    注意不得 mutate 缓存返回的 dict（页过滤走浅拷贝）。"""
     data = _resolve_paper_data(paper_id)
     if data is None:
         raise HTTPException(404, "未解析或不存在（数据目录回退未命中）")
     if outline:
         # 按需加载（4.3）：超长文档首屏只回大纲级载荷（几 KB），正文按页拉取
-        return {"meta": data.get("meta", {}),
-                "toc": data.get("toc", []),
-                "references": data.get("references", []),
-                "figures": data.get("figures", []),
-                "pages": sorted({b.get("page", 0) for b in data.get("blocks", [])}),
-                "block_count": len(data.get("blocks", [])),
-                "tables_count": len(data.get("tables", []))}
-    if page is not None:
-        data["blocks"] = [b for b in data["blocks"] if b["page"] == page]
-        data["tables"] = [t for t in data["tables"] if t["page"] == page]
-        data["figures"] = [f for f in data["figures"] if f["page"] == page]
-    return data
+        payload = {"meta": data.get("meta", {}),
+                   "toc": data.get("toc", []),
+                   "references": data.get("references", []),
+                   "figures": data.get("figures", []),
+                   "pages": sorted({b.get("page", 0) for b in data.get("blocks", [])}),
+                   "block_count": len(data.get("blocks", [])),
+                   "tables_count": len(data.get("tables", []))}
+    elif page is not None:
+        # 浅拷贝 + 过滤字段：不触碰缓存对象（此前原地赋值会污染后续 outline 请求）
+        payload = {**data,
+                   "blocks": [b for b in data.get("blocks", []) if b["page"] == page],
+                   "tables": [t for t in data.get("tables", []) if t["page"] == page],
+                   "figures": [f for f in data.get("figures", []) if f["page"] == page]}
+    else:
+        payload = data
+    return _etag_json(payload, request)
 
 
 @router.get("/papers/{paper_id}/search")
@@ -436,6 +559,7 @@ class ChatBody(BaseModel):
     paper_ids: list[str] = []
     conversation_id: str = ""   # 会话标识：断点续跑按会话归属；空则后端生成并经事件返回
     agent: str = "auto"         # Agent 指定：auto/reader/compare/graph/writer/viz（最高优先级）
+    doc_mode: str = "paper"     # 双模式：paper（学术文献）| general（普通文档）——决定工具/意图白名单
 
 
 @router.post("/chat")
@@ -445,12 +569,28 @@ def chat(body: ChatBody):
     import uuid as uuid_mod
 
     from ..agents import runner
-    from ..agents.state import FORCED_AGENT_VALUES
+    from ..agents.state import FORCED_AGENT_VALUES, GENERAL_FORCED_AGENTS
 
-    if body.agent not in FORCED_AGENT_VALUES:
-        raise HTTPException(400, f"agent 取值须为 {sorted(FORCED_AGENT_VALUES)}")
+    if body.doc_mode not in DOC_TYPES:
+        raise HTTPException(400, f"doc_mode 仅支持 {'|'.join(DOC_TYPES)}")
+    # 双模式 Agent 白名单：普通模式无 Graph（引用图谱）/Writer（学术写作）
+    allowed_agents = FORCED_AGENT_VALUES if body.doc_mode == "paper" else GENERAL_FORCED_AGENTS
+    if body.agent not in allowed_agents:
+        raise HTTPException(400, f"doc_mode={body.doc_mode} 下 agent 取值须为 {sorted(allowed_agents)}")
 
-    paper_ids = body.paper_ids or [r["id"] for r in db.query("SELECT id FROM papers WHERE status='active'")]
+    if body.paper_ids:
+        # 混选兜底：普通模式与专业模式的文档不得混在一轮问答里（前端按模式过滤，此为防线）
+        qm = ",".join("?" * len(body.paper_ids))
+        mismatch = db.query(f"SELECT id FROM papers WHERE id IN ({qm}) "
+                            "AND COALESCE(doc_type,'paper')!=?", (*body.paper_ids, body.doc_mode))
+        if mismatch:
+            raise HTTPException(400, "选文同时包含学术文献与普通文档——请按模式分开提问")
+    else:
+        # 隐式全库：只取当前模式的 active 文档
+        paper_ids = [r["id"] for r in db.query(
+            "SELECT id FROM papers WHERE status='active' AND COALESCE(doc_type,'paper')=?",
+            (body.doc_mode,))]
+    paper_ids = body.paper_ids or paper_ids
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
     paper_cap_note = ""
@@ -468,7 +608,7 @@ def chat(body: ChatBody):
     threading.Thread(target=runner.run_stream,
                      args=(body.question.strip(), paper_ids, q),
                      kwargs={"thread_id": thread_id, "conversation_id": conv, "turn": turn,
-                             "forced_agent": body.agent},
+                             "forced_agent": body.agent, "doc_mode": body.doc_mode},
                      daemon=True).start()
 
     def sse():

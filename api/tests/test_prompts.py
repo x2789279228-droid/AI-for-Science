@@ -48,16 +48,19 @@ def test_yaml_catalog_complete():
     catalog = {c["module"]: c for c in prompts.catalog()}
     for m in ("qa", "compare", "writer", "graph", "claims", "judge"):
         assert m in catalog, f"缺少 app/prompts/{m}.yaml"
-        assert catalog[m]["version"] == "2.1.0"
+        assert catalog[m]["version"], f"{m} 缺版本号"
         assert isinstance(catalog[m]["changelog"], list) and catalog[m]["changelog"]
         assert "default" in catalog[m]["slots"]
+    # 2.2.0：双模式改造（qa/compare 新增 *_general 槽位）
+    assert catalog["qa"]["version"] == "2.2.0"
+    assert catalog["compare"]["version"] == "2.2.0"
 
 
 def test_loader_resolves_and_falls_back():
     p = prompts.get_prompt("qa", "system_qa")
     assert p is not None
     assert "科研文献问答助手" in p.text
-    assert p.version == "2.1.0"
+    assert p.version == "2.2.0"
     # 槽位缺失 → 内置兜底
     text, ver = prompts.resolve("qa", "nope_slot", "BUILTIN")
     assert text == "BUILTIN" and ver == "builtin"

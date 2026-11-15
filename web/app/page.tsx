@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   API, DedupAlert, FamilyGroup, Job, Paper,
-  cancelJob, dedupDecision, deletePaper, fetchFamilies, listPapers,
+  cancelJob, dedupDecision, deletePaper, fetchFamilies, invalidateApiCache, listPapers,
   renamePaper, reparsePaper, restorePaper, uploadPaperWithProgress,
 } from "@/lib/api";
 import { useIsland } from "@/lib/island";
-import { RisoIllust } from "@/components/Illustrations";
+import { useShell } from "@/components/ShellContext";
+import ThemeIllust from "@/components/ThemeIllust";
 import { WorkbenchStats, WorkbenchPulse } from "@/components/home/Workbench";
 import { Alert, Upload } from "@/components/icons";
 
@@ -43,15 +44,20 @@ export default function LibraryPage() {
   const [flippedFams, setFlippedFams] = useState<Record<string, boolean>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const island = useIsland();
+  const { docMode } = useShell();
+  const isGeneral = docMode === "general";
+  const docType = isGeneral ? "general" as const : "paper" as const;
 
   const refresh = useCallback(async () => {
+    // 双模式：本页只展示当前模式的文档；族视图仅专业模式拉取（普通文档无版本族）
     const [active, all, fams] = await Promise.all([
-      listPapers(), listPapers(true), fetchFamilies().catch(() => []),
+      listPapers(false, docType), listPapers(true, docType),
+      isGeneral ? Promise.resolve([]) : fetchFamilies().catch(() => []),
     ]);
     setPapers(active);
     setArchived(all.filter((p) => p.status === "archived"));
     setFamilies(fams);
-  }, []);
+  }, [docType, isGeneral]);
 
   // 族分组（L8 族视图）：≥2 成员的族成组渲染，散篇保持平铺
   const grouped = useMemo(() => {
@@ -87,6 +93,7 @@ export default function LibraryPage() {
           const fresh: Job = await r.json();
           setJobs((prev) => ({ ...prev, [j.id]: fresh }));
           if (["done", "error", "cancelled"].includes(fresh.status)) {
+            invalidateApiCache("api/papers");   // 解析终态 → 强制下次列表拉新（服务端也已 bump revision）
             refresh();
             setQueue((prev) => prev.map((q) => q.jobId === j.id && q.phase === "parsing"
               ? { ...q, phase: fresh.status === "done" ? "done" : fresh.status === "error"
@@ -114,13 +121,13 @@ export default function LibraryPage() {
     for (let i = 0; i < files.length; i++) {
       const key = items[i].key;
       try {
-        // 逐文件独立处理：单个失败不影响其他（批量 P0 硬要求）
+        // 逐文件独立处理：单个失败不影响其他（批量 P0 硬要求）；归属当前模式
         const data = await uploadPaperWithProgress(files[i], (frac) => {
           setQueue((prev) => prev.map((q) => q.key === key
             ? { ...q, frac, message: `上传中 ${Math.round(frac * 100)}%` } : q));
           island.emit({ key: "upload", kind: "progress", title: `上传《${files[i].name}》`,
             progress: frac });
-        });
+        }, docType);
         if (data.dedup === "exact_file") {
           setQueue((prev) => prev.map((q) => q.key === key
             ? { ...q, phase: "reused", message: `与《${data.existing_title}》文件相同，已复用` } : q));
@@ -244,10 +251,11 @@ export default function LibraryPage() {
           <div className="t">
             <b>{p.title || "(解析中…)"}</b>
             <small>
-              {p.arxiv_id ? `arXiv:${p.arxiv_id} · ` : ""}
+              {/* 双模式：arXiv/版本取代语义仅学术文献渲染 */}
+              {!isGeneral && p.arxiv_id ? `arXiv:${p.arxiv_id} · ` : ""}
               {p.page_count ? `${p.page_count} 页 · ` : ""}
-              {p.supersedes ? "取代库中旧版 · " : ""}
-              {p.superseded_by ? "已被新版取代 · " : ""}
+              {!isGeneral && p.supersedes ? "取代库中旧版 · " : ""}
+              {!isGeneral && p.superseded_by ? "已被新版取代 · " : ""}
               id {p.id}
             </small>
           </div>
@@ -293,15 +301,15 @@ export default function LibraryPage() {
   return (
     <div className="page">
       <div className="page-inner" style={{ maxWidth: 1080 }}>
-        {/* 研究工作台:数据带 + Pulse 双卡(§3 首页叙事层) */}
-        <WorkbenchStats paperCount={papers.length} />
-        <WorkbenchPulse />
+        {/* 研究工作台:数据带 + Pulse 双卡(§3 首页叙事层)——学术向，普通模式不渲染 */}
+        {!isGeneral && <WorkbenchStats paperCount={papers.length} />}
+        {!isGeneral && <WorkbenchPulse />}
 
         {/* 文献库分区(原有列表/上传逻辑整体下移,逻辑零改动) */}
-        <h2 className="wb-section-title">文献库</h2>
+        <h2 className="wb-section-title">{isGeneral ? "文档库" : "文献库"}</h2>
 
         <div className="card card-in" style={{ ["--i" as string]: 0 }}>
-          <h2>上传 PDF</h2>
+          <h2>{isGeneral ? "上传文档 PDF" : "上传论文 PDF"}</h2>
           <div
             className={`dropzone${dragging ? " drag" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -312,7 +320,9 @@ export default function LibraryPage() {
             <Upload size={22} />
             <div><b>拖拽 PDF 到此处</b>，或点击选择文件（支持批量）</div>
             <small className="muted">
-              矢量 PDF / 扫描件 / 超长文档；同名同文件自动去重，语义同族上传后预警
+              {isGeneral
+                ? "教材 / 讲义 / 报告 / 手册 / 合同等任意 PDF；矢量 PDF / 扫描件 / 超长文档均可，同名同文件自动去重"
+                : "矢量 PDF / 扫描件 / 超长文档；同名同文件自动去重，语义同族上传后预警"}
             </small>
             <input ref={fileRef} type="file" accept="application/pdf" multiple
               onChange={(e) => e.target.files && upload(Array.from(e.target.files))}
@@ -352,8 +362,8 @@ export default function LibraryPage() {
           {papers.length === 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)",
               flexWrap: "wrap" }}>
-              <RisoIllust name="night-reader" size={160} />
-              <p className="kv">暂无论文，先上传一份 PDF。</p>
+              <ThemeIllust name="night-reader" size={160} />
+              <p className="kv">{isGeneral ? "暂无文档，先上传一份 PDF。" : "暂无论文，先上传一份 PDF。"}</p>
             </div>
           )}
           {grouped.groups.map(({ group, rows }) => {
