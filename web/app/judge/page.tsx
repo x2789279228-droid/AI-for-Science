@@ -25,7 +25,7 @@ const EVIDENCE_ITEMS = [
   ["Playwright e2e", `${EVIDENCE.e2e.passed}/${EVIDENCE.e2e.passed + EVIDENCE.e2e.failed} 通过`
     + (EVIDENCE.e2e.skipped ? ` · ${EVIDENCE.e2e.skipped} 数据跳过` : "")],
   ["诚实评测 eval", `${EVIDENCE.eval.gatesPassed}/${EVIDENCE.eval.gatesTotal}`
-    + (EVIDENCE.eval.compareOk === false ? "（compare_ok=false 如实）" : "")],
+    + (!EVIDENCE.eval.compareOk ? "（compare_ok=false 如实）" : "")],
   ["演示语料", `${EVIDENCE.corpus.papers} 篇 · ${EVIDENCE.corpus.references} refs`],
 ];
 
