@@ -1,6 +1,6 @@
 # 2026-11-15 修复轮验收清单（W1–W10）
 
-> 代码基线：`main @ 77c8ff3` + 本轮工作区修复（未提交）。数字由 `scripts/write_evidence.py`
+> 代码基线：`main`（2026-11-15 已全部提交并推送至 origin/main；当日两轮：P0 修复 + P1 健康度）。数字由 `scripts/write_evidence.py`
 > 从本目录日志生成，`/judge`、`/health` 与 README 同源引用。
 
 ## 一、门禁（全部实跑，日志在本目录）

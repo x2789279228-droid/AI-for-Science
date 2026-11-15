@@ -98,6 +98,7 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 - **C8 健康中心(/health,导航第 10 项,2026-11-15 重写)**:结果健康评分卡——**7 个固定权重运行时子分**(可靠性 20%/回答可信 20%/回答覆盖 5%/检索质量 15%/解析质量 15%/性能 15%/数据卫生 10%),全部由最近 7 天**本机运行轨迹**计算(排除 kappa_/gold_/bench_/e2e_ 等评测/测试前缀;样本 <30 条不出总分);失败 trace/任务进可靠性分母、拒答/无答案单列回答覆盖,缺失维度按 0 计**不重归一化**;性能用窗口 p50/p95 SLO 而非均值;最新离线金标 gates 未全过时总分**封顶 90**（eval-20261115-r1 全过后当前不触发封顶）;返回 n/Wilson 95%CI/公式/原始计数;judge 双 κ 校准（judge-only 0.856 / pipeline 0.928,n=28,bootstrap 95%CI,构造负类口径如实声明）与金标轮次趋势同页披露。工程快照(pytest/e2e,来自 `web/lib/evidence.ts`,由 `scripts/write_evidence.py` 自动生成)单独展示、**不计入健康分**;另含 ClaimTrace 四态/去重三态/外部校准明细;后端唯一增量 `GET /api/health-report` 只读聚合
 - **C5/C6 一致性**：阅读器五视图分段控件+⋯菜单；EmptyState 空态规范；Ideas 栏头色块；Discover 示例词点击即搜；/judge 评审导览（8 步路线+工程证据）；Placeholder/排期徽章全下线
 - **门禁（2026-11-15 实跑，详见 `docs/acceptance/latest-verify/`）**：ruff 0 error · tsc 绿 · build 绿 · pytest **342 passed** · Playwright e2e **19 条**（含 TOC 跨页/分组引用/大纲错误态/TextLayer scale/图谱含金量 chip 五条新回归；全部离线可跑，无 LLM 依赖）
+- **Round6-P1 检索与校准加固（2026-11-15）**：dense 向量回填脚本（`scripts/backfill_embeddings.py`，实测修复 11/21 篇 vec 全缺的静默损伤——BM25 对纯中文查询零召回，dense 是中文检索唯一通道；健康页披露 `dense_vec_coverage`，当前 100%）；版权/许可样板块降级（检索尾部重排 + compare 格选让位）；`llm.chat` 瞬时故障重试（429/5xx/网络，1s/3s 退避——planner 不再单次 429 即掉规则兜底）；judge 提示词数值/实体严格化 + `semantic_status` 全量记录，构造真值双 κ 校准 **judge-only 0.856 / 全管线 0.928**（n=28，bootstrap 95%CI，健康页披露 + 「非独立人工标注」口径声明）；compare 金标评测 3 题并行化（每题耗时入证据）；`qa_logs.doc_mode` 每模式 SLO（健康页延迟分列）；`/api/chat` 空问题 400（不产生假中断轨迹）、可恢复中断与健康失败分列披露
 - **已知边界**：双语同步指示线（§6.2）、统一 Tooltip（§8.1）、快捷键 cheatsheet（§8.3）为可选项未实施；节点标签 canvas 文本不可 DOM 断言（⑬ 由视觉截图人工核）
 
 ## 证据与可复现（自动生成）
@@ -123,7 +124,9 @@ cd web && pnpm e2e                  # Playwright UI 验收 19 条：双语滚动
 #    历史不过项如实归档不删——eval-20261114-r3 16/17 留档）
 # 一键验收：python scripts/accept_round.py --round round4-<date>（quick 门禁 + 全套真实证据链）
 # 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real；
-#   官方去重演示口径：快照只含 v7，上传 v1 即触发语义去重预警）
+#   官方去重演示口径：快照只含 v7，上传 v1 即触发语义去重预警；2026-11-15 重固化：chunks 向量 100% 覆盖）
+# dense 向量回填：scripts/backfill_embeddings.py（幂等，只补 vec IS NULL；入库时 embedding 失败的
+#   论文 dense 通道会静默缺席——中文检索劣化的隐形根因，健康页 dense_vec_coverage 可监控）
 ```
 
 ### 语料（data-real 快照 20 篇同领域，references 健康）

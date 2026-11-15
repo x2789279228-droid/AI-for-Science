@@ -102,9 +102,11 @@ score = Σ w_k·f_k / Σ w_k ，  w = {vector .30, title .20, author .10, minhas
 ```http
 POST /api/chat
 Content-Type: application/json
-{"question": "...", "paper_ids": ["p_xxx"], "agent": "auto", "conversation_id": ""}
-# paper_ids 缺省 = 全库 active（>8 篇截断为前 8 并发 guardrail:paper_cap 事件）
-# agent: auto|reader|compare|graph|writer|viz（UI 强制指定 Agent）
+{"question": "...", "paper_ids": ["p_xxx"], "agent": "auto", "conversation_id": "", "doc_mode": "paper"}
+# paper_ids 缺省 = 全库 active（按 doc_mode 过滤；>8 篇截断为前 8 并发 guardrail:paper_cap 事件）
+# agent: 专业模式 auto|reader|compare|graph|writer|viz；普通模式 auto|reader|compare|viz
+# doc_mode: paper（学术文献）| general（普通文档）——混选两类文档 400；空问题（空白）400
+#   （空输入不进执行链、不产生失败轨迹；agent 越出模式白名单同样 400）
 ```
 
 事件流（协议 v1.1，向后兼容；`trace` 起为节点卡时间线，`plan/tool_call/tool_result/evidence/verifier` 为 Trace 增量）：
@@ -120,15 +122,19 @@ event: verifier    → {"claims": [...]}                                        
 event: artifact    → {"type": "compare_table"|"chart_spec"|"citation_graph"|"outline", ...}
                                                                               Agent 专属产物
 event: guardrail   → {"message", "kind"}                                      护栏事件（选文超 8 篇/单侧覆盖等）
-event: final       → {"answer", "claims":[{text,status,support[],anchors[]}],  溯源结果（ClaimTrace 三态
-                      "mode": "generative"|"extractive", "guardrails": [...],   supported/needs_check/unsupported；
-                      "trace": [...], "anchors": {...}}                         anchors: E#→{page(1基),bbox,block_ids}}
+event: final       → {"answer", "claims":[{text,status,support[],anchors[]}],  溯源结果（ClaimTrace 四态
+                      "mode": "generative"|"extractive", "guardrails": [...],   supported/needs_check/unsupported/
+                      "trace": [...], "anchors": {...}, "resumable": bool}      absent（诚实缺失声明，不计失败）；
+                                                                                anchors: E#→{page(1基),bbox,block_ids}}
 event: done        → {}
 ```
 
 - 引用格式 **`[E#]`**（Evidence Pack 显式编号，多论文自动分配 P1/P2 代号）；引用后验校验失败会剔除无效锚点并记 guardrail
 - `mode=extractive`：无可用 LLM 时降级为原文摘录（逐句仍挂锚点）
-- 断点续跑：图级异常标记 thread failed，`POST /api/chat/{thread_id}/resume` 从 checkpoint 续跑（SSE 同协议）
+- 断点续跑：仅**真实可恢复中断**（图级异常且 checkpoint 已落盘）标 `final.resumable=true`，
+  `POST /api/chat/{thread_id}/resume` 从 checkpoint 续跑（SSE 同协议）；健康报告将其单列为
+  「可恢复中断」（不计可靠性失败）；用户输入错误（空问题/混选/agent 越界）入口即 400，不产生轨迹
+- LLM 调用自带瞬时故障重试（429/5xx/网络异常，退避 1s/3s；`qa_logs.guardrail=llm_retry:n` 可审计）
 
 ## 会话线程 / Trace 回放
 
@@ -145,7 +151,7 @@ event: done        → {}
 |---|---|---|
 | GET | `/api/audit/prompts?limit=50` | 调用日志（模块/模型/token/耗时/guardrail）+ 系统状态 |
 | GET | `/api/health` | LLM 连通性（真实 ping）/ Dense 开关 / 论文数 |
-| GET | `/api/health-report` | 运行时健康评分卡（只读聚合）：7 个固定权重子分（可靠性/回答可信/回答覆盖/检索/解析/性能/数据卫生）；仅统计最近 7 天本机运行轨迹（排除 kappa_/gold_/bench_/e2e_ 等评测前缀），样本 <30 不出总分；失败 trace/任务进分母、缺测按 0 计不重归一化；最新 eval_gold gates 未全过时总分封顶 0.90；返回 n/CI/`missing`/`external` 与逐项公式。工程快照（pytest/e2e）由前端单独展示，不计分 |
+| GET | `/api/health-report` | 运行时健康评分卡（只读聚合）：7 个固定权重子分（可靠性/回答可信/回答覆盖/检索/解析/性能/数据卫生）；仅统计最近 7 天本机运行轨迹（排除 kappa_/gold_/bench_/e2e_ 等评测前缀），样本 <30 不出总分；失败 trace/任务进分母、可恢复中断单列（`samples.resumable`）不藏失败、缺测按 0 计不重归一化；最新 eval_gold gates 未全过时总分封顶 0.90（eval-20261115-r1 全过后当前不触发）；返回 n/CI/`missing`/`external` 与逐项公式。Round6-P1 增量：`calibration`（judge-only/pipeline 双 κ + n + bootstrap 95%CI + 「非独立人工标注」口径声明，动态读 scripts/kappa_report.json，无报告如实标「未评测」）、`trend`（近 6 轮金标 recall/hall/anchor）、`retrieval_health`（dense 向量覆盖率——BM25 纯中文零召回，dense 是中文检索唯一通道，<95% 标 unhealthy）、`qa_perf.by_mode`（专业/普通文档延迟分列 p50/p95）。工程快照（pytest/e2e）由前端单独展示，不计分 |
 | GET | `/api/metrics` | 运行指标：请求计数（总数/状态码/限流命中/in-flight）+ LLM 聚合（qa_logs：调用数/token/平均时延）+ 任务/翻译计数 + 进程 RSS/CPU |
 
 **Request-ID**：所有响应回写 `X-Request-Id`（透传调用方值或自动生成 12 位 hex），与日志绑定。

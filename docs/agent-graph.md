@@ -100,6 +100,7 @@ graph TD;
 ```
 
 - `executor_entry` 按（检索面 × 论文）经 LangGraph `Send` 扇出 N 路 `retrieve_task`（每路独立跑 `rag.indexing.hybrid_search`），`executor_fuse` 做 RRF(k=60) 跨分支融合 + compare 每（维度,论文）组保底 + bge-reranker 全局精排（未配 key 降级融合排序并记 guardrail）；
+- **样板块降级**（Round6-P1，`retrieve_task`）：版权/许可类首页样板（`is_boilerplate_hit`，模式只收许可证措辞）移到分支命中列表尾部——只重排不删除，无更好候选时仍可入池；RRF 按位次给分，样板块不再挤进 Evidence Pack 头部。**align 格选让位**：同格存在非样板候选时样板让位（全格皆样板则保留原首选，诚实降级优于空格）——修复纯中文维度下版权块冒充格命中（weak_match 对无拉丁特征词的维度失效，金标 Q1 实证）；
 - 子图经 `executor_node` wrapper 手动 invoke：只回传 evidence/branch_stats/trace/failures/guardrails；configurable 白名单只透传 queue（防父图 checkpointer 泄入无 thread_id 的子图）。
 
 ## 节点清单（`build_graph()` 实测，2026-11-09）
@@ -108,15 +109,23 @@ graph TD;
 
 | 节点 | 职责 |
 |---|---|
-| router | 意图识别 + Agent 分发（LLM 分类/规则兜底/UI 强制） |
-| planner | 检索面规划（LLM 改写英文子查询/规则；扇出护栏 ≤12） |
+| router | 意图识别 + Agent 分发（LLM 分类/规则兜底/UI 强制；入口前空问题 400 拦截） |
+| planner | 检索面规划（LLM 改写英文子查询/规则；扇出护栏 ≤12；compare 题逐维度拆面 hint） |
 | reader_entry / compare_entry / graph_entry / writer_entry / viz_entry | 五专属入口 Guardrail（范围锁定/单篇拒绝/无表拒绝） |
-| executor | retrieve_task 并行检索（子图 Send 扇出，≤12 路）→ RRF 融合 → rerank |
-| align | Compare 维度对齐表（格级 E#、行级冲突启发） |
+| executor | retrieve_task 并行检索（子图 Send 扇出，≤12 路；样板块降级）→ RRF 融合 → rerank |
+| align | Compare 维度对齐表（格级 E#、行级冲突启发、样板让位） |
 | viz_extract / graph_build | Viz 表格提取→chart_spec / Graph 引用构图+指标 |
 | verifier | Claim-Citation 校验（L1-L4；缺失面/论文覆盖不足 → recover） |
 | recover | 三策略恢复（①重检索 ②降级 ③定向重生成；全局预算 ≤3） |
 | responder | 流式生成 + [E#] 后验 + ClaimTrace（support 级块锚点精化） |
+
+**LLM 调用底座**（Round6-P1）：`llm.chat` 自带瞬时故障重试——429 限流 / 5xx / 网络异常退避 1s/3s 重试 2 次（4xx 语义错误不重试），并发问答下 planner/router 等结构化前置调用不再因单次 429 掉进规则兜底（那会把检索面退化为中文原句，BM25 全盲）；重试可审计（`qa_logs.guardrail=llm_retry:n`）。
+
+**ClaimTrace 四态与 judge 状态机**（Round6-P1 校准后）：
+
+- `supported`（绿）/ `needs_check`（黄：数值或引文待人工核对）/ `unsupported`（红）/ `absent`（诚实缺失声明，「未检索到/未涉及」类，不计失败）；
+- L4 judge 提示词**数值/实体严格化**：数值、单位、型号、专有名词必须与证据一致（等价表示如千分位/单位换算/四舍五入算一致；语义相似但数字对不上判 no）——校准后构造真值双 κ：judge-only 0.856 / 全管线 0.928（n=28，bootstrap 95%CI [0.632,1.0] / [0.774,1.0]）；
+- verdict 全量落 `semantic_status`（yes/partial/no/unchecked 观测口径）；**状态机不越级**：L2/L3 机械黄标（needs_check）不因 L4 语义 yes 被洗绿——「数值不在证据里」是机械事实，语义可推出不能清除。
 
 ## 断点续跑
 

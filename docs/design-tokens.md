@@ -1,6 +1,8 @@
-# Meridian 设计令牌标准 v1.4
+# Meridian 设计令牌标准 v1.5
 
 > 全部 UI 的唯一取值依据。定义于 `web/app/tokens.css`，组件样式**只准引用 Semantic / Component 层**，禁止写死色值、字号、圆角。新增 token 必须先改本文档再改代码。
+>
+> **v1.5 变更**（质感打磨）：`--ink-2` 次级文字 gray-500→**gray-600**（压灰提层）；三层阴影整体加重（sm 双层、md/lg 扩散半径与不透明度上调），卡片浮起更明确。
 >
 > **v1.4 变更**：新增第四皮肤 **WUXIA 玄墨夜行**（首个深色皮肤，武侠电影海报质感）；引入 `--accent-contrast` 语义令牌（亮 accent 上的对比文字色）；mermaid 画布按主题换肤；新增 `WuxiaTagline` 路由语录题跋与 `wuxia-quotes.ts` 语录表；插画挂载统一收敛为 `ThemeIllust` 三集分发。
 >
@@ -45,7 +47,7 @@ Primitive（原始阶：gray / blue 色板）
 | `--surface` | `--gray-0` | 卡片 / 侧边栏 / 输入 dock |
 | `--surface-2` | `--gray-100` | 悬停态 / 嵌套色块 / 表头 |
 | `--ink` | `--gray-900` | 主文字 / 图标 |
-| `--ink-2` | `--gray-500` | 次级说明文字 |
+| `--ink-2` | `--gray-600` | 次级说明文字（v1.5：gray-500→600） |
 | `--ink-3` | `--gray-400` | 占位 / 弱化 / 禁用 |
 | `--line` | `--gray-200` | 常规边框、分隔线 |
 | `--line-strong` | `--gray-300` | 输入框边、hover 边 |
@@ -64,8 +66,9 @@ Primitive（原始阶：gray / blue 色板）
 | 布局 | `--sidebar-w` | `272px` |
 | 布局 | `--topbar-h` | `56px` |
 | 圆角 | `--radius-sm / md / lg / full` | `6 / 10 / 14 / 999px` |
-| 阴影 | `--shadow-sm` | `0 1px 2px rgba(16,24,40,.05)` |
-| 阴影 | `--shadow-md` | `0 4px 12px -2px rgba(16,24,40,.08), 0 2px 4px -2px rgba(16,24,40,.04)` |
+| 阴影 | `--shadow-sm` | `0 1px 2px rgba(16,24,40,.06), 0 1px 4px rgba(16,24,40,.05)` |
+| 阴影 | `--shadow-md` | `0 8px 24px -6px rgba(16,24,40,.14), 0 3px 8px -3px rgba(16,24,40,.07)` |
+| 阴影 | `--shadow-lg` | `0 20px 44px -12px rgba(16,24,40,.24), 0 6px 14px -6px rgba(16,24,40,.10)` |
 | 字号 | `--text-xs / sm / md / lg / xl / 2xl` | `12 / 13 / 14 / 15 / 17 / 20px` |
 | 间距 | `--space-1~6, 8` | `4 / 8 / 12 / 16 / 20 / 24 / 32px` |
 | 字体 | `--font` | Segoe UI / PingFang SC / Microsoft YaHei 栈 |
