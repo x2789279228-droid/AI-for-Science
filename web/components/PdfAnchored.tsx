@@ -17,7 +17,7 @@
  * - TextLayer（pdfjs 4.x TextLayer 类）：透明文本覆盖层，使 PDF 视图原生可选取词
  *   （划词翻译的数据基础）；viewport 用 CSS 像素（canvas 是 2x 超采样显示为 width）。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { API } from "@/lib/api";
 
@@ -71,6 +71,9 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseU
   const taskRef = useRef<{ cancel(): void } | null>(null);   // 属性访问不触发 TS CFA 窄化
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
+  // B0 取词框偏移修复：pdf.js 4.x TextLayer 的字号/字距用 CSS 变量 --scale-factor 计算
+  // （calc(var(--scale-factor) * Npx)），缺失时字号回落到继承值、透明取词框与画布错位。
+  const [scaleFactor, setScaleFactor] = useState(1);
 
   useEffect(() => {
     const myToken = ++tokenRef.current;
@@ -86,6 +89,8 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseU
         const base = pdfPage.getViewport({ scale: 1 });
         const scale = width / base.width;
         const viewport = pdfPage.getViewport({ scale: scale * 2 });   // 2x 渲染抗锯齿
+        const layerViewport = pdfPage.getViewport({ scale });         // TextLayer 用 CSS 像素视口（非 2x）
+        setScaleFactor(layerViewport.scale);   // 同步 --scale-factor（CSS 像素/PDF 单位），否则取词框字号错位
 
         // 离屏渲染：完成后一次性上屏（旧任务先 cancel，杜绝双 render 竞争同一 2d 上下文）
         taskRef.current?.cancel();
@@ -113,7 +118,7 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseU
           const layer = new pdfjs.TextLayer({
             textContentSource: pdfPage.streamTextContent(),
             container: layerDiv,
-            viewport: pdfPage.getViewport({ scale }),   // 非 2x：匹配 canvas 的 CSS 显示尺寸
+            viewport: layerViewport,
           });
           textLayer = layer;
           await layer.render();
@@ -138,7 +143,9 @@ export default function PdfAnchored({ paperId, page, bbox, width = 620, onMouseU
       <canvas ref={canvasRef}
         style={{ width, height: "auto", display: "block", borderRadius: "var(--radius-sm)",
           border: "1px solid var(--line)", background: "var(--surface-2)" }} />
-      <div ref={textLayerRef} className="textLayer" aria-hidden="true" />
+      {/* 取词文本层：--scale-factor 必须由容器提供（pdf.js 4.x TextLayer 约定的 CSS 变量） */}
+      <div ref={textLayerRef} className="textLayer" aria-hidden="true"
+        style={{ ["--scale-factor" as string]: String(scaleFactor) } as CSSProperties} />
       {!ready && !error && (
         <p className="kv" style={{ position: "absolute", inset: 0,
           display: "flex", alignItems: "center", justifyContent: "center" }}>

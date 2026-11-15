@@ -2,14 +2,20 @@
 DOI 标识符层、族聚类（union-find + /api/families）、cross-encoder 降级、LLM 灰区复核。"""
 from __future__ import annotations
 
+import io
 import json
+import os
+import time
 import uuid
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app import db, jobs
 from app.config import settings
 from app.rag import fingerprint as fp
+
+_DATA = Path(os.environ["SCHOLAR_DATA_DIR"])
 
 
 def _client() -> TestClient:
@@ -35,6 +41,59 @@ def _insert_paper(pid: str, title: str, *, arxiv: str = "", doi: str = "",
 
 def _row(pid: str):
     return db.query("SELECT * FROM papers WHERE id=?", (pid,))[0]
+
+
+# ---------- PDF 上传助手（复用 tests/fixtures_pdf 的合成论文夹具） ----------
+
+def _arxiv_base(seed: str) -> str:
+    """按种子派生稳定异族 arXiv 基 id——同一次会话内的多对上传不互撞。"""
+    import zlib
+
+    return f"1709.{zlib.crc32(seed.encode('utf-8')) % 100000:05d}"
+
+
+def _make_pdf(path: Path, title: str, ver: int, fact: str, base: str) -> Path:
+    from tests.fixtures_pdf import make_paper_pdf
+
+    make_paper_pdf(path, title, body_facts=[fact],
+                   refs=[f"Vaswani et al. 2017. arXiv:{base}"],
+                   arxiv_line=f"arXiv:{base}v{ver}")
+    return path
+
+
+def _upload(client: TestClient, path: Path) -> dict:
+    r = client.post("/api/papers",
+                    files={"file": (path.name, io.BytesIO(path.read_bytes()),
+                                    "application/pdf")})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _wait(client: TestClient, job_id: str, timeout_s: float = 120) -> dict:
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        j = client.get(f"/api/jobs/{job_id}").json()
+        if j.get("status") in ("done", "error", "cancelled"):
+            return j
+        time.sleep(0.2)
+    return {"status": "timeout"}
+
+
+def _upload_two_versions(first_ver: int, second_ver: int) -> tuple[TestClient, str, str]:
+    """同族（同 arXiv 基/标题）两版按指定顺序上传，返回 (client, 先传id, 后传id)。"""
+    client = _client()
+    tag = uuid.uuid4().hex[:10]
+    title = f"Supersede Direction Paper {tag}"
+    base = _arxiv_base(tag)
+    tmp = _DATA / "supersede"
+    tmp.mkdir(parents=True, exist_ok=True)
+    first = _upload(client, _make_pdf(tmp / f"{tag}_v{first_ver}.pdf", title, first_ver,
+                                      f"Variant {tag} trains on {first_ver} GPUs.", base))
+    assert _wait(client, first["job_id"])["status"] == "done"
+    second = _upload(client, _make_pdf(tmp / f"{tag}_v{second_ver}.pdf", title, second_ver,
+                                       f"Variant {tag} trains on {second_ver} GPUs.", base))
+    assert _wait(client, second["job_id"])["status"] == "done"
+    return client, first["paper_id"], second["paper_id"]
 
 
 # ---------- L3：boilerplate 滤除 ----------
@@ -232,3 +291,28 @@ def test_families_api_archived_member_and_pending_count():
     assert group["canonical_id"] == "p_gb", "canonical=最新 active"
     assert group["pending_alerts"] >= 1
     assert group["versions"][0]["id"] == "p_ga", "versions 升序：旧版在前"
+
+
+# ---------- supersedes 方向：版本感知（两种上传顺序都必须「较新指向较旧」） ----------
+
+def test_supersedes_points_from_newer_to_older():
+    """先传 v7 再传 v1：supersedes 仍须由**较新**的 v7 指向较旧 v1（方向不可反转）。
+
+    旧实现无条件 `new.supersedes=old`：后传的 v1 会写成 v1.supersedes=v7，
+    把版本链方向整个反过来。修复后：v7.supersedes=v1 且 v1.superseded_by=v7。
+    """
+    client, p7, p1 = _upload_two_versions(first_ver=7, second_ver=1)
+    d7 = client.get(f"/api/papers/{p7}").json()
+    d1 = client.get(f"/api/papers/{p1}").json()
+    assert d7["supersedes"] == p1, "较新版本 v7 的 supersedes 必须指向较旧 v1"
+    assert d1["superseded_by"] == p7, "较旧版本 v1 的 superseded_by 必须指向较新 v7"
+    assert d1["supersedes"] == "", "较旧版本不得再写 supersedes（方向反转根因）"
+
+
+def test_supersedes_version_aware_on_reverse_upload_order():
+    """先传 v1 再传 v7：后上传的较新 v7 同样必须 supersedes 较旧 v1。"""
+    client, p1, p7 = _upload_two_versions(first_ver=1, second_ver=7)
+    d7 = client.get(f"/api/papers/{p7}").json()
+    d1 = client.get(f"/api/papers/{p1}").json()
+    assert d7["supersedes"] == p1, "较新 v7 应 supersedes 较旧 v1（与上传顺序无关）"
+    assert d1["superseded_by"] == p7, "较旧 v1 的 superseded_by 应指向较新 v7"

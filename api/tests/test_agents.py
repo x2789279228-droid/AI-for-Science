@@ -583,7 +583,9 @@ def test_citation_graph_and_metrics(indexed_paper, viz_paper):
     assert frozenset((viz_paper, indexed_paper)) in pair          # 真实边
     assert not any(e["source"] == e["target"] for e in g["edges"])  # 自环剔除
     m = _graph_metrics(g)
-    assert m["backend"] in ("networkx", "pagerank_py") and m["edge_count"] == len(g["edges"])
+    # 介数由 networkx 计算（无需 scipy）；PageRank 缺 scipy 时回退纯 Python，backend 如实标注组合
+    assert m["backend"] in ("networkx", "pagerank_py",
+                            "networkx_betweenness_pagerank_py") and m["edge_count"] == len(g["edges"])
     top = m["nodes"][0]
     assert top["paper_id"] == indexed_paper  # 被引者 PageRank 最高
 
@@ -604,7 +606,8 @@ def test_forced_graph_full_flow(indexed_paper, viz_paper):
     # 无 LLM：确定性指标摘要（含 PageRank/被引数字，模式 extractive）
     assert final["mode"] == "extractive"
     assert "引用图谱摘要" in final["answer"] and "PageRank" in final["answer"]
-    assert final.get("graph_data", {}).get("metrics", {}).get("backend") in ("networkx", "pagerank_py")
+    assert final.get("graph_data", {}).get("metrics", {}).get("backend") in (
+        "networkx", "pagerank_py", "networkx_betweenness_pagerank_py")
 
 
 def test_forced_writer_flow(indexed_paper, monkeypatch):

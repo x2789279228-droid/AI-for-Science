@@ -79,11 +79,15 @@ def _build_graph(ids: list[str], weighted: bool) -> dict:
                                       "weight": 0.0, "examples": []}) for e in g["edges"]]
         g["class_stat"] = w["class_stat"]
         g["mention_count"] = w["mention_count"]
-    # insights：基石/边缘角色汇总
+    # insights：基石/边缘角色汇总；含金量统计双写——insights 内给新前端读，
+    # 顶层 class_stat/mention_count 保留兼容旧前端与既有缓存载荷。
     g["insights"] = {
         "cornerstone": [n for n in g["nodes"] if n.get("role") == "cornerstone"],
         "peripheral": [n for n in g["nodes"] if n.get("role") == "peripheral"],
     }
+    if weighted:
+        g["insights"]["class_stat"] = g["class_stat"]
+        g["insights"]["mention_count"] = g["mention_count"]
     return g
 
 

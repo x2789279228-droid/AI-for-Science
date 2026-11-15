@@ -53,12 +53,12 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 
 | 模块 | 状态 | 说明 |
 |---|---|---|
-| 一 PDF 解析 | ✅ | **解析路由**：probe→native(MinerU 2.5.4)/scanned(Qwen-VL 逐页)/gray(逐页 VLM 救援)/long(50 页/批+前 120 页索引)；失败→PyMuPDF 兜底；公式 LaTeX→KaTeX；**References 三通道切分**（行内 [n] / 字母键 [ABC+18] / author-year 作者头 + 标题粘连兜底，Appendix 边界截断；authors/year/venue/title_norm 富字段落库）——BERT 56 / PreLN 101 / **GPT-3 118** / ScalingLaws 43 / UDL 245 条，零脏巨块；`ref_count_consistency` 质量探针 |
+| 一 PDF 解析 | ✅ | **解析路由**：probe→native(MinerU 2.5.4)/scanned(Qwen-VL 逐页)/gray(逐页 VLM 救援)/long(50 页/批+前 120 页索引)；失败→PyMuPDF 兜底；公式 LaTeX→KaTeX；**References 三通道切分**（行内 [n] / 字母键 [ABC+18] / author-year 作者头 + 标题粘连兜底，Appendix 边界截断；authors/year/venue/title_norm 富字段落库）——BERT 56 / PreLN 101 / **GPT-3 118** / ScalingLaws 43 / **UDL 991** 条（round6 重解析；断行碎片/41 anomaly 如实标注），零脏巨块；`ref_count_consistency` 质量探针 |
 | 二 溯源问答 | ✅ | BM25(中文 bigram)+可选 Dense→RRF→Rerank；Evidence Pack `[E#]`；L1-L4 Claim-Citation 校验；ClaimTrace 三态；引用点击跳 PDF bbox；SSE 流式 |
 | 三 阅读与双向翻译 | ✅ | 五视图（PDF/文本/双语对照/原版对照/**PDF↔译文联动**）；**[n]↔References 双向无损跳转**（含跨页回退）；双语 IntersectionObserver 防回环同步；**双向翻译**：英→中 + 中→英学术体（target_lang/mode，复合缓存键 `zh\|academic`，legacy 缓存兼容命中）；划词/悬停（可开悬停即译）/整篇（含表格+图注）翻译；**导出**：MD/HTML（对照/单栏）+ **PDF 原位替换 overlay**（redaction 保图保矢量、公式不动、溢出进补遗页）+ 双语交替版；术语表 CRUD+导入导出 |
-| 四 检索追踪推荐 | ✅ | **多源检索**（arXiv Atom + Semantic Scholar + OpenAlex，DOI→arXiv→title_norm 三索引去重）；**参考文献列表下钻**（BibTeX/RIS/纯文本→S2 batch 补全，未解析如实标注）；**引用含金量**（实质/背景/凑数 → References 面板可逆过滤）；**arXiv 追踪**（Sickle OAI-PMH 主通道+Atom 回退、订阅表、后台 worker、last_run 水位线续跑、库内已知标记）；**个性化推荐**（本地库画像打分 local/recency/citation/github/keyword 五分量+可解释理由，👍👇 反馈重加权，X-User-Id 多用户隔离）；`/discover` 四区 UI |
-| 五 图谱与综述 | ✅ | Louvain 社区+基石🪨/边缘衍生🌿+含金量加权边；G6 交互图谱 + **批量选择 5–20 篇** + PNG/JSON 导出；**整批领域综述**（五节结构：背景/时间线/方法族/基石边缘/开放问题，每节 [E#]+ClaimTrace，survey_reports 缓存）；**Future Work 外部核查**（语义去重→S2 外部证据→solved/partial/open/**open_unverified** 诚实态+置信度+证据链）；/ideas 两栏 |
-| 六 写作与可视化 Copilot | ✅ | `/copilot` 四 Tab：**① 无幻觉论文框架**（固定章节 Abstract→…→References；白名单=选中论文 references+库内条目去重；正文 [R#] 白名单外自动剔除；References 代码组装双向一致 0 编造；guardrails 审计）**② CSV 可视化**（≤5MB/10 万行护栏+编码嗅探+公式注入清洗+按行预算截断防烂 JSON；table/line/bar/雷达（多维）/scatter3d 真 3D 散点（echarts-gl grid3D，≥3 数值维+第 4 维 visualMap）；Figure Caption 数字全部可回溯数据集，LLM 润色数字越界自动回退模板）**③ 中→英学术翻译**（复用模块三管线）**④ 拓扑图脚本**（LLM 只产 DiagramSpec→确定性渲染 Mermaid/Graphviz DOT/TikZ + matplotlib sandbox PNG；幽灵边剔除+语法校验） |
+| 四 检索追踪推荐 | ✅ | **多源检索**（arXiv Atom + Semantic Scholar + OpenAlex，DOI→arXiv→title_norm 三索引去重）；**参考文献列表下钻**（BibTeX/RIS/纯文本→S2 batch 补全，未解析如实标注）；**引用含金量**（实质/背景/凑数；正文引用支持数字 `[n]`、分组 `[n, m]`、字母键 `[ABC+18]`、author-year 四种样式；默认自动剔除凑数、可逆；附 `coverage` 口径）→ References 面板可逆过滤；**arXiv 追踪**（Sickle OAI-PMH 主通道+Atom 回退、订阅表、后台 worker、last_run 水位线续跑、库内已知标记）；**个性化推荐**（本地库画像打分 local/recency/citation/github/keyword 五分量+可解释理由，👍👇 反馈重加权，X-User-Id 多用户隔离）；`/discover` 四区 UI |
+| 五 图谱与综述 | ✅ | Louvain 社区+PageRank+介数（networkx 介数 + scipy 缺失时纯 Python PageRank 回退，backend 如实标注）+基石🪨/边缘衍生🌿+含金量加权边；G6 交互图谱 + **批量选择 5–20 篇** + PNG/JSON 导出；**整批领域综述**（五节结构：背景/时间线/方法族/基石边缘/开放问题，每节 [E#]+ClaimTrace，survey_reports 缓存）；**Future Work 外部核查**（尾章 heading 抽取→CJK 语义去重→S2/OpenAlex/arXiv 三源证据→solved/partial/open/**open_unverified** 诚实态+置信度+证据链；LLM 离线时规则初判标 `verdict_source=rule`）；/ideas 两栏 |
+| 六 写作与可视化 Copilot | ✅ | `/copilot` 四 Tab：**① 无幻觉论文框架**（固定章节 Abstract→…→References；References 白名单=选中论文 references+库内条目按篇配额（每篇≤20/总≤60，每篇保底 5），正文 [R#] 白名单外自动剔除；used<3 时一次补引重试，仍不足如实 `refs_underused`；导出只列被引条目，未引用单列不编号；guardrails 审计）**② CSV 可视化**（≤5MB/10 万行护栏+编码嗅探+公式注入清洗+按行预算截断防烂 JSON；table/line/bar/radar（多维，轴语义修正）/radar3d（3D 透视层叠，如实标注 ECharts 无原生 radar3D）/scatter3d 真 3D 散点；bar 类别>60 时 Top60+其他聚合且图注仍用全量统计；Figure Caption 数字全部可回溯数据集，LLM 润色数字越界自动回退模板）**③ 中→英学术翻译**（复用模块三管线）**④ 拓扑图脚本**（LLM 只产 DiagramSpec→确定性渲染 Mermaid/Graphviz DOT/TikZ + matplotlib sandbox PNG；LLM 不可用时规则图降级 `guardrail=diagram_rule_fallback`；幽灵边剔除+语法校验） |
 | 翻译底座 | ✅ | 占位符保护（公式/代码/[n]）+术语表优先+缓存续译+2 并发限流；SSE；导出审计 translation_exports |
 | 横切生产化（Round4） | ✅ | 重端点 POST 令牌桶限流（30/min/匿名用户，429+Retry-After）· X-Request-Id · `GET /api/metrics`（请求/LLM 聚合/进程资源）· 上传 %PDF- 魔数护栏 · 匿名多用户画像隔离（**非多租户鉴权，如实口径**）· bench 性能基准（建图 0.2s/100k CSV 0.8s/10 并发 p95 5.7s 0 错） |
 | Prompt 审计 | ✅ | `app/prompts/*.yaml` 版本化（translate 1.1.0 / insights 1.1.0 / copilot 1.0.0 新增）；qa_logs.prompt_version；`/audit` 版本分布 |
@@ -67,8 +67,9 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 
 - PDF overlay 导出**保留原表格**（避免破坏版式），表格译文进 MD/HTML 与双语文本视图；
 - S2/OpenAlex 无 key 有共享限速：适配器缓存+退避，断网时 `source=cache_offline` 如实回放；
-- Future Work 外部核查无证据时标 `open_unverified`（≠确认没人做）；引用含金量无引用句条目显示「无引用句」中性态；
-- LLM 不可用时：综述出图谱客观数据骨架、写作节标「待补：证据不足」、图注回退确定性模板——均不冒充生成；
+- Future Work 外部核查无证据时标 `open_unverified`（≠确认没人做）；LLM 离线时 `partial` 为**规则初判**（`verdict_source=rule`、confidence 0.4），不当强结论；引用含金量只对能匹配到 references 的引用句计数，未匹配保持中性态（不硬猜）；正文引用四种样式（数字/分组/字母键/author-year），字母键只映射 raw 开头带键的条目；
+- Copilot 「3D 雷达」为 **ECharts 2D radar + 前端 3D 透视层叠**（ECharts 无原生 radar3D，UI/文档如实标注）；真 3D 数据用 scatter3d；
+- LLM 不可用时：综述出图谱客观数据骨架、写作节标「待补：证据不足」、图注回退确定性模板、拓扑图走规则降级——均不冒充生成；
 - 限流/隔离是**单机单进程匿名多用户画像**口径（X-User-Id 分桶），非多租户鉴权/分布式治理；
 - 中文查询→英文语料的检索依赖 Dense 多语向量桥接（BM25 无法跨语言）——embedding 配额限速时如实降级（Round4 实测记录于 docs/acceptance/round4-20261110/）。
 
@@ -91,29 +92,37 @@ cp .env.example .env         # 填入密钥（密钥绝不入仓库）
 > 方案全文：`docs/前端改造方案.md`；视觉验收截图：`docs/acceptance/round1/screenshots/`（7 张，1440×900）。
 
 - **C1 品牌层收敛**：经典浅蓝=唯一工作皮肤，RISO 降级品牌层（intro/印章/`?theme=riso` 截图通道）；印章语义（证/基）tokens；字体语义三轨（--font-display-cn/en/--font-data）+ `--text-h1=26px`；排期徽章全下线；ClaimTrace 四态色收敛
-- **C2 研究工作台**：首页 = 数据带（22 篇/50 库内边/2371 外部引用/LLM 状态）+ 最近问答卡（`GET /api/qa/recent` 唯一后端新增）+ 图谱只读缩略卡 + 文献库分区
+- **C2 研究工作台**：首页 = 数据带（运行时取数：篇数 / 库内引用边 / 外部引用追踪 / LLM 状态）+ 最近问答卡（`GET /api/qa/recent` 唯一后端新增）+ 图谱只读缩略卡 + 文献库分区
 - **C3 Chat 演示入口**：空态演示问题卡（按选中论文动态，点击即发送）；claim「证」章 Stamp；E# mono 脉冲；回答 15px/68ch
 - **C4 图谱舞台化**：画布 ≥560px（实测 664）；标签词典零截断；社区 Hull 凸包（双降级路径）；基石「基」章 badges；图例；统计 popover；详情抽屉 340px+去问答
-- **C8 健康中心(/health,导航第 10 项)**:抽象宣称→具体数据的自证面板——溯源可信/幻觉抑制/检索充分/解析覆盖/性能五子分(全部运行时数据,公式+原始计数随卡展示,评分本身可审计)+ 工程健康静态注入(pytest/e2e 手注,权重 15%)+ ClaimTrace 四态分布/去重三态/离线金标对照明细;后端唯一增量 `GET /api/health-report` 只读聚合
+- **C8 健康中心(/health,导航第 10 项,2026-11-15 重写)**:结果健康评分卡——**7 个固定权重运行时子分**(可靠性 20%/回答可信 20%/回答覆盖 5%/检索质量 15%/解析质量 15%/性能 15%/数据卫生 10%),全部由最近 7 天**真实用户轨迹**计算(排除 kappa_/gold_/bench_/e2e_ 等评测/测试前缀;样本 <30 条不出总分);失败 trace/任务进可靠性分母、拒答/无答案单列回答覆盖,缺失维度按 0 计**不重归一化**;性能用窗口 p50/p95 SLO 而非均值;最新离线金标 gates 未全过时总分**封顶 90**;返回 n/Wilson 95%CI/公式/原始计数。工程快照(pytest/e2e,来自 `web/lib/evidence.ts`,由 `scripts/write_evidence.py` 自动生成)单独展示、**不计入健康分**;另含 ClaimTrace 四态/去重三态/外部校准明细;后端唯一增量 `GET /api/health-report` 只读聚合
 - **C5/C6 一致性**：阅读器五视图分段控件+⋯菜单；EmptyState 空态规范；Ideas 栏头色块；Discover 示例词点击即搜；/judge 评审导览（8 步路线+工程证据）；Placeholder/排期徽章全下线
-- **门禁**：tsc 绿 · e2e 14/14（10 旧+4 新）· build 绿 · pytest 286（2 个 tracker 环境性失败为预存,与本轮无关）
+- **门禁（2026-11-15 实跑，详见 `docs/acceptance/latest-verify/`）**：ruff 0 error · tsc 绿 · build 绿 · pytest **342 passed** · Playwright e2e **19 条**（含 TOC 跨页/分组引用/大纲错误态/TextLayer scale/图谱含金量 chip 五条新回归；全部离线可跑，无 LLM 依赖）
 - **已知边界**：双语同步指示线（§6.2）、统一 Tooltip（§8.1）、快捷键 cheatsheet（§8.3）为可选项未实施；节点标签 canvas 文本不可 DOM 断言（⑬ 由视觉截图人工核）
+
+## 证据与可复现（自动生成）
+
+> 页面上所有测试/评测/语料数字不再手写：先跑门禁把日志落到 `docs/acceptance/latest-verify/`，
+> 再执行 `cd api && uv run python scripts/write_evidence.py` 生成
+> `web/lib/evidence.ts`（`/judge`、`/health` 直接 import）与
+> `docs/acceptance/latest-verify/summary.md`。当前快照：见该 summary。
 
 ## 测试
 
 ```bash
-cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（286 用例，HTTP 全 mock；含 qa/recent 轻接口 3 例）
-cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚动同步 / [n]→References /
+cd api && uv run pytest -q          # 后端全量：单元 + API + 进程内 E2E（336 用例，HTTP 全 mock；含 qa/recent 轻接口 3 例）
+cd web && pnpm e2e                  # Playwright UI 验收 19 条：双语滚动同步 / [n]→References /
                                     #   CSV 出图+图注 / 多源搜索 / G6 / PDF↔译文 bbox 双向（⑦反向）/ 
                                     #   discover 含金量可逆过滤 / 滚动同步中线块锚定量化 / 拓扑四格式渲染
-                                    #   + 前端改造 v1.0 新增 ④:首页工作台 / Chat 空态演示卡 / 图谱舞台 / 评审导览
-                                    #   + 健康中心新增 ①:综合健康分(五子分公式透明)/ClaimTrace 四态分布/离线金标对照（15 用例）
+                                    #   + 首页工作台 / Chat 空态演示卡 / 图谱舞台 / 评审导览 / 健康中心
+                                    #   + 2026-11-15 新增：标题树跨页定位 / [n,m] 分组引用 / 大纲失败重试 / TextLayer scale / 图谱含金量 chip
 # 抗幻觉金标评测（需真实 LLM）：scripts/eval_gold.py --out ../docs/acceptance/<round>/
-#   16 项门禁（Round4 收紧：anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
-#   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新 round5 见 docs/acceptance/
-#   （round8+9 终版：表块保位 gold_acc 1.0 / absent 分类 unsupported≤0.11 / compare_ok True）
+#   17 项门禁（anchor≥0.85 全 verified support 口径 / rubric 真 8 问 /
+#   compare 3 题手工金标矩阵 / quote_unverified≤0.15）——最新见 docs/acceptance/eval-20261114-r3/
+#   （16/17 gates；compare_ok=false 如实归档，不冒充全绿）
 # 一键验收：python scripts/accept_round.py --round round4-<date>（quick 门禁 + 全套真实证据链）
-# 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real）
+# 数据快照：scripts/fetch_corpus.py --snapshot（19 篇 arXiv + UDL = 20 篇同领域语料固化 data-real；
+#   官方去重演示口径：快照只含 v7，上传 v1 即触发语义去重预警）
 ```
 
 ### 语料（data-real 快照 20 篇同领域，references 健康）
@@ -122,7 +131,7 @@ cd web && pnpm e2e                  # Playwright UI 验收 10 用例：双语滚
 Round4 扩充十四篇 transformer 家族：RoBERTa · ALBERT · ELECTRA · XLNet · BART · Longformer ·
 BigBird · Reformer · DeBERTa · ViT · LoRA · FlashAttention · Megatron-LM · T5。
 边界如实：Reformer(24)/BART(34) 条 refs（解析层块内无边界标记，BART 待重解析）、ELECTRA anomaly 11/59、UDL anomaly 41/991=4%。
-勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；UDL 旧 "245 条" 为序言散文假阳性（round6 已重解析为真书目）；GPT 系原文以 GPT-3 论文代表
+勘误：2001.08361 是 Kaplan 缩放律（旧脚本误标 "GPT2"）；UDL 旧基线 "245/59 条" 为序言散文假阳性（round6 已全书重解析为 991 条真书目，41 条 anomaly 如实保留）；GPT 系原文以 GPT-3 论文代表
 （GPT-2 原文无 arXiv 版，OpenAI 技术报告 PDF 不在 arXiv 通道——如实注明）。
 
 ## 快速开始

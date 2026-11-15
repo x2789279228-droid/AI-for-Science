@@ -37,9 +37,12 @@ class DiagramSpec(BaseModel):
 
 
 def spec_from_description(description: str) -> DiagramSpec:
-    """描述 → DiagramSpec（LLM 结构化；校验 id 引用存在、节点数上限）。"""
+    """描述 → DiagramSpec（LLM 结构化；校验 id 引用存在、节点数上限）。
+
+    LLM 不可用/调用失败时抛异常，由 generate_diagram 捕获后走 _rule_spec 规则降级
+    （Round7：旧实现直接 RuntimeError(llm_unavailable) 冒到路由 → 503，e2e ⑩ 失败）。"""
     if not llm.available():
-        raise RuntimeError("llm_unavailable:拓扑图需要 LLM 解析描述")
+        raise RuntimeError("llm_unavailable:LLM 不可用")
     system, pv = _resolve("copilot", "system_diagram_spec",
                           "你是架构图结构化器。只输出 DiagramSpec JSON。")
     res = llm.chat(
@@ -56,6 +59,53 @@ def spec_from_description(description: str) -> DiagramSpec:
         spec.nodes = spec.nodes[:_MAX_NODES]
     spec.edges = [e for e in spec.edges if e.from_ in ids and e.to in ids]
     return spec
+
+
+# ---------- 无 LLM 规则降级（确定性，不冒充 LLM） ----------
+
+_RULE_ARROW = re.compile(r"-{1,2}>|=>|→|➜|➔")
+_RULE_STEP_SPLIT = re.compile(r"[，,、；;。!?！？\n]+")
+_RULE_ENUM = re.compile(r"^\s*(?:第?\s*\d+\s*[步.、):：）]|\d+\s*[.)、]|步骤\s*\d+\s*[:：])\s*")
+
+
+def _clean_step_label(raw: str) -> str:
+    """步骤标签清洗：去序号前缀、合并空白；「系统名：步骤」保留步骤本体；截 40 字。"""
+    s = re.sub(r"\s+", " ", (raw or "").strip())
+    s = _RULE_ENUM.sub("", s)
+    m = re.match(r"^([^：:]{1,14})[：:]\s*(.{2,})$", s)
+    if m:
+        s = m.group(2)          # 形如「RAG 系统：Query 改写器」→ 节点名取后半
+    return s[:40].strip()
+
+
+def _rule_spec(description: str) -> DiagramSpec:
+    """规则解析：按 →/->/=> 拆链生成节点+边；无箭头时按句读/逗号拆步；≤12 节点。
+
+    这是 LLM 不可用/失败时的确定性降级路径，保证拓扑图功能不 503、四格式脚本
+    仍可生成（结果带 guardrail=diagram_rule_fallback 如实标注「非 LLM 解析」）。"""
+    text = (description or "").strip()
+    if not text:
+        raise ValueError("description 为空")
+    steps: list[str] = []
+    if _RULE_ARROW.search(text):
+        segments = _RULE_ARROW.split(text)
+        for seg in segments:
+            steps.extend(p for p in _RULE_STEP_SPLIT.split(seg) if p.strip())
+    else:
+        steps = [p for p in _RULE_STEP_SPLIT.split(text) if p.strip()]
+    labels: list[str] = []
+    for raw in steps:
+        lab = _clean_step_label(raw)
+        if lab and (not labels or labels[-1] != lab):
+            labels.append(lab)
+        if len(labels) >= _MAX_NODES:
+            break
+    if not labels:
+        raise ValueError("empty_nodes:未能从描述中解析出节点")
+    nodes = [DiagNode(id=f"n{i}", label=lab) for i, lab in enumerate(labels, 1)]
+    edges = [DiagEdge.model_validate({"from": nodes[i].id, "to": nodes[i + 1].id})
+             for i in range(len(nodes) - 1)]
+    return DiagramSpec(nodes=nodes, edges=edges)
 
 
 def _safe(s: str) -> str:
@@ -141,6 +191,8 @@ def render_matplotlib_png(spec: DiagramSpec) -> dict:
 _MERMAID_HEAD = re.compile(r"^\s*(graph|flowchart)\s+\w+", re.IGNORECASE)
 # 边语法：--> / -> / -.-> / ==>（renderer 恒用箭头式；`-->|标签|` 变体由前缀覆盖）
 _MERMAID_EDGE = re.compile(r"-\.->|==>|-{1,2}>")
+# 节点声明：`id["label"]` / `id[label]`（单节点图合法：只有节点、没有边）
+_MERMAID_NODE = re.compile(r"^\s*[\w.-]+\[", re.MULTILINE)
 
 
 def validate_syntax(kind: str, source: str) -> dict:
@@ -150,10 +202,12 @@ def validate_syntax(kind: str, source: str) -> dict:
     Round4 修复：mermaid 旧式 `startswith("graph") and "->" in s or "-->" in s`
     因 and 优先于 or，任何含 "-->" 的字符串都通过（无 graph 前缀也过）——评审
     指出的优先级 bug；同时补 flowchart 前缀（mermaid 官方两种等价写法）与
-    无箭头连线 `--`/带标签边。"""
+    无箭头连线 `--`/带标签边。
+    Round7：允许「只有节点声明、没有边」的单节点图（规则降级可能出现单步描述）。"""
     if kind == "mermaid":
         s = source.strip()
-        ok = bool(_MERMAID_HEAD.match(s) and _MERMAID_EDGE.search(s))
+        ok = bool(_MERMAID_HEAD.match(s)
+                  and (_MERMAID_EDGE.search(s) or _MERMAID_NODE.search(s)))
         return {"ok": ok, "checker": "structural"}
     if kind == "dot":
         bal = source.count("{") == source.count("}") and source.count('"') % 2 == 0
@@ -168,13 +222,26 @@ def validate_syntax(kind: str, source: str) -> dict:
 
 
 def generate_diagram(description: str, fmt: str = "all") -> dict:
-    """主入口：spec → {spec, sources{mermaid,dot,tikz}, matplotlib_png, validation}。"""
-    spec = spec_from_description(description)
+    """主入口：spec → {spec, sources{mermaid,dot,tikz}, matplotlib_png, validation}。
+
+    LLM 不可用/解析失败 → 规则降级（不 503），结果附 guardrail=diagram_rule_fallback。
+    """
+    fallback = False
+    try:
+        spec = spec_from_description(description)
+    except Exception as exc:  # noqa: BLE001 —— LLM 不可用/解析失败都必须降级而非报错
+        logger.warning(f"diagram LLM 解析不可用，规则降级: {type(exc).__name__}: {exc}",
+                       module="diagram")
+        spec = _rule_spec(description)
+        fallback = True
     sources = {"mermaid": render_mermaid(spec), "dot": render_dot(spec),
                "tikz": render_tikz(spec)}
     validation = {k: validate_syntax(k, v) for k, v in sources.items()}
     png = render_matplotlib_png(spec) if fmt in ("all", "matplotlib") else {}
     validation["matplotlib"] = {"ok": bool(png.get("ok")),
                                 "checker": "sandbox_render"} if png else {"ok": None}
-    return {"spec": json.loads(spec.model_dump_json(by_alias=True)), "sources": sources,
-            "matplotlib": png, "validation": validation}
+    out = {"spec": json.loads(spec.model_dump_json(by_alias=True)), "sources": sources,
+           "matplotlib": png, "validation": validation}
+    if fallback:
+        out["guardrail"] = "diagram_rule_fallback"
+    return out

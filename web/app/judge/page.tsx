@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import Stamp from "@/components/Stamp";
+import { EVIDENCE } from "@/lib/evidence";
 
 const ROUTE: { title: string; desc: string; href: string; cta: string }[] = [
   { title: "1 · 文献库与版本去重", desc: "上传 PDF → 语义同族预警 → 三态决策 → 版本族书堆（翻面看其余版本）", href: "/", cta: "打开文献库" },
@@ -18,12 +19,14 @@ const ROUTE: { title: string; desc: string; href: string; cta: string }[] = [
   { title: "8 · 透明度中心：Prompt 审计", desc: "Prompt 版本化落库、token/延迟计量，全过程可审计", href: "/audit", cta: "打开透明度中心" },
 ];
 
-/** 工程证据（与 README / checklist 手动同步；最近核对：2026-11-11）。 */
-const EVIDENCE = [
-  ["pytest", "286 用例"],
-  ["Playwright e2e", "10 用例"],
-  ["诚实评测 eval", "16/17"],
-  ["演示语料", "22 篇 · 991 refs · 2371 引用边"],
+/** 工程证据：唯一来源 web/lib/evidence.ts（scripts/write_evidence.py 生成）。 */
+const EVIDENCE_ITEMS = [
+  ["pytest", `${EVIDENCE.pytest.passed} 用例 · ${EVIDENCE.pytest.failed} 失败`],
+  ["Playwright e2e", `${EVIDENCE.e2e.passed}/${EVIDENCE.e2e.passed + EVIDENCE.e2e.failed} 通过`
+    + (EVIDENCE.e2e.skipped ? ` · ${EVIDENCE.e2e.skipped} 数据跳过` : "")],
+  ["诚实评测 eval", `${EVIDENCE.eval.gatesPassed}/${EVIDENCE.eval.gatesTotal}`
+    + (EVIDENCE.eval.compareOk === false ? "（compare_ok=false 如实）" : "")],
+  ["演示语料", `${EVIDENCE.corpus.papers} 篇 · ${EVIDENCE.corpus.references} refs`],
 ];
 
 export default function JudgePage() {
@@ -54,15 +57,16 @@ export default function JudgePage() {
 
         <div className="card card-in" style={{ ["--i" as string]: 1 }}>
           <h2 style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            工程证据 <Stamp kind="verified" size="sm" tip="数字与 README/最新 checklist 手动同步（2026-11-11）" />
+            工程证据 <Stamp kind="verified" size="sm" tip={`数字由 scripts/write_evidence.py 生成（${EVIDENCE.generatedAt}）`} />
           </h2>
           <div className="judge-evidence num">
-            {EVIDENCE.map(([k, v]) => (
+            {EVIDENCE_ITEMS.map(([k, v]) => (
               <span key={k} className="judge-ev-item">{k} <b>{v}</b></span>
             ))}
           </div>
           <p className="kv muted" style={{ marginTop: "var(--space-2)" }}>
-            以上数字与 README / 最新验收 checklist 同源核对（2026-11-11）；诚实边界见 README「边界与未完成」章节与功能索引树。
+            以上数字与 README / 透明度中心同源（自动生成于 {EVIDENCE.generatedAt}，基线
+            <code> {EVIDENCE.branch} @ {EVIDENCE.commit} </code>）；诚实边界见 README「边界与未完成」章节与功能索引树。
           </p>
         </div>
 
@@ -77,7 +81,7 @@ export default function JudgePage() {
         </div>
 
         <p className="kv num muted" style={{ marginTop: "var(--space-4)" }}>
-          代码基线：main @ 788709e（工作区随提交前移，与 git log 一致为准）
+          代码基线：{EVIDENCE.branch} @ {EVIDENCE.commit}（证据生成于 {EVIDENCE.generatedAt}；以 git log 为准）
         </p>
       </div>
     </div>

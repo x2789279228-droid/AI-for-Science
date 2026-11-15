@@ -9,6 +9,11 @@
  * ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮（Round4）
  * ⑧ Discover 从库内导入参考文献：含金量徽章 + 可逆「隐藏凑数」过滤（Round4）
  * ⑨ 双语滚动同步量化：中线块锚定一致（Round4）
+ * ⑯ 标题树跨页定位：点跨页 TOC → 页码切换 + 目标块闪高亮（W6）
+ * ⑰ [n, m] 分组引用：逐号 chip + 双向跳转（W6）
+ * ⑱ 大纲加载失败错误态 + 重试恢复（W6）
+ * ⑲ PDF TextLayer 提供 --scale-factor（取词框对齐，W6）
+ * ⑳ 图谱含金量 chip 渲染（W3）
  */
 import { expect, test } from "@playwright/test";
 
@@ -18,6 +23,16 @@ async function firstPaperId(): Promise<string> {
   const r = await fetch(`${API}/api/papers`);
   const j = await r.json();
   return j.papers?.[0]?.id ?? "";
+}
+
+async function fetchDocir(paperId: string): Promise<any> {
+  const r = await fetch(`${API}/api/papers/${paperId}/docir`);
+  return r.ok ? r.json() : {};
+}
+
+async function fetchOutline(paperId: string): Promise<any> {
+  const r = await fetch(`${API}/api/papers/${paperId}/docir?outline=1`);
+  return r.ok ? r.json() : {};
 }
 
 async function attentionPaperId(): Promise<string> {
@@ -87,8 +102,13 @@ test("② [n] 引用标记 → References 跳转高亮", async ({ page }) => {
   const chip = page.locator("span.chip[data-bid], p span").filter({ hasText: /^\[\d+\]$/ }).first();
   const hasCite = await chip.count();
   test.skip(!hasCite, "该论文正文无 [n] 标记（换用含数字引用的论文）");
+  const n = (await chip.textContent())?.replace(/[^\d]/g, "") ?? "";
   await chip.click();
   await expect(page.getByText(/References（\d+ 条/)).toBeVisible({ timeout: 10_000 });
+  // 加强断言（W6）：References 面板展开且被引条目可见（正向链路不再只看标题）
+  if (n) {
+    await expect(page.locator(`[data-refidx="${n}"]`).first()).toBeVisible({ timeout: 10_000 });
+  }
 });
 
 test("③ Copilot：CSV → 柱状图 canvas + 图注", async ({ page }) => {
@@ -263,28 +283,25 @@ test("⑧ Discover：从库内导入参考文献 + 含金量可逆过滤", async
   // 导入完成：refsNote 提示 + 参考文献卡列表出现
   await expect(page.getByText(/已导入 \d+ 条参考文献/)).toBeVisible({ timeout: 30_000 });
   const cards = page.locator("div.card", { hasText: /实质|背景|凑数/ });
-  const total = await cards.count();
-  expect(total).toBeGreaterThan(0);
-  // 凑数条目存在时：隐藏 → 卡数减少 → 点击恢复 → 卡数还原（可逆）
-  const cheap = page.getByText("凑数", { exact: true });
-  const nCheap = await cheap.count();
-  if (nCheap === 0) {
-    // 分类结果随 LLM 缓存波动可能无凑数条目：过滤退化为恒等可逆校验（不跳过）
-    await page.getByText("隐藏凑数引用").click();
-    expect(await cards.count()).toBe(total);
-    await page.getByText("已隐藏凑数（点击恢复）").click();
-    expect(await cards.count()).toBe(total);
+  await expect.poll(async () => cards.count(), { timeout: 20_000 }).toBeGreaterThan(0);
+  // W4 起默认已自动剔除「凑数引用」（可逆）：先读默认剔除数，再展开/恢复/再次剔除
+  const autoHide = page.getByText(/已自动剔除 \d+ 条凑数引用（点击恢复）|隐藏凑数引用/).first();
+  await expect(autoHide).toBeVisible({ timeout: 20_000 });
+  const label = (await autoHide.textContent()) ?? "";
+  const autoN = Number(label.match(/已自动剔除 (\d+) 条/)?.[1] ?? "0");
+  const folded = await cards.count();      // 默认（凑数已剔除）可见卡数
+  await autoHide.click();                   // 恢复显示凑数
+  if (autoN > 0) {
+    await expect.poll(async () => cards.count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(folded + autoN);
+  } else {
+    // 分类结果随缓存波动可能无凑数条目：过滤退化为恒等可逆校验（不跳过）
+    expect(await cards.count()).toBe(folded);
     test.info().annotations.push({ type: "note",
       description: "本轮无凑数条目（含金量分类波动），过滤断言退化为恒等可逆" });
-    return;
   }
-  await page.getByText("隐藏凑数引用").click();
-  const hidden = await cards.count();
-  expect(hidden).toBeLessThan(total);
-  await page.getByText("已隐藏凑数（点击恢复）").click();
-  await expect(async () => {
-    expect(await cards.count()).toBe(total);
-  }).toPass({ timeout: 10_000 });
+  await page.getByText(/隐藏凑数引用/).first().click();   // 再次剔除 → 可逆回到默认
+  await expect.poll(async () => cards.count(), { timeout: 10_000 }).toBe(folded);
 });
 
 test("⑨ 双语滚动同步量化：中线块锚定一致", async ({ page }) => {
@@ -400,7 +417,7 @@ test("⑫ Chat 空态演示卡：点击即提问（拦截后端，仅断言请�
 });
 
 test("⑬ 图谱舞台：画布高度 ≥560px + 统计 popover 可见 + 无渲染失败", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(150_000);
   await page.goto("/graph");
   const card = page.locator(".graph-canvas-card");
   await expect(card.locator("canvas").first()).toBeVisible({ timeout: 60_000 });
@@ -410,6 +427,8 @@ test("⑬ 图谱舞台：画布高度 ≥560px + 统计 popover 可见 + 无渲�
   // 注:节点标签在 canvas 内,DOM 不可断言文本——零截断由视觉截图人工核(§9.3)
   const errCount = await page.getByText("G6 渲染失败").count();
   expect(errCount).toBe(0);
+  // ⑳ 含金量 chip（W3：insights.class_stat 渲染，修复前该字段读错位置永不显示）
+  await expect(page.getByText(/含金量：实质 \d+/)).toBeVisible({ timeout: 90_000 });
 });
 
 test("⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章", async ({ page }) => {
@@ -422,20 +441,116 @@ test("⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章", async ({ pag
   expect(body).not.toContain("排期");
 });
 
-test("⑮ 健康中心：综合分+子分公式卡+模块明细", async ({ page }) => {
+test("⑮ 健康中心：运行时 7 子分+工程快照+样本/外部校准明细", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/health");
   await expect(page.getByTestId("health-total")).toBeVisible({ timeout: 30_000 });
-  // 总分 0-100 数字存在(Playfair 大数字)
-  const totalText = await page.locator(".h-total-num").textContent();
-  expect(Number(totalText)).not.toBeNaN();
-  // 六张子分卡(五运行时+工程静态),每张含公式文本
-  const cards = page.locator(".h-score-card");
-  await expect(cards).toHaveCount(6);
-  for (let i = 0; i < 6; i++) {
-    await expect(cards.nth(i)).toContainText("权重");
+  // 总分：样本充足时为 0-100 数字；样本不足时显示 — 并出现提示条
+  const totalText = (await page.locator(".h-total-num").textContent())?.trim();
+  if (totalText === "—") {
+    await expect(page.getByTestId("health-insufficient")).toBeVisible();
+  } else {
+    expect(Number(totalText)).not.toBeNaN();
   }
-  // 模块明细原始计数区
+  // 7 个运行时子分卡 + 1 张工程快照（不计分）
+  const cards = page.locator(".h-score-card");
+  await expect(cards).toHaveCount(8);
+  for (let i = 0; i < 8; i++) {
+    await expect(cards.nth(i)).toContainText(/权重|不计分|按 0 计/);
+  }
+  await expect(page.getByTestId("health-score-engineering")).toContainText("不计分");
+  // 口径与明细：生产样本窗口、固定权重、外部校准、ClaimTrace
+  await expect(page.getByText(/运行时健康分/)).toBeVisible();
+  await expect(page.getByText(/生产轨迹窗口 7 天/)).toBeVisible();
+  await expect(page.getByText(/外部校准/).first()).toBeVisible();
   await expect(page.getByTestId("health-detail")).toBeVisible();
   await expect(page.getByText("ClaimTrace 四态分布")).toBeVisible();
+  // 工程数字来自 web/lib/evidence.ts（不手写）
+  await expect(page.getByText(/pytest \d+\/\d+ ×/)).toBeVisible();
+  await expect(page.getByText(/e2e \d+\/\d+/)).toBeVisible();
+  const body = await page.evaluate(() => document.body.textContent ?? "");
+  expect(body).not.toContain("手注静态");
+});
+
+// ---------------- W6/W3 新增回归（2026-11-15 修复） ----------------
+
+test("⑯ 标题树跨页定位：点跨页 TOC → 页码切换 + 目标块闪高亮", async ({ page }) => {
+  test.setTimeout(120_000);
+  const pid = await attentionPaperId();
+  test.skip(!pid, "库内无论文");
+  const outline = await fetchOutline(pid);
+  const entry = (outline.toc ?? []).find((t: any) => t.level === 1 && (t.page ?? 0) + 1 > 1);
+  test.skip(!entry, "该论文无跨页一级标题");
+  await page.goto(`/reader/${pid}?page=1`);
+  await page.getByRole("button", { name: "DocIR" }).click();
+  const item = page.locator(".toc-panel .toc-item").filter({ hasText: entry.title }).first();
+  await expect(item).toBeVisible({ timeout: 30_000 });
+  await item.click();
+  // 页码选择器切到目标页（唯一 <select>）
+  await expect.poll(async () => page.locator("select").first().inputValue(),
+    { timeout: 20_000 }).toBe(String(entry.page + 1));
+  // 目标块闪高亮：flash 状态 2.5s 自清，poll 抢在窗口内
+  await expect.poll(async () => page.locator(".block-item.flash").count(),
+    { timeout: 8_000 }).toBeGreaterThan(0);
+});
+
+test("⑰ [n, m] 分组引用：逐号 chip + 双向跳转", async ({ page }) => {
+  test.setTimeout(120_000);
+  const pid = await attentionPaperId();
+  test.skip(!pid, "库内无论文");
+  const doc = await fetchDocir(pid);
+  const block = (doc.blocks ?? []).find((b: any) =>
+    /\[\d{1,3}\s*[,，]\s*\d{1,3}\]/.test(b.text ?? ""));
+  test.skip(!block, "该论文无分组引用");
+  const m = (block.text as string).match(/\[(\d{1,3})\s*[,，]\s*(\d{1,3})\]/)!;
+  const [a, b] = [m[1], m[2]];
+  await page.goto(`/reader/${pid}?page=${(block.page ?? 0) + 1}`);
+  await page.getByRole("button", { name: "DocIR" }).click();
+  const blk = page.locator(`[data-bid="${block.id}"]`);
+  await expect(blk).toBeVisible({ timeout: 30_000 });
+  // 分组引用必须逐号渲染为独立 chip（修复前只保留第一个编号）
+  const chipA = blk.locator("span.anchor-chip").filter({ hasText: new RegExp(`^\\[${a}\\]$`) });
+  const chipB = blk.locator("span.anchor-chip").filter({ hasText: new RegExp(`^\\[${b}\\]$`) });
+  await expect(chipA.first()).toBeVisible();
+  await expect(chipB.first()).toBeVisible();
+  // 正向：点第二个编号 → References 面板展开且对应条目存在
+  await chipB.first().click();
+  await expect(page.getByText(/References（\d+ 条/)).toBeVisible({ timeout: 10_000 });
+  const refRow = page.locator(`[data-refidx="${b}"]`).first();
+  await expect(refRow).toBeVisible({ timeout: 10_000 });
+  // 反向：点 References 条目 → 正文分组 chip 高亮（背景色不再透明）
+  await refRow.click();
+  await expect.poll(async () => chipB.first().evaluate(
+    (el) => getComputedStyle(el).backgroundColor), { timeout: 8_000 })
+    .not.toBe("rgba(0, 0, 0, 0)");
+});
+
+test("⑱ 大纲加载失败：错误态 + 重试恢复", async ({ page }) => {
+  test.setTimeout(120_000);
+  const pid = await attentionPaperId();
+  test.skip(!pid, "库内无论文");
+  let failed = false;
+  await page.route(/docir\?outline=1/, async (route) => {
+    if (!failed) {
+      failed = true;
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.goto(`/reader/${pid}`);
+  await expect(page.getByTestId("outline-error")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("outline-retry").click();
+  await expect(page.getByText(/标题树（/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("outline-error")).toHaveCount(0);
+});
+
+test("⑲ PDF TextLayer：容器提供 --scale-factor（取词框对齐）", async ({ page }) => {
+  test.setTimeout(120_000);
+  const pid = await attentionPaperId();
+  test.skip(!pid, "库内无论文");
+  await page.goto(`/reader/${pid}`);
+  const layer = page.locator(".textLayer").first();
+  await expect(layer).toBeVisible({ timeout: 60_000 });
+  await expect(layer).toHaveAttribute("style", /--scale-factor/);
 });

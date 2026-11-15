@@ -870,8 +870,22 @@ def responder_node(state: AgentState, config=None) -> dict:
     answer, cited_guards = validate_citations(answer, eid_map)
     guardrails += cited_guards
 
-    # 证据不足拒答：不进重写环（合法无引用），按拒答策略附「最接近的 3 条证据」
-    if "未找到依据" in answer:
+    # 拒答语义（Round6 修复「自相矛盾输出」）：LLM 偶发在**已带 [E#] 引用的主体**
+    # 末尾追加「未找到依据」模板句（对未覆盖子问题的诚实说明被误拼接）。旧逻辑
+    # 字符串匹配整条判 refusal + claims=[] → 用户看到「有引用的回答」+「没找到」
+    # 的矛盾、回答覆盖被拉低。现分级：
+    #   a) 主体有 [E#] 引用 → 剥离尾部矛盾句，正常走 claims 校验（guardrail 如实记录）；
+    #   b) 全文无引用且含拒答模板 → 才是真正的「证据不足拒答」。
+    _REFUSAL_MARK = "未找到依据"
+    has_citations = bool(re.search(r"\[E\d+\]", answer))
+    if _REFUSAL_MARK in answer and has_citations:
+        lines = [ln for ln in answer.splitlines() if _REFUSAL_MARK not in ln]
+        answer = "\n".join(lines).rstrip()
+        if _REFUSAL_MARK in answer:   # 模板句嵌在行中间（罕见）→ 整段截断到首次出现
+            answer = answer.split(_REFUSAL_MARK, 1)[0].rstrip()
+        guardrails.append("partial_refusal_trimmed")
+    elif _REFUSAL_MARK in answer and not has_citations:
+        # 全文无引用的真拒答：不进重写环（合法无引用），附「最接近的 3 条证据」
         answer += near_evidence_block(hits)
         return finish(answer, [], "refusal", "证据不足拒答 · 已附最近证据供人工判断")
 
@@ -907,6 +921,14 @@ def responder_node(state: AgentState, config=None) -> dict:
         refine_support_blocks(claims, hits)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"support 块级锚点精化失败: {type(e).__name__}: {e}", module="responder")
+
+    # Round6 口径细分（修复「40 条 unsupported 混口径」）：有 E# 引用但块级锚点
+    # 缺失的论断标 claim_kind=inference（LLM 归纳性陈述，引用层可信、块级未定位）；
+    # 与无任何支撑的 unsupported（fabrication 风险类）区分。不改变 status 判定、
+    # 不减分母——只给前端/评测一个诚实的细分维度。
+    for c in claims:
+        if c.get("status") in ("supported", "needs_check") and c.get("support")                 and not any(s.get("block_id") or s.get("block_ids") for s in c["support"]):
+            c["claim_kind"] = "inference"
 
     def verify_note() -> str:
         n_check = sum(1 for c in claims if c.get("status") == "needs_check")

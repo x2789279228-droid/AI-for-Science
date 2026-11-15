@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import io
+import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -14,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from app import db, jobs
 from app.parsing._types import ParseCancelled
+from app.rag import fingerprint as fp
 
 _DATA = Path(__import__("os").environ["SCHOLAR_DATA_DIR"])
 
@@ -122,6 +125,67 @@ def test_different_papers_no_alert():
     _wait(client, pb["job_id"])
     assert not _alerts(client, pa["paper_id"]), "异文不得误报"
     assert not _alerts(client, pb["paper_id"])
+
+
+# ---------- 正文 MinHash：bottom-k 抽样须贴近真实 5-gram Jaccard ----------
+
+def _true_gram_jaccard(a: str, b: str, k: int = 5) -> float:
+    """真实字符 k-gram Jaccard（与 fingerprint 同口径归一化，作 MinHash 估计的对照）。"""
+    def grams(t: str) -> set[str]:
+        t = re.sub(r"\s+", " ", (t or "").lower()).strip()
+        return {t[i:i + k] for i in range(len(t) - k + 1)} if t else set()
+
+    ga, gb = grams(a), grams(b)
+    return len(ga & gb) / len(ga | gb) if ga and gb else 0.0
+
+
+def test_minhash_estimate_tracks_true_jaccard():
+    """约 70% 相同的合成文本：MinHash 估计须贴近真实 5-gram Jaccard 且 >0.5。
+
+    旧实现按固定步长取 512 个 shingle 位置：两段文本长度不同时抽样位置错位，
+    真实 Jaccard≈0.7 的对会被压到 0.1 量级（真实 UDL v1/v7 实测 0.09）——
+    本用例锁定 bottom-k 抽样去偏后的估计精度。
+    """
+    base = " ".join(f"gamma{i:04d}" for i in range(900))
+    variant = " ".join(f"delta{i:04d}" if i % 10 >= 7 else f"gamma{i:04d}"
+                       for i in range(900))
+    true_j = _true_gram_jaccard(base, variant)
+    est = fp.minhash_jaccard(fp.minhash_sig(base), fp.minhash_sig(variant))
+    assert true_j > 0.5, f"测试前提：约 70% 相同应为高重合文本：{true_j:.3f}"
+    assert abs(est - true_j) <= 0.15, \
+        f"MinHash 估计 {est:.3f} 偏离真实 5-gram Jaccard {true_j:.3f} 超过 ±0.15"
+    assert est > 0.5, f"高重合文本估计不得被抽样错位压低：{est:.3f}"
+
+
+def test_minhash_unrelated_text_low_similarity():
+    """无关文本（中英异字符集、5-gram 集零交集）：估计必须 <0.2。"""
+    en = ("Attention is all you need: we propose the Transformer based solely on "
+          "attention mechanisms, dispensing with recurrence entirely.")
+    zh = ("本文提出一种基于注意力机制的序列转换模型，完全摒弃循环与卷积结构，"
+          "在机器翻译任务上取得领先效果。")
+    assert _true_gram_jaccard(en, zh) == 0.0, "测试前提：异字符集文本无共享 5-gram"
+    est = fp.minhash_jaccard(fp.minhash_sig(en), fp.minhash_sig(zh))
+    assert est < 0.2, f"无关文本不得被 MinHash 误判为相似：{est:.3f}"
+
+
+# 真实 UDL v1/v7 DocIR（仓库 data/docir 只读样例；CI 无数据时跳过）
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_UDL_V7 = _REPO_ROOT / "data" / "docir" / "p_5e84333e8e1d.json"
+_UDL_V1 = _REPO_ROOT / "data" / "docir" / "p_a19a95dbf468.json"
+
+
+def _docir_full_text(path: Path) -> str:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return fp.strip_boilerplate([(b.get("text") or "") for b in data.get("blocks", [])])
+
+
+@pytest.mark.skipif(not (_UDL_V7.exists() and _UDL_V1.exists()),
+                    reason="真实 UDL v1/v7 DocIR 不在本机（CI 无数据）")
+def test_minhash_real_udl_v1_v7_not_regressed():
+    """真实同族对（真实 5-gram Jaccard≈0.64）：修复后估计须 >0.4（修复前≈0.09）。"""
+    t7, t1 = _docir_full_text(_UDL_V7), _docir_full_text(_UDL_V1)
+    est = fp.minhash_jaccard(fp.minhash_sig(t7), fp.minhash_sig(t1))
+    assert est > 0.4, f"UDL v1/v7 同族正文指纹估计过低（抽样错位回归）：{est:.3f}"
 
 
 # ---------- 三态决策（软归档语义） ----------

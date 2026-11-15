@@ -135,7 +135,7 @@ export default function DiscoverPage() {
   const [refsNote, setRefsNote] = useState("");
   const [libRefs, setLibRefs] = useState<{ entries: MultiEntry[]; quality: Record<number, {
     cls: string; weight: number; mention_count: number; examples: string[] }> } | null>(null);
-  const [hideCheap, setHideCheap] = useState(false);
+  const [hideCheap, setHideCheap] = useState(true);   // 默认自动剔除凑数引用（可逆）
 
   const runRefs = () => {
     if (!refsText.trim() || refsBusy) return;
@@ -192,10 +192,11 @@ export default function DiscoverPage() {
     }
   };
 
+  // 过滤时保留原 ref 序号（references.idx），否则 quality[i+1] 会错位到别的条目
   const visibleLibRefs = libRefs
-    ? (hideCheap
-        ? libRefs.entries.filter((e, i) => libRefs.quality[i + 1]?.cls !== "perfunctory")
-        : libRefs.entries)
+    ? libRefs.entries
+        .map((entry, i) => ({ entry, refIdx: i + 1 }))
+        .filter(({ refIdx }) => !hideCheap || libRefs.quality[refIdx]?.cls !== "perfunctory")
     : [];
 
   // ---- ③ 追踪订阅 ----
@@ -449,15 +450,17 @@ export default function DiscoverPage() {
                 {libRefs && (
                   <span className={`chip ${hideCheap ? "accent" : ""}`} style={{ cursor: "pointer" }}
                     onClick={() => setHideCheap((v) => !v)}
-                    title="可逆过滤：隐藏「凑数引用」（权重 0.1）；无引用句条目保持中性态显示">
-                    {hideCheap ? "已隐藏凑数（点击恢复）" : "隐藏凑数引用"}
+                    title="可逆过滤：默认自动剔除「凑数引用」（权重 0.1）；点击恢复显示；无引用句条目保持中性态显示">
+                    {hideCheap
+                      ? `已自动剔除 ${libRefs.entries.length - visibleLibRefs.length} 条凑数引用（点击恢复）`
+                      : `隐藏凑数引用（${libRefs.entries.length - visibleLibRefs.length} 条）`}
                   </span>
                 )}
               </div>
               {refsNote && <p className="kv" style={{ marginTop: 8 }}>{refsNote}</p>}
             </div>
-            {libRefs && visibleLibRefs.map((e, i) => {
-              const q = libRefs.quality[i + 1];
+            {libRefs && visibleLibRefs.map(({ entry: e, refIdx }, i) => {
+              const q = libRefs.quality[refIdx];
               return (
                 <div className="card card-in card-lift" key={`lr-${i}`}
                   style={{ opacity: q?.cls === "perfunctory" ? 0.6 : 1, ["--i" as string]: i }}>

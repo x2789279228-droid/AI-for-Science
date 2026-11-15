@@ -314,3 +314,217 @@ def test_store_dataset_100k_rows_valid_json():
     js, kept = csv_viz._serialize_rows_bounded(rows, cols)
     data = json.loads(js)          # 必须可解析（旧字节切片会产生烂 JSON）
     assert len(data) == kept and kept <= 100_000
+
+
+# ---------- Round7：写作 References 配额 / 全量 prompt / 补引 / 导出 ----------
+
+def _insert_paper_with_refs(pid: str, prefix: str, n: int = 40) -> None:
+    with db.tx() as c:
+        c.execute("INSERT OR REPLACE INTO papers(id,title,status,file_path,file_hash,"
+                  "created_at,docir_path) VALUES(?,?,?,?,?,?,?)",
+                  (pid, f"{prefix} Survey", "active", "", f"h_{pid}", 0.0, ""))
+        for i in range(n):
+            c.execute('INSERT INTO "references"(id,paper_id,idx,title,arxiv_id,doi,authors,'
+                      "year,venue,title_norm) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                      (f"{pid}_r{i}", pid, i, f"{prefix} Ref {i}", "", "", "A Author",
+                       2020 + i % 5, "NeurIPS", f"{prefix} ref {i}"))
+
+
+def test_whitelist_quota_3papers_40refs_each():
+    """Round7 回归：3 篇×40 refs → 每篇配额前 20、保底 ≥5、总量 ≤60。
+
+    旧实现 entries[:80] 会把第 3 篇选中论文的引用几乎全部截断。"""
+    pids = ["p_quota1", "p_quota2", "p_quota3"]
+    for i, pid in enumerate(pids, 1):
+        _insert_paper_with_refs(pid, f"Quota{i}")
+    wl = cp.build_reference_whitelist(pids)
+    assert len(wl) <= cp._MAX_REFS == 60
+    for i in range(1, 4):
+        got = [e for e in wl if e["title"].startswith(f"Quota{i} Ref ")]
+        assert len(got) >= 5, f"第 {i} 篇选中论文白名单条目不足 5"
+        assert len(got) <= cp._PER_PAPER_REFS == 20, "单篇配额不得超过 20"
+    assert wl[0]["ref_id"] == 1 and [e["ref_id"] for e in wl] == list(range(1, len(wl) + 1))
+
+
+def test_writing_prompt_full_whitelist_and_citation_constraint(monkeypatch):
+    """Round7 回归：白名单全量（≤60）进 prompt + 追加「至少 5 个不同 [R#]、禁编造」约束。"""
+    captured: list[str] = []
+
+    def _chat(msgs, **kw):
+        captured.append(msgs[-1]["content"])
+        return {"text": "本节引用 [R1] [R2] [R3] 支撑论点。"}
+
+    monkeypatch.setattr(cp, "hybrid_search", lambda pids, q, top_k=5: {"hits": [
+        {"paper_id": PID, "chunk_id": f"cq{i}", "text": f"evidence {i}", "page": 0, "bbox": []}
+        for i in range(3)]})
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "chat", _chat)
+    out = cp.writing_framework("RAG 综述", [PID])
+    prompt = captured[0]
+    assert "禁止编造" in prompt and "至少引用 5 个不同 [R#]" in prompt
+    wl = cp.build_reference_whitelist([PID])
+    for e in wl:   # 旧实现 prompt 只喂前 60 条；现白名单 ≤60 应全量出现
+        assert f"[R{e['ref_id']}]" in prompt
+    assert out["references"]["used"], "prompt 已带引用约束时正文引用的 [R#] 必须可回溯"
+
+
+def test_writing_underused_guardrail_and_export_unused_unumbered(monkeypatch):
+    """Round7：used<3 → 补引重试 1 次仍不足则记 refs_underused:N；
+    导出 MD 的 References 只列 used，未引用条目另列且不带 [R#] 编号。"""
+    monkeypatch.setattr(cp, "hybrid_search", lambda pids, q, top_k=5: {"hits": [
+        {"paper_id": PID, "chunk_id": f"cu{i}", "text": f"evidence {i}", "page": 0, "bbox": []}
+        for i in range(3)]})
+    calls: list[int] = []
+
+    def _chat(msgs, **kw):
+        calls.append(1)
+        return {"text": "本节只做综述，没有可用引用。"}
+
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "chat", _chat)
+    out = cp.writing_framework("无引用 idea", [PID])
+    assert "refs_underused:0" in out["guardrails"], "引用不足必须如实写 guardrail"
+    # 6 节正文各 1 次 + 补引重试恰好 1 次
+    assert len(calls) == len(cp.DEFAULT_SECTIONS) + 1, "补引重试应只触发 1 次"
+    assert out["references"]["used"] == []
+    md = out["content_md"]
+    assert "（正文暂未引用任何白名单文献）" in md
+    assert "## 未引用（未纳入正文）" in md
+    unused_part = md.split("## 未引用（未纳入正文）", 1)[1]
+    assert "[R" not in unused_part, "未引用条目不得带 [R#] 编号（避免误读为正文引用）"
+
+
+# ---------- Round7：radar 方向修正 / radar3d / bar 降采样 ----------
+
+_RADAR_DS = {
+    "id": "ds_radar", "name": "radar.csv",
+    "columns": [{"name": "model", "dtype": "string"},
+                {"name": "accuracy", "dtype": "number"},
+                {"name": "params_M", "dtype": "number"},
+                {"name": "latency_ms", "dtype": "number"}],
+    "row_count": 3,
+    "rows": [["bert-base", "0.88", "110", "12.5"],
+             ["bert-large", "0.92", "340", "33.0"],
+             ["distilbert", "0.86", "66", "8.2"]],
+}
+
+
+def test_radar_direction_indicators_are_y_columns_series_are_rows():
+    """Round7 回归：indicators = y 指标列（每维 max=该列全量最大×1.1）；
+    series = 每个 x 类别一行 {name, data:[各维值]}（旧实现方向反置）。"""
+    spec = csv_viz.build_chart(_RADAR_DS, "radar", "model",
+                               ["accuracy", "params_M", "latency_ms"])["spec"]
+    assert spec["type"] == "radar"
+    assert [i["name"] for i in spec["indicators"]] == ["accuracy", "params_M", "latency_ms"]
+    assert spec["indicators"][0]["max"] == pytest.approx(0.92 * 1.1)
+    assert spec["indicators"][1]["max"] == pytest.approx(340 * 1.1)
+    assert spec["indicators"][2]["max"] == pytest.approx(33.0 * 1.1)
+    assert len(spec["series"]) == len(_RADAR_DS["rows"]), "每个行/类别一条雷达多边形"
+    assert spec["series"][0] == {"name": "bert-base", "data": [0.88, 110.0, 12.5]}
+    assert spec["series"][2]["name"] == "distilbert"
+    # radar 图注走确定性模板（route 传进类别名也不会当列统计炸 500）
+    cap = csv_viz.make_caption(_RADAR_DS, spec, "model", spec["series"][0]["name"])
+    assert "3 维指标雷达" in cap and "bert-base" not in cap
+
+
+def test_radar3d_variant_is_2d_radar_with_perspective_marker():
+    spec = csv_viz.build_chart(_RADAR_DS, "radar3d", "model",
+                               ["accuracy", "params_M", "latency_ms"])["spec"]
+    assert spec["type"] == "radar", "底层仍是 ECharts 2D radar（ECharts 无原生 radar3D）"
+    assert spec["variant"] == "radar3d" and "radar3D" in spec["render_note"]
+    assert len(spec["indicators"]) == 3 and len(spec["series"]) == 3
+
+
+def test_chart_endpoint_radar_caption_and_radar3d():
+    """Round7 路由回归：radar 的 series[0].name 是类别名而非列名，
+    旧 caption 逻辑会 names.index(类别名) 抛 500——现由确定性雷达图注兜住。"""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    stored = csv_viz.store_dataset(_CSV.encode("utf-8"), "radar_ep.csv")
+    client = TestClient(app)
+    body = {"dataset_id": stored["id"], "chart_type": "radar", "x": "model",
+            "y": ["accuracy", "params_M", "latency_ms"]}
+    r = client.post("/api/copilot/chart", json=body)
+    assert r.status_code == 200, f"radar 图注不得 500：{r.text[:300]}"
+    out = r.json()
+    assert len(out["spec"]["indicators"]) == 3 and len(out["spec"]["series"]) == 3
+    assert "3 维指标雷达" in out["caption"]
+    r2 = client.post("/api/copilot/chart", json={**body, "chart_type": "radar3d"})
+    assert r2.status_code == 200
+    assert r2.json()["spec"]["variant"] == "radar3d" and r2.json()["caption"]
+
+
+def test_bar_downsample_100k_rows_top60_plus_others():
+    """Round7：10 万行 bar 降采样为 Top60 +「其他（聚合）」；caption 统计仍用全量。"""
+    lines = ["idx,val"] + [f"{i},{i}" for i in range(100_000)]
+    parsed = csv_viz.parse_csv("\n".join(lines).encode(), "big100k_bar.csv")
+    ds = {"id": "ds_bigbar", "name": "big100k_bar.csv", "columns": parsed["columns"],
+          "row_count": parsed["row_count"], "rows": parsed["rows"]}
+    spec = csv_viz.build_chart(ds, "bar", "idx", ["val"])["spec"]
+    labels = spec["x"]["data"]
+    assert len(labels) == 61, "Top60 + 其他聚合 = 61 个类别"
+    assert labels[-1] == "其他（聚合）"
+    data = spec["series"][0]["data"]
+    assert data[0] == 99999.0 and data[59] == 99940.0, "按数值降序取 Top60"
+    assert data[-1] == sum(range(99940)), "其余行按系列求和聚合"
+    info = spec["downsampled"]
+    assert info["total_rows"] == 100_000 and info["shown_rows"] == 60
+    assert info["others_rows"] == 100_000 - 60
+    cap = csv_viz.make_caption(ds, spec, "idx", "val")
+    assert "n=100000" in cap, "图注统计必须仍用全量数据（非 Top60 子集）"
+
+
+# ---------- Round7：拓扑图 LLM 不可用规则降级 ----------
+
+def test_rule_spec_arrow_chain_4nodes_3edges():
+    spec = diagram._rule_spec("Query → Retriever → Reranker → Generator")
+    assert [(n.id, n.label) for n in spec.nodes] == [
+        ("n1", "Query"), ("n2", "Retriever"), ("n3", "Reranker"), ("n4", "Generator")]
+    assert [(e.from_, e.to) for e in spec.edges] == [
+        ("n1", "n2"), ("n2", "n3"), ("n3", "n4")]
+    # 变体箭头 + 系统名前缀清洗 + 句读/逗号拆步 + ≤12 节点
+    assert [n.label for n in diagram._rule_spec("A -> B => C").nodes] == ["A", "B", "C"]
+    rag = diagram._rule_spec(
+        "RAG 系统：Query 改写器 → Retriever 从向量库取 top-k → Reranker 精排 → Generator 生成带引用回答")
+    assert rag.nodes[0].label == "Query 改写器" and len(rag.nodes) == 4
+    steps = "步骤：" + "、".join(f"s{i}" for i in range(20))
+    assert len(diagram._rule_spec(steps).nodes) == diagram._MAX_NODES, "节点数上限 12"
+
+
+def test_generate_diagram_llm_unavailable_rule_fallback(monkeypatch):
+    """Round7 回归：LLM 不可用时 generate_diagram 正常返回四格式（不再 503）。"""
+    monkeypatch.setattr(diagram.llm, "available", lambda: False)
+    out = diagram.generate_diagram(
+        "Query → Retriever → Reranker → Generator", fmt="mermaid")
+    assert out.get("guardrail") == "diagram_rule_fallback"
+    assert set(out["sources"]) == {"mermaid", "dot", "tikz"}
+    assert out["validation"]["mermaid"]["ok"] is True
+    assert out["validation"]["dot"]["ok"] is True
+    assert out["validation"]["tikz"]["ok"] is True
+    assert len(out["spec"]["nodes"]) == 4 and len(out["spec"]["edges"]) == 3
+    # LLM 可用但调用抛错 → 同样降级
+    monkeypatch.setattr(diagram.llm, "available", lambda: True)
+
+    def _boom(*a, **kw):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(diagram.llm, "chat", _boom)
+    out2 = diagram.generate_diagram("A -> B", fmt="mermaid")
+    assert out2.get("guardrail") == "diagram_rule_fallback"
+    assert out2["validation"]["mermaid"]["ok"] is True
+
+
+def test_diagram_endpoint_no_503_without_llm(monkeypatch):
+    """e2e ⑩ 回归：POST /api/copilot/diagram 在 LLM 不可用时应 200（旧实现 503）。"""
+    monkeypatch.setattr(diagram.llm, "available", lambda: False)
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    client = TestClient(app)
+    r = client.post("/api/copilot/diagram", json={
+        "description": "Query → Retriever → Reranker → Generator", "fmt": "mermaid"})
+    assert r.status_code == 200, f"LLM 不可用不得 503：{r.text[:200]}"
+    body = r.json()
+    assert body.get("guardrail") == "diagram_rule_fallback"
+    assert body["validation"]["mermaid"]["ok"] is True

@@ -249,7 +249,12 @@ def _pagerank_py(nodes: list[dict], edges: list[dict], alpha: float = 0.85,
 
 
 def _graph_metrics(graph: dict) -> dict:
-    """图谱指标：networkx+scipy 可用 → PageRank+介数；否则纯 Python PageRank（backend 如实标注）。"""
+    """图谱指标：networkx 建图后，介数与 PageRank 分开降级（backend 如实标注实现组合）。
+
+    此前 networkx 分支整体放在 `import scipy` 之后，而 scipy 不是项目依赖 →
+    恒走 ImportError 的纯 Python 分支、介数恒 0。现拆分：networkx 可用即算介数
+    （不依赖 scipy）；PageRank 单独 try `nx.pagerank`，缺 scipy 时回退纯 Python。
+    """
     nodes = graph.get("nodes", [])
     edges = graph.get("edges", [])
     if not nodes:
@@ -264,23 +269,27 @@ def _graph_metrics(graph: dict) -> dict:
     bet: dict[str, float] = {}
     try:
         import networkx as nx
-        import scipy  # noqa: F401 —— nx.pagerank 硬依赖
+    except ImportError:
+        pr = _pagerank_py(nodes, edges)
+        backend = "pagerank_py"
+    else:
         g = nx.DiGraph()
         g.add_nodes_from(n["id"] for n in nodes)
         g.add_edges_from((e["source"], e["target"]) for e in edges)
         if g.number_of_edges():
-            pr = nx.pagerank(g, alpha=0.85)
-            bet = nx.betweenness_centrality(g)
-            backend = "networkx"
+            try:
+                bet = nx.betweenness_centrality(g)  # 纯 networkx，不依赖 scipy
+            except Exception:  # noqa: BLE001 —— 介数失败不阻塞 PageRank
+                bet = {}
+            try:
+                pr = nx.pagerank(g, alpha=0.85)     # 硬依赖 scipy，缺失时回退
+                backend = "networkx"
+            except Exception:  # noqa: BLE001 —— 典型为缺 scipy 的 ImportError
+                pr = _pagerank_py(nodes, edges)
+                backend = "networkx_betweenness_pagerank_py"
         else:
             pr = {n["id"]: 1.0 / len(nodes) for n in nodes}
             backend = "networkx_no_edges"
-    except ImportError:
-        pr = _pagerank_py(nodes, edges)
-        backend = "pagerank_py"
-    except Exception as e:  # noqa: BLE001 —— 意外失败降级为均匀分，不阻塞
-        pr = {n["id"]: 1.0 / len(nodes) for n in nodes}
-        backend = f"degraded:{type(e).__name__}"
 
     title_of = {n["id"]: n["title"] for n in nodes}
     ranked = sorted(pr.items(), key=lambda kv: -kv[1])

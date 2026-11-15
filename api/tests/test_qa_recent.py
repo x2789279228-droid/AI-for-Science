@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """qa/recent 轻列表（前端改造方案 v1.0 §3.3 唯一后端新增点）：
 - 空库 → items==[]
 - 两条 trace（final 带 claims）→ 最近在前、四态计数正确

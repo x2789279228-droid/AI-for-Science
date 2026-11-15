@@ -213,7 +213,6 @@ def _query_vector(q: str) -> list[float] | None:
             ev = _query_vec_inflight.get(key)
             if ev is None:
                 _query_vec_inflight[key] = threading.Event()
-                owner = True
                 break
         ev.wait(timeout=15.0)   # 等持有者完成（超时兜底防悬挂）
     try:

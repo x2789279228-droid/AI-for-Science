@@ -552,13 +552,24 @@ export default function GraphPage() {
                   {graph.insights?.peripheral?.length > 0 && (
                     <span className="chip">🌿 边缘衍生 ×{graph.insights.peripheral.length}</span>
                   )}
-                  {graph.insights?.class_stat && (
-                    <span className="chip" title={`实质/背景/凑数 · 共 ${graph.insights.mention_count} 处引用标记`}>
-                      含金量：实质 {graph.insights.class_stat.substantive ?? 0} ·
-                      背景 {graph.insights.class_stat.background ?? 0} ·
-                      凑数 {graph.insights.class_stat.perfunctory ?? 0}
-                    </span>
-                  )}
+                  {(() => {
+                    // 含金量统计兼容：新后端写入 insights；旧响应/缓存挂在响应顶层
+                    // （web/lib/api.ts 的 FullGraph 尚未声明顶层字段，用局部断言兼容，不改共享类型）
+                    const legacy = graph as FullGraph & {
+                      class_stat?: Record<string, number>;
+                      mention_count?: number;
+                    };
+                    const stat = graph.insights?.class_stat ?? legacy.class_stat;
+                    if (!stat) return null;
+                    const mentions = graph.insights?.mention_count ?? legacy.mention_count;
+                    return (
+                      <span className="chip" title={`实质/背景/凑数 · 共 ${mentions ?? 0} 处引用标记`}>
+                        含金量：实质 {stat.substantive ?? 0} ·
+                        背景 {stat.background ?? 0} ·
+                        凑数 {stat.perfunctory ?? 0}
+                      </span>
+                    );
+                  })()}
                 </div>
               )}
               {showPicker && (

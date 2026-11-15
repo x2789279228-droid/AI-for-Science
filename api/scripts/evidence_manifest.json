@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-11-15 15:45:28",
+  "algorithm": "sha256",
+  "note": "评测证据包：报告数字 ← 这些脚本 × 这份源码 × 这些数据。复核=逐条比对 sha256。",
+  "files": [
+    {
+      "path": "docs\\acceptance\\eval-20261114\\eval-20261114\\eval_gold.json",
+      "bytes": 67029,
+      "sha256": "e67c9b390cc8393e22ccc406dc43ea67674ca78461ec2410836709f58b4eabfb"
+    },
+    {
+      "path": "docs\\acceptance\\eval-20261114-r2\\eval_gold.json",
+      "bytes": 87000,
+      "sha256": "22e7681bc99d1414697db697f62c5135038394f63df54cf8c54e6ed8ff2d210d"
+    },
+    {
+      "path": "docs\\acceptance\\eval-20261114-r3\\eval_gold.json",
+      "bytes": 87646,
+      "sha256": "333efc901ca156b2445fc7ed9db5066e4049e80b951b88e232182de6966f48fc"
+    },
+    {
+      "path": "docs\\acceptance\\round2-20261108\\eval_gold.json",
+      "bytes": 6239,
+      "sha256": "367b429f1608f0b0c53dd88cfbac143a6ea3d2b0078858e0c7f93c32d228bfec"
+    },
+    {
+      "path": "docs\\acceptance\\round3-20261109\\eval_gold.json",
+      "bytes": 41011,
+      "sha256": "56c7176ab4015364293b44d47df3a00385c861c96ee5fa384cffe3643080d947"
+    },
+    {
+      "path": "docs\\acceptance\\round4-20261110\\eval_gold.json",
+      "bytes": 69252,
+      "sha256": "f0b6452276d1ff52bf671755df7d658fcb1cebbecd808209d0038759e74e9901"
+    },
+    {
+      "path": "docs\\acceptance\\round5-20261110\\eval_gold.json",
+      "bytes": 60094,
+      "sha256": "2467ecde25efa49a183b74448e8145a36202bce04e4ea8457c88111e2309e0df"
+    },
+    {
+      "path": "docs\\acceptance\\round6-20261110\\eval_gold.json",
+      "bytes": 67729,
+      "sha256": "ce2655bcfddfccf6276e5b734a731dd64be9789c43c3adc5e594669188c77e9c"
+    },
+    {
+      "path": "docs\\acceptance\\round7-20261110\\eval_gold.json",
+      "bytes": 67326,
+      "sha256": "7202e81412cc9e43011010cfab85c0010b535cf7e5276a7fb0eb96a70109c109"
+    },
+    {
+      "path": "docs\\acceptance\\round8-20261110\\eval_gold.json",
+      "bytes": 67993,
+      "sha256": "0ccad40762fc990d2f6f81169243b68c39a13bb14ff8c125256d3a5b7f7564bd"
+    },
+    {
+      "path": "api\\scripts\\eval_ablation.py",
+      "bytes": 11463,
+      "sha256": "9cefb9b59794a20dfb35ea1d6ef7b256104cd979fa78384a9c492a78c393929e"
+    },
+    {
+      "path": "api\\scripts\\eval_evidence_manifest.py",
+      "bytes": 2753,
+      "sha256": "49fc8e356da79c7e4498c4a3df2d80e4a484fd81daff8ce2318947e47b9392a1"
+    },
+    {
+      "path": "api\\scripts\\eval_gold.py",
+      "bytes": 46152,
+      "sha256": "5a48a0bf116071497fcdf3869bd3a0be7630ac9328d8addf375ef695dd33223b"
+    },
+    {
+      "path": "api\\scripts\\eval_kappa.py",
+      "bytes": 11227,
+      "sha256": "313174fc61586111ac414abf2cfc21e5e12648666ab88e9c30759ca82e1afc6b"
+    },
+    {
+      "path": "api\\scripts\\eval_quick.py",
+      "bytes": 4918,
+      "sha256": "7a1901581cb087c8863f5f1e2de13297a7d51888984b0d1ed6f079875c662d78"
+    },
+    {
+      "path": "api\\scripts\\eval_round6_metrics.py",
+      "bytes": 7864,
+      "sha256": "9dcdf328572f289c2a0fab7f691f814e54fb2a97b2ade8e84c21509bd6a351c6"
+    },
+    {
+      "path": "api\\scripts\\eval_seeds.py",
+      "bytes": 5817,
+      "sha256": "2066010a11357cc4968c808eb4acef91e10b0744242937a355b94d41a4466000"
+    },
+    {
+      "path": "api\\scripts\\verify_goldset_40.py",
+      "bytes": 6121,
+      "sha256": "d72d1afbbfc64b70ad195646f17d2ff22bcdfe6f942b819ca88ee6945c6f739c"
+    },
+    {
+      "path": "api\\scripts\\ablation.json",
+      "bytes": 2988,
+      "sha256": "13787526315da111c784651bd9814895412d7fd56bc46436379a83ddfb22c28a"
+    },
+    {
+      "path": "api\\scripts\\ablation_40q.json",
+      "bytes": 6786,
+      "sha256": "da6fbba2998a60321771020aa32b14826aef5edcc5d994f7bdf3d1a9c782b665"
+    },
+    {
+      "path": "api\\scripts\\ablation_40q_rr.json",
+      "bytes": 3118,
+      "sha256": "998fa3209b79d131a21fa36b2649f646f9f53779831828d418a6f1a0508461d4"
+    },
+    {
+      "path": "api\\scripts\\ablation_47q.json",
+      "bytes": 8536,
+      "sha256": "a0fdbbaa2bb054bc44268f57071dff5cc156e94b224c9971ba3c3341c0bafaaf"
+    },
+    {
+      "path": "api\\scripts\\ablation_real.json",
+      "bytes": 3510,
+      "sha256": "f7a0f64b573411f766da465204f21311181d32e37ced2a0df3896662a06fc91a"
+    },
+    {
+      "path": "api\\scripts\\kappa_report.json",
+      "bytes": 27280,
+      "sha256": "8dbd9389824787a6bd4207d79eebfb2b04d8bc6dd8aca8cc838d9a2fbd7c25b0"
+    },
+    {
+      "path": "api\\scripts\\seeds_ci.json",
+      "bytes": 1110,
+      "sha256": "10c55d5d491d53e70efadfab57cffad696eb398379a75d36ca7ca76f9208f587"
+    },
+    {
+      "path": "api\\scripts\\round6_metrics.json",
+      "bytes": 862,
+      "sha256": "0edeb4146b1d4a103fff5711b9f7b9351baa9df6ca1d12e5fbd59e0cda5d0179"
+    },
+    {
+      "path": "api\\scripts\\feas_pymupdf_udl.json",
+      "bytes": 525,
+      "sha256": "29e1039858cd2ce571f45cdf1d6cc6a386cdc42dd7d6d3b24ebb341e02c4aa87"
+    },
+    {
+      "path": "api\\app\\agents\\nodes.py",
+      "bytes": 54338,
+      "sha256": "212caaeab855aa358aff4d330c4c6fe12aff26951d14768ee60a3761c8ca03be"
+    },
+    {
+      "path": "api\\app\\agents\\graph.py",
+      "bytes": 8979,
+      "sha256": "2ebcc65c46c214edb6142b94a4b7ca7c424335e0f7d8219980a2e4e87a869acc"
+    },
+    {
+      "path": "api\\app\\rag\\verify.py",
+      "bytes": 17090,
+      "sha256": "d52383a7124085b0ff29ea7808197d866cee5702c437bded7baca24f0ebd28bf"
+    },
+    {
+      "path": "api\\app\\rag\\answering.py",
+      "bytes": 25610,
+      "sha256": "5ac150312606c1d0d71ee4325def6a520567ecf30de53b8afbd5e0988c898b75"
+    },
+    {
+      "path": "api\\app\\api_routes\\routes.py",
+      "bytes": 55868,
+      "sha256": "015fbfd16f93da8fc3e2a34874828d54814e3d14ec8bf428cc769c80702b8b9f"
+    },
+    {
+      "path": "api\\app\\api_routes\\graph_routes.py",
+      "bytes": 13758,
+      "sha256": "037c9ecb6703905c8f2a07242b1465e66c7c8d8a7789b588e0dab7900f80ed0e"
+    }
+  ]
+}

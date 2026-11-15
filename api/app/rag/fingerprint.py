@@ -21,7 +21,7 @@ import numpy as np
 PERMS = 128          # MinHash 置换函数个数（128×f4 = 512B/篇）
 SHINGLE = 5          # 5-gram 字符 shingle（中英混排均可）
 _MAX_HEAD = 20000    # 指纹取样上限字符（正文过长时取头部——重合检测对头部已足够敏感）
-_MAX_HASHES = 512    # 参与 MinHash 的 shingle 抽样上限（长文档防慢）
+_MAX_HASHES = 512    # 参与 MinHash 的 shingle 抽样上限（长文档防慢；bottom-k 取最小哈希）
 
 LSH_BANDS = 32       # b-band LSH：32 band × 4 row，命中阈值≈(1/32)^(1/4)≈0.42
 LSH_ROWS = 4         # 取向召回：判定阈 0.85 分量里 minhash 0.5~0.75 的对也要能被 blocking 捕获，
@@ -34,19 +34,36 @@ _PAGE_NO = re.compile(r"^\d{1,4}$")
 _REF_HEADING = re.compile(r"^(references|参考文献)$", re.IGNORECASE)
 
 
-def _shingles(text: str, k: int = SHINGLE) -> list[bytes]:
-    t = re.sub(r"\s+", " ", (text or "").lower()).strip()
-    if len(t) <= k:
-        return [t.encode("utf-8")] if t else []
-    shingles = [t[i:i + k].encode("utf-8") for i in range(len(t) - k + 1)]
-    if len(shingles) > _MAX_HASHES:  # 均匀抽样，保持签名对全文代表性
-        step = len(shingles) / _MAX_HASHES
-        shingles = [shingles[int(i * step)] for i in range(_MAX_HASHES)]
-    return shingles
-
-
 def _hash64(data: bytes) -> int:
     return int.from_bytes(hashlib.sha1(data).digest()[:8], "big")
+
+
+def _shingle_hashes(text: str, k: int = SHINGLE, cap: int = _MAX_HASHES) -> np.ndarray:
+    """正文 → 字符 k-gram 的 64 位哈希（bottom-k 抽样，返回升序去重 uint64 数组）。
+
+    旧实现对 shingle 列表按**固定步长取位置**：v1/v7 文本长度不同时抽样位置错位，
+    两份文档即使共享大段正文，抽样到的 shingle 也几乎不重合（实测真实 5-gram
+    Jaccard≈0.64 的 UDL v1/v7，落地签名 Jaccard 只有≈0.09）。改为对**全部**
+    shingle 计算同一哈希函数（sha1 前 8 字节，跨文档稳定可比）后取最小的 cap 个
+    ——bottom-k / KMV 草图：抽样集合与文本长度/位置解耦，是标准的 Jaccard 估计器。
+
+    numpy 实现（np.fromiter 批量取哈希 + np.unique/np.partition 局部选择），
+    不做 Python set 全量排序；全量 shingle 的 O(n) 哈希无法避免，但只有
+    _MAX_HEAD 字符（≤20k shingle）——百万级全书由调用方先截头部控制。
+    """
+    t = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not t:
+        return np.empty(0, dtype=np.uint64)
+    if len(t) <= k:  # 短文本：整串作唯一 shingle（与旧实现同语义）
+        return np.fromiter((_hash64(t.encode("utf-8")),), dtype=np.uint64, count=1)
+    n = len(t) - k + 1
+    hs = np.fromiter((_hash64(t[i:i + k].encode("utf-8")) for i in range(n)),
+                     dtype=np.uint64, count=n)
+    hs = np.unique(hs)   # 去重（重复 shingle 不挤占 bottom-k 名额），返回已升序
+    if hs.size > cap:
+        # 局部选择最小 cap 个（O(n)），排序固定升序保证确定性
+        hs = np.sort(hs[np.argpartition(hs, cap - 1)[:cap]])
+    return hs
 
 
 # ---------- boilerplate 滤除（文本指纹标准前置：页眉页脚/水印/参考文献强干扰） ----------
@@ -85,19 +102,23 @@ def strip_boilerplate(blocks: list[str] | str, min_repeat: int = 3) -> str:
 
 
 def minhash_sig(text: str) -> bytes:
-    """正文 → 128 维 MinHash 签名（float32 LE BLOB，存 papers.content_sig）。"""
-    shingles = _shingles((text or "")[:_MAX_HEAD])
-    if not shingles:
+    """正文 → 128 维 MinHash 签名（float32 LE BLOB，存 papers.content_sig）。
+
+    shingle 由 _shingle_hashes 直接给出 64 位哈希（bottom-k 抽样、跨文档同一哈希
+    函数），这里只对整数哈希做 128 个置换取最小值——**不再对抽样后的 bytes 二次
+    hash**（旧实现二次 hash 叠加固定步长抽样，使签名对 v1/v7 这类长度不同的同族
+    文档系统性失配）。
+    """
+    hs = _shingle_hashes((text or "")[:_MAX_HEAD])
+    if hs.size == 0:
         return b""
-    hs = np.fromiter((_hash64(s) for s in shingles), dtype=np.uint64,
-                     count=len(shingles)).astype(np.uint64)
     # 置换族：a_i * x + b_i (mod 大素数)，a/b 由计数序列派生（确定性）
     idx = np.arange(PERMS, dtype=np.uint64)
     a = (idx * 2 + 1) * 2654435761 % _MERSenne
     b = (idx + 1) * 40503 % _MERSenne
-    sig = np.full(PERMS, np.uint64(_MERSenne), dtype=np.uint64)
-    for i in range(PERMS):
-        sig[i] = np.min((a[i] * hs + b[i]) % np.uint64(_MERSenne))
+    # 广播成 (PERMS, n) 后按行取最小值：与逐行循环等值，但一次向量化完成
+    perm = (a[:, None] * hs[None, :] + b[:, None]) % np.uint64(_MERSenne)
+    sig = perm.min(axis=1)
     return struct.pack(f"<{PERMS}f", *(v / _MERSenne for v in sig.astype(np.float64)))
 
 

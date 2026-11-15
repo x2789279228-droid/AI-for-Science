@@ -67,7 +67,7 @@ def trim_quote_to_evidence(quote: str, evidence_text: str) -> str | None:
     best_span, best_ratio = None, 0.0
     n = len(sents)
     for span in (1, 2, 3):        # 1~3 连续句
-        for i in range(0, n - span + 1):
+        for i in range(n - span + 1):
             group = " ".join(sents[i:i + span])
             sm = difflib.SequenceMatcher(None, qn, _norm(group), autojunk=False)
             ratio = sum(b.size for b in sm.get_matching_blocks()) / len(qn)
@@ -77,21 +77,6 @@ def trim_quote_to_evidence(quote: str, evidence_text: str) -> str | None:
         return None
     cov = quote_coverage(quote, best_span)
     return best_span if cov >= 0.75 else None
-    words = ev_text.split()
-    if not words:
-        return None
-    # 以归一字符数估计词窗上下界（原文形式保持可读，词粒度滑窗）
-    avg_w = max(len(tn) / max(len(words), 1), 1.0)
-    w_lo = max(4, int(len(qn) / avg_w) - 3)
-    w_hi = min(len(words), int(len(qn) * 1.5 / avg_w) + 3)
-    best_sub, best_ratio = None, 0.0
-    for w in range(w_lo, w_hi + 1):
-        for i in range(0, len(words) - w + 1):
-            sub = " ".join(words[i:i + w])
-            ratio = difflib.SequenceMatcher(None, qn, _norm(sub), autojunk=False).ratio()
-            if ratio > best_ratio:
-                best_ratio, best_sub = ratio, sub
-    return best_sub if best_ratio >= 0.90 else None
 
 
 def extract_claims_numbers(claim_text: str) -> list[str]:

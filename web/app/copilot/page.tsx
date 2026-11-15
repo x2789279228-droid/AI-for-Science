@@ -4,10 +4,12 @@
  * 学术写作与数据可视化 Copilot（模块六）：
  * ① 写作：idea + 选中论文 → 无幻觉论文框架（固定章节 + References 白名单，
  *    正文 [R#] 与 References 由代码双向一致化，白名单外引用自动剔除并记 guardrails）
- * ② 数据可视化：CSV 上传（5MB/10万行护栏）→ table/line/bar/3D-radar（ECharts）
- *    + 学术 Figure Caption（数字全部可回溯数据集）
+ * ② 数据可视化：CSV 上传（5MB/10万行护栏）→ table/line/bar/多维 radar（含
+ *    3D 透视变体） / 真 3D scatter3d（ECharts + echarts-gl）+ 学术 Figure
+ *    Caption（数字全部可回溯数据集；bar 大数据 Top60+其他聚合降采样）
  * ③ 学术翻译：中文摘要/全文 → 英文学术语体（复用模块三双向管线）
  * ④ 拓扑图脚本：DiagramSpec → Mermaid/Graphviz DOT/TikZ 源码 + matplotlib PNG
+ *    （LLM 不可用时按规则降级，仍出四格式脚本并如实标注 guardrail）
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -21,6 +23,23 @@ import { useShell } from "@/components/ShellContext";
 import { canvasTheme } from "@/lib/theme-palettes";
 
 type Tab = "write" | "viz" | "translate" | "diagram";
+
+/** 后端静态产物（sandbox PNG 等）返回的是相对路径；<img> 必须拼 API base，
+ *  否则会指向 Next 自身源（如 3005）而 404。 */
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8100";
+
+function mediaUrl(url?: string): string {
+  if (!url) return "";
+  if (/^(https?:)?\/\//i.test(url) || url.startsWith("data:")) return url;
+  return `${API_ORIGIN.replace(/\/+$/, "")}/${url.replace(/^\/+/, "")}`;
+}
+
+/** 图表 spec 的扩展字段（web/lib/api.ts 不属本轮写域，局部窄化断言）。 */
+type ChartSpecExt = ChartOut["spec"] & {
+  variant?: string;
+  render_note?: string;
+  downsampled?: { total_rows: number; shown_rows: number; method: string };
+};
 
 /** ECharts 客户端渲染（dynamic 导入防 SSR；type=table 由表格渲染；scatter3d 走 echarts-gl）。 */
 function EChart({ spec }: { spec: ChartOut["spec"] }) {
@@ -48,11 +67,13 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
             data: s.data, smooth: true,
           })),
         });
-      } else if (spec.type === "radar") {
+      } else if (spec.type === "radar" || spec.type === "radar3d") {
+        const radarSeries = (spec.series ?? []).map((s) => ({ name: s.name, value: s.data }));
         chart.setOption({
           ...common,
-          radar: { indicator: spec.indicators ?? [] },
-          series: [{ type: "radar", data: (spec.series ?? []).map((s) => ({ name: s.name, value: s.data })) }],
+          legend: { top: 4, type: "scroll" },
+          radar: { indicator: spec.indicators ?? [], splitArea: { areaStyle: { opacity: 0.12 } } },
+          series: [{ type: "radar", data: radarSeries, symbolSize: 4 }],
         });
       } else if (spec.type === "scatter3d") {
         await import("echarts-gl");   // 真 3D：grid3D + scatter3D（注册后全局生效）
@@ -74,6 +95,49 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
     return () => { alive = false; instRef.current?.dispose(); instRef.current = null; };
   }, [spec, theme]);
   return <div ref={ref} style={{ width: "100%", height: 360 }} />;
+}
+
+/** 「雷达（3D 透视）」呈现层：ECharts 5 无原生 radar3D（真 3D 用 scatter3d）。
+ *  底层仍是 2D 多维雷达，这里用 CSS 三层错位 + 透视/阴影近似 3D 观感——
+ *  底层两块「轴面」错位后移、顶层雷达轻微 rotateX，兼具可读性与立体感。 */
+function Radar3DLayers({ spec }: { spec: ChartOut["spec"] }) {
+  const plates = [
+    {
+      top: 26, scale: 0.9, opacity: 0.16, rot: 26,
+      bg: "linear-gradient(135deg, var(--surface-2,#dbe4f0), transparent 72%)",
+    },
+    {
+      top: 13, scale: 0.95, opacity: 0.26, rot: 17,
+      bg: "linear-gradient(135deg, var(--surface-2,#e8eef7), transparent 70%)",
+    },
+  ];
+  return (
+    <div style={{ position: "relative", padding: "6px 0 18px", perspective: 1200 }}>
+      {plates.map((p) => (
+        <div key={p.top} aria-hidden style={{
+          position: "absolute", left: "9%", right: "9%", top: p.top, height: 360 - p.top,
+          borderRadius: 14, border: "1px solid var(--line)", background: p.bg,
+          opacity: p.opacity, transformOrigin: "50% 100%",
+          transform: `rotateX(${p.rot}deg) scale(${p.scale})`,
+          boxShadow: "0 10px 24px rgba(15,23,42,.08)", pointerEvents: "none",
+        }} />
+      ))}
+      <div style={{
+        position: "relative", borderRadius: 14, overflow: "visible",
+        transform: "rotateX(9deg) rotateZ(-2deg)", transformOrigin: "50% 100%",
+        boxShadow: "0 20px 40px rgba(15,23,42,.20)",
+      }}>
+        <EChart spec={spec} />
+      </div>
+      <div style={{ position: "absolute", right: 4, top: 0, maxWidth: "60%" }}>
+        <span className="chip warn" style={{ fontSize: 10 }}
+          title={(spec as ChartSpecExt).render_note
+            ?? "ECharts 无原生 radar3D：底层为 2D 多维雷达，CSS 三层错位/透视近似"}>
+          3D 透视（ECharts 无原生 radar3D）
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /** mermaid 源码预览（render 通过才显示，语法校验可视化）。
@@ -140,10 +204,13 @@ export default function CopilotPage() {
   const [datasets, setDatasets] = useState<DatasetMeta[]>([]);
   const [dsId, setDsId] = useState("");
   const [chart, setChart] = useState<ChartOut | null>(null);
-  const [chartType, setChartType] = useState<"table" | "line" | "bar" | "radar" | "scatter3d">("bar");
+  const [chartType, setChartType] = useState<
+    "table" | "line" | "bar" | "radar" | "radar3d" | "scatter3d">("bar");
   const [xCol, setXCol] = useState("");
   const [yCols, setYCols] = useState<string[]>([]);
   const [vizNote, setVizNote] = useState("");
+  const chartSpec = chart?.spec as ChartSpecExt | undefined;
+  const isRadar3d = chartSpec?.variant === "radar3d";
 
   const loadDatasets = () => datasetApi.list().then(setDatasets).catch(() => {});
   useEffect(() => { if (tab === "viz" && !datasets.length) void loadDatasets(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -198,6 +265,7 @@ export default function CopilotPage() {
   const [archDesc, setArchDesc] = useState("");
   const [diagram, setDiagram] = useState<DiagramOut | null>(null);
   const [dgNote, setDgNote] = useState("");
+  const dgGuardrail = (diagram as (DiagramOut & { guardrail?: string }) | null)?.guardrail;
 
   const runDiagram = async () => {
     if (!archDesc.trim()) return;
@@ -205,7 +273,9 @@ export default function CopilotPage() {
     try {
       const out = await generateDiagram(archDesc.trim());
       setDiagram(out);
-      setDgNote(`完成：${out.spec.nodes.length} 节点 · ${out.spec.edges.length} 边`);
+      const guard = (out as DiagramOut & { guardrail?: string }).guardrail;
+      setDgNote(`完成：${out.spec.nodes.length} 节点 · ${out.spec.edges.length} 边`
+        + (guard ? `（LLM 不可用，已规则降级：${guard}）` : ""));
     } catch (e) { setDgNote(`出错：${e}`); }
   };
 
@@ -260,6 +330,13 @@ export default function CopilotPage() {
                 )}
               </div>
               {writeNote && <p className="kv" style={{ marginTop: 8 }}>{writeNote}</p>}
+              {writing?.guardrails?.find((g) => g.startsWith("refs_underused:")) && (
+                <p className="kv" style={{ color: "var(--warn)" }}>
+                  引用不足，已如实标注：正文实际引用{" "}
+                  {writing.guardrails.find((g) => g.startsWith("refs_underused:"))?.split(":")[1]} 条
+                  （&lt; 3，补引重试后仍不足），未强行编造引用——已在 guardrails 记录 refs_underused。
+                </p>
+              )}
               {writing?.guardrails?.length ? (
                 <p className="kv" style={{ color: "var(--warn)" }}>
                   guardrails（自动剔除的白名单外引用/超证据标记）：{writing.guardrails.slice(0, 6).join(" · ")}
@@ -300,6 +377,11 @@ export default function CopilotPage() {
           <>
             <div className="card">
               <h2 style={{ marginTop: 0 }}>CSV 数据可视化</h2>
+              <p className="kv" style={{ marginTop: 0 }}>
+                雷达图＝多维指标雷达（指标 = 选定 y 列，每个 x 类别一个多边形，半径上限取该指标全量最大值 ×1.1）；
+                3D 数据请用「3D 散点」；「雷达（3D 透视）」为 2D radar + CSS 三层透视近似
+                （ECharts 无原生 radar3D）。柱状图类别 &gt;60 时按数值 Top60 +「其他（聚合）」降采样，图注统计仍用全量数据。
+              </p>
               <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", alignItems: "center" }}>
                 <input type="file" accept=".csv" onChange={(e) => uploadCsv(e.target.files?.[0] ?? null)}
                   style={{ fontSize: 12 }} />
@@ -311,12 +393,14 @@ export default function CopilotPage() {
                     ))}
                   </select>
                 )}
-                {(["table", "line", "bar", "radar", "scatter3d"] as const).map((t) => (
+                {(["table", "line", "bar", "radar", "radar3d", "scatter3d"] as const).map((t) => (
                   <button key={t} className={`chip ${chartType === t ? "accent" : ""}`}
                     style={{ cursor: "pointer" }} onClick={() => setChartType(t)}
-                    title={t === "radar" ? "多维指标雷达（ECharts radar，平面多维轴）"
+                    title={t === "radar" ? "多维指标雷达：指标 = 选定 y 列，每个 x 类别一个多边形（ECharts radar 平面多维轴）"
+                      : t === "radar3d" ? "3D 透视：底层同一份 2D radar 数据，CSS 三层错位/透视近似（ECharts 无原生 radar3D）"
                       : t === "scatter3d" ? "真 3D 散点（echarts-gl grid3D，可拖拽旋转）" : undefined}>
-                    {t === "radar" ? "雷达（多维）" : t === "scatter3d" ? "3D 散点"
+                    {t === "radar" ? "雷达（多维）" : t === "radar3d" ? "雷达（3D 透视）"
+                      : t === "scatter3d" ? "3D 散点"
                       : t === "table" ? "表格" : t === "line" ? "折线" : "柱状"}
                   </button>
                 ))}
@@ -349,7 +433,20 @@ export default function CopilotPage() {
             {chart && (
               <div className="card">
                 <h2 style={{ marginTop: 0, fontSize: 15 }}>{chart.spec.title}
-                  <span className="chip" style={{ fontSize: 10, marginLeft: 8 }}>{chart.spec.type}</span>
+                  <span className="chip" style={{ fontSize: 10, marginLeft: 8 }}>
+                    {chart.spec.type}{isRadar3d ? " · 3D 透视" : ""}
+                  </span>
+                  {chartSpec?.downsampled && (
+                    <span className="chip warn" style={{ fontSize: 10, marginLeft: 8 }}
+                      title={`类别数 ${chartSpec.downsampled.total_rows} → 展示 ${chartSpec.downsampled.shown_rows}；图注统计仍用全量数据`}>
+                      大数据降采样：{chartSpec.downsampled.method}（{chartSpec.downsampled.total_rows} → {chartSpec.downsampled.shown_rows}）
+                    </span>
+                  )}
+                  {isRadar3d && (
+                    <span className="chip warn" style={{ fontSize: 10, marginLeft: 8 }}>
+                      ECharts 无原生 radar3D（CSS 透近似）
+                    </span>
+                  )}
                 </h2>
                 {chart.spec.type === "table" ? (
                   <div style={{ overflowX: "auto" }}>
@@ -367,6 +464,8 @@ export default function CopilotPage() {
                       <p className="kv">…共 {chart.spec.row_count} 行（预览前 30 行）</p>
                     )}
                   </div>
+                ) : isRadar3d ? (
+                  <Radar3DLayers spec={chart.spec} />
                 ) : <EChart spec={chart.spec} />}
                 {chart.caption && (
                   <p style={{ fontSize: 13, marginTop: 10, fontStyle: "italic" }}>
@@ -412,13 +511,24 @@ export default function CopilotPage() {
           <>
             <div className="card">
               <h2 style={{ marginTop: 0 }}>架构拓扑图脚本</h2>
-              <p className="kv">描述系统/方法 → 结构化 DiagramSpec → 确定性生成 Mermaid / Graphviz DOT / TikZ 源码 + matplotlib 渲染 PNG（不执行任意代码；幽灵边自动剔除）。</p>
+              <p className="kv">
+                描述系统/方法 → 结构化 DiagramSpec → 确定性生成 Mermaid / Graphviz DOT / TikZ 源码 +
+                matplotlib 渲染 PNG（不执行任意代码；幽灵边自动剔除）。LLM 不可用时自动规则降级
+                （按 →/{"->"}/=&gt; 拆链 + 句读/逗号拆步，≤12 节点），仍出四格式脚本并以
+                guardrail=diagram_rule_fallback 如实标注。
+              </p>
               <textarea value={archDesc} onChange={(e) => setArchDesc(e.target.value)}
                 placeholder="如：一个 RAG 系统：Query 改写器 → Retriever（从向量库取 top-k）→ Reranker → Generator 生成带引用的回答"
                 style={{ width: "100%", minHeight: 100, border: "1px solid var(--line-strong)",
                   borderRadius: "var(--radius-sm)", padding: 10, fontFamily: "var(--font)", outline: "none" }} />
               <button className="btn primary" style={{ marginTop: 10 }} onClick={runDiagram}>生成四种脚本</button>
               {dgNote && <p className="kv" style={{ marginTop: 8 }}>{dgNote}</p>}
+              {dgGuardrail === "diagram_rule_fallback" && (
+                <p className="kv" style={{ color: "var(--warn)" }}>
+                  LLM 不可用 → 已按规则降级解析（guardrail=diagram_rule_fallback）：
+                  节点/边由箭头链与句读拆分确定性生成，非 LLM 结构化结果。
+                </p>
+              )}
             </div>
 
             {diagram && (
@@ -452,8 +562,13 @@ export default function CopilotPage() {
                     </span>
                   </h2>
                   {diagram.matplotlib?.ok && diagram.matplotlib.image_url && (
-                    <img src={diagram.matplotlib.image_url} alt="拓扑图"
+                    <img src={mediaUrl(diagram.matplotlib.image_url)} alt="拓扑图"
                       style={{ maxWidth: "100%", borderRadius: "var(--radius-sm)" }} />
+                  )}
+                  {diagram.matplotlib?.ok && diagram.matplotlib.image_url && (
+                    <p className="kv" style={{ fontSize: 12 }}>
+                      PNG 经 API base 拼接：{mediaUrl(diagram.matplotlib.image_url)}
+                    </p>
                   )}
                 </div>
               </>

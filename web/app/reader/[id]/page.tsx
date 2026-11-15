@@ -17,7 +17,7 @@
  * - 模块三 G：整篇翻译（缓存续译 + AbortController 中断）+ 中英对照 MD/HTML 导出
  * - 公式 KaTeX + 扫描件徽章 + 解析报告（含解析峰值内存曲线，4.3）
  */
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -30,6 +30,7 @@ import {
 import { useIsland } from "@/lib/island";
 import { useShell } from "@/components/ShellContext";
 import { List, Maximize } from "@/components/icons";
+import EmptyState from "@/components/EmptyState";
 import PdfAnchored from "@/components/PdfAnchored";
 
 type ViewMode = "pdf" | "text" | "bilingual" | "compare" | "pdf-bilingual";
@@ -90,31 +91,41 @@ function katexHtml(tex: string, display: boolean): string {
   }
 }
 
-/** [n] 引用标记 chip（正向跳 References，反向由 refsIndex 高亮）。 */
+/** [n] / [n, m] 引用标记 chip（正向跳 References，反向由 refsIndex 高亮）。 */
 function CitationChips({ text, onCite, highlightRef }: {
   text: string; onCite?: (n: number) => void; highlightRef?: number | null;
 }) {
   const parts = useMemo(
-    () => text.split(/(\$[^$\n]+\$|\[\d{1,3}(?:,\s*\d{1,3})*\])/g), [text]);
+    () => text.split(/(\$[^$\n]+\$|\[\d{1,3}(?:[,，]\s*\d{1,3})*\])/g), [text]);
   return (
     <>
       {parts.map((p, i) => {
         if (p.startsWith("$") && p.endsWith("$") && p.length > 2) {
           return <span key={i} dangerouslySetInnerHTML={{ __html: katexHtml(p.slice(1, -1), false) }} />;
         }
-        const m = p.match(/^\[(\d{1,3})(?:,\s*\d{1,3})*\]$/);
+        // 分组引用 [13, 14]：逐号渲染独立可点 chip（旧实现只取首个编号，14 既不可点、
+        // 反向索引也查不到）；逗号保留为普通文本，单个 [n] 的样式/highlight 语义不变
+        const m = p.match(/^\[(\d{1,3}(?:[,，]\s*\d{1,3})*)\]$/);
         if (m && onCite) {
-          const n = Number(m[1]);
+          const nums = m[1].split(/[,，]/).map((s) => Number(s.trim()))
+            .filter((n) => Number.isFinite(n));
           return (
-            <span key={i}
-              className="chip anchor-chip"
-              style={{
-                cursor: "pointer", fontSize: 11, padding: "0 6px",
-                background: highlightRef === n ? "var(--accent, #2563eb)" : undefined,
-                color: highlightRef === n ? "var(--accent-contrast, #fff)" : undefined,
-              }}
-              title={`跳转到参考文献 [${n}]`}
-              onClick={() => onCite(n)}>[{n}]</span>
+            <span key={i}>
+              {nums.map((n, j) => (
+                <Fragment key={j}>
+                  {j > 0 ? ", " : null}
+                  <span
+                    className="chip anchor-chip"
+                    style={{
+                      cursor: "pointer", fontSize: 11, padding: "0 6px",
+                      background: highlightRef === n ? "var(--accent, #2563eb)" : undefined,
+                      color: highlightRef === n ? "var(--accent-contrast, #fff)" : undefined,
+                    }}
+                    title={`跳转到参考文献 [${n}]`}
+                    onClick={() => onCite(n)}>[{n}]</span>
+                </Fragment>
+              ))}
+            </span>
           );
         }
         return <span key={i}>{p}</span>;
@@ -282,9 +293,10 @@ function PaperMetaCard({ meta, arxivId }: { meta: DocIRMeta; arxivId?: string })
   );
 }
 
-/** 划词翻译浮窗：选区上方弹出，上下文短译 + 术语命中 + 加入术语表。 */
-function SelectionPopup({ sel, onClose }: {
+/** 划词翻译浮窗：按当前翻译方向（英→中 / 中→英）短译，选区上方弹出，上下文 + 术语命中 + 加入术语表。 */
+function SelectionPopup({ sel, targetLang, onClose }: {
   sel: { x: number; y: number; text: string; context: string } | null;
+  targetLang: "zh" | "en";
   onClose: () => void;
 }) {
   const [result, setResult] = useState<{ translation: string; term_hit?: { term: string; translation: string } | null; ok: boolean } | null>(null);
@@ -295,10 +307,10 @@ function SelectionPopup({ sel, onClose }: {
   useEffect(() => {
     if (!sel) { setResult(null); setAdded(false); return; }
     setLoading(true);
-    translateSelection(sel.text, sel.context)
+    translateSelection(sel.text, sel.context, targetLang)
       .then(setResult)
       .finally(() => setLoading(false));
-  }, [sel]);
+  }, [sel, targetLang]);
 
   if (!sel) return null;
   const term = result?.term_hit;
@@ -373,7 +385,10 @@ function ReaderInner() {
   // 双模式：普通文档（doc_type=general）隐藏学术面板——References/引用跳转/阅读顺序演示
   const isPaperDoc = (paper?.doc_type ?? "paper") !== "general";
   const [outline, setOutline] = useState<OutlinePayload | null>(null);
+  const [outlineErr, setOutlineErr] = useState<string | null>(null);  // 大纲加载失败原因（空=正常/加载中）
+  const [outlineRetry, setOutlineRetry] = useState(0);                // 重试计数 → 重跑 outline 拉取
   const [pageData, setPageData] = useState<PagePayload | null>(null);
+  const [loadedPage, setLoadedPage] = useState(0);            // pageData 实际对应的 1 基页码（0=未加载；TOC 跨页定位的数据就绪门槛）
   const [pageLoading, setPageLoading] = useState(false);
   const [page, setPage] = useState(1);                       // 1 基人读页码
   const [query, setQuery] = useState("");
@@ -455,7 +470,6 @@ function ReaderInner() {
       const cjk = ((p.title ?? "").match(/[\u4e00-\u9fff]/g) ?? []).length;
       setTransLang((cur) => (cjk >= 2 && !localStorage.getItem("trans_lang_manual") ? "en" : cur));
     }).catch(() => { /* 详情失败不影响 outline 兜底链路 */ });
-    fetchDocirOutline<OutlinePayload>(id as string).then((d) => setOutline(d));
     // 库内 arXiv id 集合（References「库内」标记）：走缓存版 listPapers，不再裸拉
     listPapers().then((ps) => {
       const ids = new Set<string>();
@@ -466,6 +480,19 @@ function ReaderInner() {
       setLibraryArxivIds(ids);
     }).catch(() => {});
   }, [id]);
+
+  // 大纲拉取（含失败态）：404/网络失败不再永久停在「加载大纲中…」——正文渲染依赖
+  // outline（pages/meta/toc），失败时显式暴露错误并提供重试，不静默空转。
+  useEffect(() => {
+    let alive = true;
+    setOutlineErr(null);
+    fetchDocirOutline<OutlinePayload>(id as string)
+      .then((d) => { if (alive) setOutline(d); })
+      .catch((e) => {
+        if (alive) setOutlineErr(e instanceof Error ? e.message : String(e));
+      });
+    return () => { alive = false; };
+  }, [id, outlineRetry]);
 
   // Round4：方向切换（或自动定向生效）→ 清空当前译文并拉取该方向缓存
   useEffect(() => {
@@ -478,6 +505,7 @@ function ReaderInner() {
     fetchDocirPage<PagePayload>(id as string, p - 1)
       .then((d) => {
         setPageData({ blocks: d.blocks ?? [], tables: d.tables ?? [], figures: d.figures ?? [] });
+        setLoadedPage(p);   // 记录 pageData 实际对应的页码：TOC 跨页定位据此判定目标页数据是否就绪
         // 相邻页预取（性能修复）：当前页渲染即后台拉下一页，翻页秒开
         fetchDocirPage(id as string, p).catch(() => { /* 越界页预取失败静默 */ });
       })
@@ -592,15 +620,23 @@ function ReaderInner() {
     return () => obs.disconnect();
   }, [view, page, pageData]);
 
-  /** A：TOC 块级跳转——pageData 就绪后定位章节首块（section_id 优先，标题前缀兜底）。 */
+  /** A：TOC 块级跳转——**目标页**数据就绪后定位章节首块（section_id 优先，标题前缀兜底）。
+   *  跨页 bug 修复：旧实现只看 pageData 是否非空——setPage 后 effect 立即拿旧页数据跑一次，
+   *  找不到目标就清空 pendingSection，新页数据到达时跳转意图已丢（跨页 TOC 必失效）。
+   *  现以 page + loadedPage（pageData 实际对应页码）双门槛：旧页数据不消费意图，等目标页
+   *  落数据再定位；目标块找不到时回退页首第一块（不静默丢弃）；同页跳转照常立即生效。 */
   useEffect(() => {
     if (!pendingSection || !pageData) return;
+    const targetPage = pendingSection.page + 1;
+    if (page !== targetPage) { setPendingSection(null); return; }  // 用户已翻走 → 放弃该跳转意图
+    if (loadedPage !== targetPage) return;                         // 目标页数据未就绪 → 等（不清空意图）
     const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
     const key = norm(pendingSection.title).slice(0, 30);
-    const target =
+    const hit =
       pageData.blocks.find((b) => b.section_id && b.section_id === pendingSection.id)
       ?? (key ? pageData.blocks.find(
           (b) => b.type === "heading" && norm(b.text).startsWith(key)) : undefined);
+    const target = hit ?? pageData.blocks[0];   // 兜底：目标块缺失 → 页首第一块，不静默丢弃跳转
     if (target) {
       if (view === "pdf") {
         setFocusBbox(target.bbox?.length === 4 ? target.bbox : undefined);
@@ -614,7 +650,7 @@ function ReaderInner() {
       }
     }
     setPendingSection(null);
-  }, [pageData, pendingSection, view, flash]);
+  }, [pageData, pendingSection, view, flash, page, loadedPage]);
 
   /** D：全文搜索跨页跳转——目标块所在页数据就绪后 scrollIntoView + flash。 */
   useEffect(() => {
@@ -694,14 +730,19 @@ function ReaderInner() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // refsIndex：[n] → 出现的 block id 列表（一次遍历建好，反向跳转数据源）
+  // refsIndex：[n] → 出现的 block id 列表（一次遍历建好，反向跳转数据源）。
+  // 支持分组引用 [13, 14]（逐号映射；逗号/中文逗号）——旧正则只认单个 [n]，
+  // 「正文 ×N」计数与 References 反向定位对分组引用全部漏配。
   const fullRefsIndex = useMemo(() => {
     const m = new Map<number, string[]>();
     for (const b of pageData?.blocks ?? []) {
-      for (const match of b.text.matchAll(/\[(\d{1,3})\]/g)) {
-        const n = Number(match[1]);
-        if (!m.has(n)) m.set(n, []);
-        if (!m.get(n)!.includes(b.id)) m.get(n)!.push(b.id);
+      for (const match of b.text.matchAll(/\[(\d{1,3}(?:[,，]\s*\d{1,3})*)\]/g)) {
+        for (const raw of match[1].split(/[,，]/)) {
+          const n = Number(raw.trim());
+          if (!Number.isFinite(n)) continue;
+          if (!m.has(n)) m.set(n, []);
+          if (!m.get(n)!.includes(b.id)) m.get(n)!.push(b.id);
+        }
       }
     }
     return m;
@@ -777,7 +818,24 @@ function ReaderInner() {
   }, [outline, view, activeSectionId, page]);
   const tocKey = (t: TocEntry) => t.id ?? `${t.page}:${t.title}`;
 
+  // 大纲失败态：outline 是标题树/页码/正文渲染的共同数据源（无 outline 时无法安全渲染正文），
+  // 故错误态取代骨架屏显式暴露 + 重试，不再永久停在「加载大纲中…」，也不静默空转。
   if (!outline) {
+    if (outlineErr) {
+      return (
+        <div className="page"><div className="page-inner">
+          <div data-testid="outline-error">
+            <EmptyState
+              title="大纲加载失败"
+              desc={`标题树与正文页码读取失败：${outlineErr}。若论文刚上传，请等解析完成后再重试。`}
+              action={<button className="btn" data-testid="outline-retry"
+                style={{ marginTop: "var(--space-2)" }}
+                onClick={() => setOutlineRetry((n) => n + 1)}>重试</button>}
+            />
+          </div>
+        </div></div>
+      );
+    }
     return (
       <div className="page"><div className="page-inner">
         <p className="kv">加载大纲中…（若刚上传请等解析完成）</p>
@@ -841,20 +899,32 @@ function ReaderInner() {
       try {
         if (!globalRefsRef.current) {
           const r = await fetch(`${API}/api/papers/${id}/docir`);
-          if (!r.ok) return;
+          if (!r.ok) {
+            showToast(`引用 [${n}] 跨页定位暂不可用（docir HTTP ${r.status}），已保持当前页`);
+            return;
+          }
           const docir = await r.json();
           const m = new Map<number, { bid: string; page: number }>();
           for (const b of docir.blocks ?? []) {
             const seen = new Set<number>();
-            for (const match of (b.text ?? "").matchAll(/\[(\d{1,3})\]/g)) {
-              const k = Number(match[1]);
-              if (!seen.has(k)) { seen.add(k); if (!m.has(k)) m.set(k, { bid: b.id, page: b.page }); }
+            // 分组引用 [13, 14] 逐号映射：旧正则只认单个 [n]，其余编号全部索引不到
+            for (const match of (b.text ?? "").matchAll(/\[(\d{1,3}(?:[,，]\s*\d{1,3})*)\]/g)) {
+              for (const raw of match[1].split(/[,，]/)) {
+                const k = Number(raw.trim());
+                if (!Number.isFinite(k) || seen.has(k)) continue;
+                seen.add(k);
+                if (!m.has(k)) m.set(k, { bid: b.id, page: b.page });
+              }
             }
           }
           globalRefsRef.current = m;
         }
         const hit = globalRefsRef.current.get(n);
-        if (!hit) return;
+        if (!hit) {
+          // 非阻塞提示：不静默失败（编号可能仅出现在参考文献列表/字母键形式，正文无 [n] 引用块）
+          showToast(`未在正文中定位到引用 [${n}]（可能仅为参考文献独有条目）`);
+          return;
+        }
         if (hit.page + 1 !== page) { setPage(hit.page + 1); setPendingBid(hit.bid); }
         else {
           const pane = view === "bilingual" ? origPaneRef.current : textPaneRef.current;
@@ -862,7 +932,10 @@ function ReaderInner() {
             ?.scrollIntoView({ block: "center", behavior: "smooth" });
           flash(hit.bid);
         }
-      } catch { /* 全量拉取失败 → 静默保持当前页（诚实降级，不阻塞本地跳转） */ }
+      } catch {
+        // 全量拉取失败 → 保持当前页（诚实降级，不阻塞本地跳转），但仍给非阻塞提示
+        showToast(`引用 [${n}] 跨页定位失败，已保持当前页`);
+      }
     })();
   };
 
@@ -1614,7 +1687,7 @@ function ReaderInner() {
           </div>
         </>
       )}
-      <SelectionPopup sel={sel} onClose={() => setSel(null)} />
+      <SelectionPopup sel={sel} targetLang={transLang} onClose={() => setSel(null)} />
 
       {/* F：悬停翻译浮窗——只读缓存（hover 不调 LLM），未译块点按才触发单块翻译 */}
       {hoverTrans && (() => {

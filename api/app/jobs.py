@@ -537,8 +537,17 @@ def _write_alert_pair(new, old_row, score: float, breakdown: dict,
     # 幂等（同对已存在即复用），双向都能看到预警并做出决策
     db.create_dedup_alert(old_row["id"], new["id"], score,
                           {**breakdown, "reverse": True}, reverse_reason)
+    # supersedes 方向按**版本号**判定（修「先传 v7 后传 v1」的方向反转：旧实现无条件
+    # new.supersedes=old，导致 v1.supersedes=v7——较旧版本指向较新版本）：
+    #   较新 → supersedes 指向较旧；较旧 → superseded_by 指向较新（版本链正反向字段）。
+    # 版本相同/不可解析（0）时不写：方向无从判断，留待人工三态决策
+    # （apply_dedup_decision 的覆盖/保留语义不变）。
     with db.tx() as c:
-        c.execute("UPDATE papers SET supersedes=? WHERE id=?", (old_row["id"], new["id"]))
+        if ver_new > 0 and ver_old > 0 and ver_new != ver_old:
+            newer_id, older_id = (new["id"], old_row["id"]) if ver_new > ver_old \
+                else (old_row["id"], new["id"])
+            c.execute("UPDATE papers SET supersedes=? WHERE id=?", (older_id, newer_id))
+            c.execute("UPDATE papers SET superseded_by=? WHERE id=?", (newer_id, older_id))
     rebuild_families()
 
     return {"duplicate_of": old_row["id"], "title": old_row["title"],

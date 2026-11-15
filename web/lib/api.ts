@@ -634,23 +634,45 @@ export interface HealthScore {
   weight: number;
   formula: string;
   raw?: Record<string, unknown>;
+  n?: number;
+  ci?: [number, number] | null;
 }
 
 export interface HealthReport {
   total: number | null;
+  runtime_total: number;
+  cap: number | null;
+  cap_applied: boolean;
+  insufficient: boolean;
+  insufficient_reason: string;
+  window: { days: number; cutoff: number; min_traces: number; traces: number };
+  weights: Record<string, number>;
+  missing: string[];
   scores: Record<string, HealthScore>;
+  samples: {
+    traces: number; failed: number; answered: number; no_answer: number;
+    modes: Record<string, number>; jobs: number; jobs_failed: number;
+    llm_calls: number; llm_errors: number; llm_error_rate: number | null;
+  };
   trace: { samples: number; claims: Record<string, number>;
-           verifier_pass: number; verifier_fail: number; plans: number; replans: number };
-  qa_perf: { count: number; avg_latency_ms: number; error_rate: number | null };
-  parse: { mean_text_coverage: number | null; mean_ref_parse: number | null;
-           papers_with_quality: number; papers_total: number;
-           scanned_papers: number; parse_fail: number; value?: number } | null;
-  dedup: { total: number; pending: number; covered: number; kept: number; coexisted: number };
+           verifier_pass: number; verifier_fail: number; plans: number; replans: number;
+           modes: Record<string, number> };
+  qa_perf: { count: number; avg_latency_ms: number; p50_ms: number | null;
+             p95_ms: number | null; error_rate: number | null };
+  parse: { value: number | null; page_weighted: number | null;
+           quality_coverage: number | null; mean_text_coverage: number | null;
+           mean_ref_parse: number | null; papers_with_quality: number;
+           papers_total: number; scanned_papers: number; parse_fail: number;
+           page_total: number } | null;
+  dedup: { total: number; pending: number; stale_pending: number; covered: number;
+           kept: number; coexisted: number };
   offline: { available: boolean; round?: string; date?: string;
+             gates_passed?: number; gates_total?: number; gates_failed?: string[];
              hallucination_rate?: number | null; supported_ratio?: number | null;
              anchor_precision?: number | null; quote_unverified_rate?: number | null;
              recall_at5?: number | null; mrr_at5?: number | null;
              refusal_accuracy?: number | null };
+  external: { available: boolean; cap?: number | null } & Record<string, unknown>;
 }
 
 /** 系统健康报告(健康中心页;只读聚合,公式随返回值下发)。 */
@@ -757,11 +779,13 @@ export async function fetchTranslation(
   }
 }
 
-/** 划词翻译：上下文感知短译 + 术语命中。 */
-export async function translateSelection(text: string, context = ""): Promise<SelectionResult> {
+/** 划词翻译：上下文感知短译 + 术语命中。targetLang 与阅读器翻译方向一致（zh=英→中 / en=中→英）。 */
+export async function translateSelection(
+  text: string, context = "", targetLang: "zh" | "en" = "zh"
+): Promise<SelectionResult> {
   const r = await fetch(`${API}/api/translate/selection`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, context }),
+    body: JSON.stringify({ text, context, target_lang: targetLang }),
   });
   if (!r.ok) return { translation: "", ok: false };
   return r.json();

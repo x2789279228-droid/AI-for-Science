@@ -145,6 +145,7 @@ event: done        → {}
 |---|---|---|
 | GET | `/api/audit/prompts?limit=50` | 调用日志（模块/模型/token/耗时/guardrail）+ 系统状态 |
 | GET | `/api/health` | LLM 连通性（真实 ping）/ Dense 开关 / 论文数 |
+| GET | `/api/health-report` | 运行时健康评分卡（只读聚合）：7 个固定权重子分（可靠性/回答可信/回答覆盖/检索/解析/性能/数据卫生）；仅统计最近 7 天真实用户轨迹（排除 kappa_/gold_/bench_/e2e_ 等评测前缀），样本 <30 不出总分；失败 trace/任务进分母、缺测按 0 计不重归一化；最新 eval_gold gates 未全过时总分封顶 0.90；返回 n/CI/`missing`/`external` 与逐项公式。工程快照（pytest/e2e）由前端单独展示，不计分 |
 | GET | `/api/metrics` | 运行指标：请求计数（总数/状态码/限流命中/in-flight）+ LLM 聚合（qa_logs：调用数/token/平均时延）+ 任务/翻译计数 + 进程 RSS/CPU |
 
 **Request-ID**：所有响应回写 `X-Request-Id`（透传调用方值或自动生成 12 位 hex），与日志绑定。
@@ -170,7 +171,10 @@ event: done        → {}
 - `POST /api/discover/download` — `{arxiv_id}` 或 `{pdf_url}` 二选一下载入库（`%PDF-` 魔数校验，arxiv 主源 + export 备源）
 - `GET /api/discover/repro?repo=` — GitHub 复现性懒加载（stars 档位/活跃度/许可证 → 复现分）
 - `GET /api/sandbox/figure/{name}` — matplotlib 沙箱产物（文件名白名单防路径穿越）
-- `GET /api/papers/{id}/ref-quality` — 参考文献含金量（实质/背景/凑数 + 引用句明细；无引用句条目不出现=中性态）
+- `GET /api/papers/{id}/ref-quality` — 参考文献含金量（实质/背景/凑数 + 引用句明细；无引用句条目不出现=中性态）。
+  支持四种正文引用样式映射：数字 `[n]`、分组 `[n, m]`、字母键 `[DGM06]`、author-year `(Surname et al., 2019)`；
+  响应含 `mention_count`、`coverage`（有引用句条目/真实 references 数）、`covered_refs/total_refs`、`class_stat`
+  与 `guardrails`（LLM 分批增强失败的批次如实标注）。
 - `GET|POST /api/tracking/subscriptions`、`DELETE /api/tracking/subscriptions/{id}` — 订阅 CRUD（keyword/author/category）
 - `POST /api/tracking/refresh` — 手动刷新（Sickle OAI 主通道/Atom 回退；返回通道与新增/去重计数）
 - `GET /api/tracking/items?sub_id=&status=`、`POST /api/tracking/items/{id}/dismiss` — 追踪条目
@@ -189,6 +193,6 @@ event: done        → {}
 - `POST /api/copilot/writing` — `{idea, paper_ids, sections?}` 无幻觉论文框架 SSE（References 白名单后验；guardrails 审计；结果落 writing_drafts）
 - `POST /api/copilot/datasets`（multipart file）— CSV 上传（≤5MB/10 万行/编码嗅探/公式注入清洗/类型推断）
 - `GET /api/copilot/datasets`、`GET /api/copilot/datasets/{id}` — 列表与预览（前 50 行）
-- `POST /api/copilot/chart` — `{dataset_id, chart_type: table|line|bar|radar|scatter3d, x?, y?..., title?, with_caption?}` 五类图 spec（scatter3d 真 3D 散点：≥3 数值维 + 第 4 维 visualMap，echarts-gl 渲染）+ Figure Caption（数字可回溯）
-- `POST /api/copilot/diagram` — `{description}` DiagramSpec→Mermaid/DOT/TikZ 源码 + matplotlib PNG + 各格式语法校验
+- `POST /api/copilot/chart` — `{dataset_id, chart_type: table|line|bar|radar|radar3d|scatter3d, x?, y?..., title?, with_caption?}` 图表 spec（scatter3d 真 3D 散点：≥3 数值维 + 第 4 维 visualMap，echarts-gl 渲染；radar3d 为 2D radar + 前端 3D 透视层叠，如实标注"ECharts 无原生 radar3D"；bar 类别 >60 时 Top60+其他聚合，spec 带 `downsampled` 元信息）+ Figure Caption（数字可回溯）
+- `POST /api/copilot/diagram` — `{description}` DiagramSpec→Mermaid/DOT/TikZ 源码 + matplotlib PNG + 各格式语法校验；LLM 不可用/解析失败时走确定性规则图（`guardrail=diagram_rule_fallback`），不再 503
 - `POST /api/copilot/translate` — `{text}` 或 `{paper_id, scope}` 中→英学术翻译
