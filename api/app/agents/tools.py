@@ -83,6 +83,21 @@ def _weak_match(hit_text: str, terms: list[str]) -> bool:
     return not any(w.lower() in t for w in words)
 
 
+# Round6-P1：出版商/预印本平台首页样板（版权/许可声明）——纯中文维度上 weak_match
+# 无特征词可用（_aspect_terms 只取拉丁词），dense 泛相似会把这类块顶成格命中
+# （金标 Q1 实证：版权声明冒充「预训练目标」维度证据）。模式只收「不可能出现在
+# 正文内容块」的许可证措辞，宁缺勿滥。
+_BOILERPLATE_RE = re.compile(
+    r"provided proper attribution|hereby grants permission|creative commons"
+    r"|arxiv\.org/license|\bcc[- ]?by[- ]?(nd|sa|\d)|all rights reserved"
+    r"|copyright ©|© \d{4}", re.IGNORECASE)
+
+
+def is_boilerplate_hit(text: str) -> bool:
+    """首页版权/许可样板块判定（降级用，不删除——仅当同格有非样板候选时让位）。"""
+    return bool(_BOILERPLATE_RE.search(text or ""))
+
+
 def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     """维度对齐：按 (aspect, paper) 分组，每格取 RRF 最优命中 → 对比表结构。
 
@@ -97,7 +112,19 @@ def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     for h in evidence:
         key = (h.get("aspect", ""), h.get("paper_id", ""))
         cur = best.get(key)
-        if cur is None or (h.get("rrf") or h.get("score") or 0) > (cur.get("rrf") or cur.get("score") or 0):
+        h_boil = is_boilerplate_hit(h.get("text") or "")
+        if cur is None:
+            best[key] = h
+            continue
+        cur_boil = is_boilerplate_hit(cur.get("text") or "")
+        # 样板让位（Round6-P1）：非样板候选优先于版权/许可样板块；全格皆样板时
+        # 保留原首选（诚实降级优于空格）
+        if cur_boil and not h_boil:
+            best[key] = h
+            continue
+        if h_boil and not cur_boil:
+            continue
+        if (h.get("rrf") or h.get("score") or 0) > (cur.get("rrf") or cur.get("score") or 0):
             best[key] = h
     aspects = list(dict.fromkeys(h.get("aspect", "") for h in evidence))
     rows = []

@@ -613,8 +613,20 @@ def compare_metrics(client) -> dict:
     fabrication_any = False
     all_ok = True
     qs_detail = []
-    for gold in _COMPARE_GOLD:
-        final = _compare_round(client, att, bert, gold["q"])
+    # Round6-P1 并行化：3 题问答相互独立 → 并发跑完整管线（SQLite WAL+busy_timeout
+    # 与 LLM 客户端内部节流均支持并发），汇总后按原顺序分析。仅加速评测迭代，
+    # 每题内部管线顺序不变；记录每题耗时（每模式 SLO 证据）
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _one(g):
+        t0 = _time.time()
+        f = _compare_round(client, att, bert, g["q"])
+        return f, round(_time.time() - t0, 1)
+
+    with ThreadPoolExecutor(max_workers=min(3, len(_COMPARE_GOLD))) as ex:
+        rounds = list(ex.map(_one, _COMPARE_GOLD))
+    for gold, (final, elapsed) in zip(_COMPARE_GOLD, rounds):
         table = final.get("compare_table") or {}
         rows_t = table.get("rows", [])
         cells = [c for r2 in rows_t for c in r2.get("cells", [])]
@@ -669,6 +681,7 @@ def compare_metrics(client) -> dict:
         all_ok = all_ok and q_ok
         qs_detail.append({"question": gold["q"], "ok": bool(q_ok), "rows": len(rows_t),
                           "cells": len(cells), "found": len(found),
+                          "elapsed_s": elapsed,
                           "p_labels": p_labels, "one_sided": one_sided, "gold_eval": ev,
                           "answer_full": final.get("answer") or "",
                           "answer_excerpt": (final.get("answer") or "")[:400],

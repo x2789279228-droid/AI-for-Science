@@ -1,15 +1,21 @@
-"""LLM-Judge vs 构造真值的 Cohen's κ（Round6，评分表「统计·LLM-Judge vs 人工 κ」行）。
+"""LLM-Judge 校准双 κ（Round6-P1）：judge-only κ + 全管线 κ，各自 vs 构造真值。
 
 样本设计（50 条平衡，构造即真值——无需人工标注）：
-- 30 正类：R3 金标评测真实 claims（status=supported，引文逐字来自证据）→ 真值=supported
-- 20 负类：程序构造的三种「看似合理实则无支撑」：
+- 正类：R3 金标评测真实 claims（status=supported，引文逐字来自证据）→ 真值=supported
+- 负类：程序构造的三种「看似合理实则无支撑」：
   a. 数值篡改（28.4→28.9 等） b. 实体替换（P100→V100、Adam→SGD）
   c. 论断-证据错配（claim 配另一篇/另一段的证据）
   → 真值=unsupported
 
-流程：构造样本 → 走 verify_claims L2-L4 真管线（真实 LLM judge）→ judge 判定 vs
-真值 → Cohen's κ + 混淆矩阵。诚实口径：负类为程序构造（模式明确），正类为系统
-真实产物——κ 反映 judge 对「可支撑/不可支撑」的判别力。
+两种口径（诚实分离，不再混测）：
+- judge-only κ：仅 L4 语义判定器（verdict 读 semantic_status，不读 final status——
+  旧实现把 needs_check 初始态 claims 直接灌给 judge，yes 判定不升级 status，
+  全样本读成 flagged → κ=0.0 是度量伪影而非 judge 无判别力）
+- pipeline κ：L2 引文→L3 数值→L4 语义全链路（final status 二值化），度量端到端防御
+
+分块：每批 ≤6 条、批内证据包独立编号——生产 judge 调用证据包 ≤6000 字符；
+旧实现 38 条证据挤一个包被截断，后半样本 judge 看不到证据（第二个失真源）。
+
 用法：cd api && uv run python scripts/eval_kappa.py
 """
 from __future__ import annotations
@@ -24,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.rag.verify import verify_claims  # noqa: E402
 
 _GOLD_R3 = Path(__file__).resolve().parents[2] / "docs" / "acceptance" / "eval-20261114-r3" / "eval_gold.json"
+_BATCH = 6          # 每批样本数——批证据包 6×1200 字符 ≈ 生产 judge 包规模
 
 
 def _load_positive_claims() -> list[dict]:
@@ -89,45 +96,69 @@ def _load_positive_claims() -> list[dict]:
 
 
 def _build_negatives(claims: list[dict]) -> list[dict]:
-    """三类程序负类：数值篡改 / 实体替换 / 论断-证据错配。"""
+    """三类程序负类：数值篡改 / 实体替换 / 论断-证据错配。
+
+    P1 构造修正（首轮实测 8/8 FP 均为伪影，诚实修正样本而非宽松化判定）：
+    - 数值/实体篡改必须落在 **claim 文本**（judge 的输入只有 claim+证据，quote 篡改
+      judge 不可见——那是 L2/L3 机械层的职责；旧构造把篡改放 quote，judge 判 yes
+      在语义上正确，被误计 FP）；
+    - 错配负类的证据取 **配对 claim 的证据文本**（旧实现按 quote 反查，找回 claim
+      自己的正确证据 → 样本自洽，judge 判 yes 同样正确，被误计 FP）。"""
     negs: list[dict] = []
-    # a. 数值篡改：正类里含数字的 quote+text，数字 ±扰动
-    num_pairs = []
-    for c in claims:
-        nums = re.findall(r"\d+\.\d+|\d+", c["quote"])
-        if nums:
-            num_pairs.append(c)
+    # a. 数值篡改：claim 文本含数字才可构造（篡改同步落 text 与 quote）
+    num_pairs = [c for c in claims if re.findall(r"\d+\.\d+|\d+", c["text"])]
     for c in num_pairs[:8]:
         t2, q2 = c["text"], c["quote"]
-        for num in re.findall(r"\d+\.\d+|\d+", q2):
+        tampered = None
+        for num in re.findall(r"\d+\.\d+|\d+", t2):
             tampered = str(int(num) + 7) if "." not in num else f"{float(num) + 0.5:.1f}"
-            q2 = q2.replace(num, tampered, 1)
             t2 = t2.replace(num, tampered, 1)
+            q2 = q2.replace(num, tampered, 1)
             break
         negs.append({"text": t2, "quote": q2, "eid": c["support_ref"]["eid"],
-                     "support_ref": c["support_ref"], "neg_kind": "numeric"})
-    # b. 实体替换
-    ent_pairs = []
-    for c in claims:
-        ents = re.findall(r"\b(Adam|P100|V100|Transformer|Encoder|Decoder|ReLU)\b", c["quote"])
-        if ents:
-            ent_pairs.append(c)
+                     "support_ref": c["support_ref"], "neg_kind": f"numeric:{num}->{tampered}"})
+    # b. 实体替换：实体必须出现在 claim 文本（judge 可见）
+    ent_pairs = [c for c in claims
+                 if re.search(r"\b(Adam|P100|V100|Transformer|Encoder|Decoder|ReLU)\b", c["text"])]
     swap = {"Adam": "SGD", "P100": "V100", "Transformer": "LSTM"}
     for c in ent_pairs[:6]:
         t2, q2 = c["text"], c["quote"]
+        hit = None
         for e, r in swap.items():
-            if e in q2:
-                q2 = q2.replace(e, r, 1)
+            if e in t2:
                 t2 = t2.replace(e, r, 1)
+                q2 = q2.replace(e, r, 1)
+                hit = f"{e}->{r}"
                 break
-        negs.append({"text": t2, "quote": q2, "eid": c["support_ref"]["eid"],
-                     "support_ref": c["support_ref"], "neg_kind": "entity"})
-    # c. 论断-证据错配：claim i 的 quote 配 claim i+2 的证据
+        if hit:
+            negs.append({"text": t2, "quote": q2, "eid": c["support_ref"]["eid"],
+                         "support_ref": c["support_ref"], "neg_kind": f"entity:{hit}"})
+    # c. 论断-证据错配：claim i 的 text+quote 配 claim i+2 的证据文本
+    #    （错配证据在主流程用 evidence_for(b.quote) 反查——b 的 quote 找 b 的块）
     for i in range(0, min(6, len(claims) - 2)):
         a, b = claims[i], claims[i + 2]
         negs.append({"text": a["text"], "quote": a["quote"], "eid": b["support_ref"]["eid"],
-                     "support_ref": b["support_ref"], "neg_kind": "mismatch"})
+                     "support_ref": {**b["support_ref"], "_evidence_quote": b["quote"]},
+                     "neg_kind": "mismatch"})
     return negs[:20]
+
+
+def _kappa(pairs: list[tuple[str, str]]) -> dict:
+    """二值混淆 + Cohen's κ。pairs=(truth, pred)，pred∈{positive, negative}。"""
+    n = len(pairs)
+    if not n:
+        return {"n": 0, "kappa": None, "accuracy": None}
+    tp = sum(1 for t, j in pairs if t == "supported" and j == "positive")
+    tn = sum(1 for t, j in pairs if t == "unsupported" and j == "negative")
+    fp = sum(1 for t, j in pairs if t == "unsupported" and j == "positive")
+    fn = sum(1 for t, j in pairs if t == "supported" and j == "negative")
+    po = (tp + tn) / n
+    p_pos = (tp + fn) / n
+    p_j = (tp + fp) / n
+    pe = p_pos * p_j + (1 - p_pos) * (1 - p_j)
+    kappa = round((po - pe) / (1 - pe), 3) if pe < 1 else 1.0
+    return {"n": n, "kappa": kappa, "accuracy": round((tp + tn) / n, 3),
+            "confusion": {"tp": tp, "tn": tn, "fp": fp, "fn": fn}}
 
 
 def main() -> int:
@@ -140,17 +171,14 @@ def main() -> int:
         return 1
 
     # eid_map：每个负类/正类样本独立构造（quote 所属证据文本）
-    # 从正类 support_ref 取 chunk 文本不可得（trace 无全文）——改用
-    # eval_gold 的做法：按 paper+quote 反查不可行 → 直接用生成时同一
-    # paper 的证据包？简化：构造 eid_map = {1: {"text": 原文证据}}——
-    # 正类的原文证据可从 R3 generative_trace 的 anchors/claims 拿不到全文，
-    # 改为:用该论文 DocIR 按 quote 反查所在块文本作为证据文本。
+    # 从正类 support_ref 取 chunk 文本不可得（trace 无全文）——按论文 DocIR
+    # 归一反查：quote 归一包含于某块 → 该块文本即证据文本
     from app.rag.version_diff import load_docir_for
     d = json.loads(_GOLD_R3.read_text(encoding="utf-8"))
     pid = d.get("paper_id")
     docir = load_docir_for(pid) or {}
     blocks = docir.get("blocks", [])
-    # 归一反查：quote 归一包含于某块 → 该块文本即证据文本
+
     def _norm(t): return re.sub(r"\s+", "", str(t or "")).lower()
     block_index = [(b.get("text", ""), b.get("page", 0)) for b in blocks if b.get("text")]
 
@@ -170,9 +198,11 @@ def main() -> int:
         return best if best_cov >= 0.7 else ""
 
     samples = []
-    eid_map = {1: {}}
     for i, c in enumerate(pos + negs, 1):
-        ev = evidence_for(c["quote"])
+        # 错配负类：证据按「配对 claim」的 quote 反查（b 的块）——claim(=a) 与证据(=b)
+        # 语义错位即负类本体；其余样本按自身 quote 反查
+        eq = (c.get("support_ref") or {}).get("_evidence_quote") or c["quote"]
+        ev = evidence_for(eq)
         truth = "unsupported" if "neg_kind" in c else "supported"
         samples.append({
             "id": f"s{i}", "text": c["text"], "quote": c["quote"],
@@ -182,63 +212,69 @@ def main() -> int:
     built = sum(1 for x in samples if x["evidence"])
     print(f"证据文本反查成功: {built}/{len(samples)}")
 
-    # 跑 L4 judge：构造 claims 形状走 verify_claims
-    from app import db  # noqa
-    from app.config import settings  # noqa
-    results = []
-    judge_map = {1: None}
-    batch_claims, batch_map = [], {}
-    for idx, x in enumerate([s for s in samples if s["evidence"]], 1):
-        batch_map[idx] = {"text": x["evidence"], "page": 0, "paper_id": pid,
-                          "chunk_id": f"k{idx}", "section_path": ""}
-        batch_claims.append({
-            "text": x["text"], "status": "needs_check",
-            "evidence_ids": [idx], "quote": x["quote"],
-            "support": [{"eid": f"E{idx}", "page": 1, "quote": x["quote"],
-                         "chunk_id": f"k{idx}", "section_path": ""}],
-        })
-    from app.rag.verify import judge_claims as _judge
-    judged, _guards = _judge(batch_claims, batch_map)
-    by_text = {c["text"]: c for c in judged}
+    usable = [s for s in samples if s["evidence"]]
+    judge_pairs: list[tuple[str, str]] = []
+    pipe_pairs: list[tuple[str, str]] = []
+    per_batch: list[dict] = []
+    for b0 in range(0, len(usable), _BATCH):
+        chunk = usable[b0:b0 + _BATCH]
+        eid_map = {k + 1: {"text": s["evidence"], "page": 0, "paper_id": pid,
+                           "chunk_id": f"k{b0 + k}", "section_path": ""}
+                   for k, s in enumerate(chunk)}
 
-    for x in samples:
-        if not x["evidence"]:
-            x["judge"] = "no_evidence_text"
-            continue
-        c = by_text.get(x["text"])
-        verdict = None
-        if c:
+        def _mk(s, k, status):
+            return {"text": s["text"], "status": status,
+                    "evidence_ids": [k + 1], "quote": s["quote"],
+                    "support": [{"eid": f"E{k + 1}", "page": 1, "quote": s["quote"],
+                                 "chunk_id": f"k{b0 + k}", "section_path": ""}]}
+
+        # ---- 口径 A：judge-only（初始态=生产 L4 候选真实入口，verdict 落
+        # semantic_status——判定读它而非 final status）----
+        jc = [_mk(s, k, "supported") for k, s in enumerate(chunk)]
+        from app.rag.verify import judge_claims as _judge
+        judged, _g = _judge(jc, eid_map)
+        for s, c in zip(chunk, judged):
+            v = c.get("semantic_status")
+            pred = {"yes": "positive", "partial": "positive",
+                    "no": "negative"}.get(v, "unknown")
+            s["judge_verdict"] = v or "unknown"
+            if pred != "unknown":
+                judge_pairs.append((s["truth"], pred))
+
+        # ---- 口径 B：全管线（L2→L3→L4，final status 二值化）----
+        pc = [_mk(s, k, "supported") for k, s in enumerate(chunk)]
+        piped, _g2 = verify_claims(pc, eid_map)
+        for s, c in zip(chunk, piped):
             st = c.get("status")
-            # 系统口径二值化：supported=放行；needs_check/unsupported=已标记疑点
-            verdict = "flagged" if st in ("needs_check", "unsupported") else "supported"
-        x["judge"] = verdict or "unknown"
+            pred = "positive" if st == "supported" else "negative"
+            s["pipeline_status"] = st
+            s["quote_status"] = c.get("quote_status")
+            pipe_pairs.append((s["truth"], pred))
+        per_batch.append({"n": len(chunk)})
 
-    # Cohen's κ（judge 二值化：unsupported=负，其余=正）vs 构造真值
-    pairs = [(x["truth"], "unsupported" if x["judge"] == "unsupported" else "positive")
-             for x in samples if x["judge"] not in ("no_evidence_text", "unknown")]
-    n = len(pairs)
-    tp = sum(1 for t, j in pairs if t == "supported" and j == "positive")
-    tn = sum(1 for t, j in pairs if t == "unsupported" and j == "unsupported")
-    fp = sum(1 for t, j in pairs if t == "unsupported" and j == "positive")
-    fn = sum(1 for t, j in pairs if t == "supported" and j == "unsupported")
-    po = (tp + tn) / n if n else 0
-    p_pos = (tp + fn) / n if n else 0
-    p_j = (tp + fp) / n if n else 0
-    pe = p_pos * p_j + (1 - p_pos) * (1 - p_j)
-    kappa = round((po - pe) / (1 - pe), 3) if pe < 1 else 1.0
-    acc = round((tp + tn) / n, 3) if n else 0
-
+    kj = _kappa(judge_pairs)
+    kp = _kappa(pipe_pairs)
+    import time as _time
     out = {
-        "n_evaluated": n, "accuracy": acc, "cohens_kappa": kappa,
-        "confusion": {"tp": tp, "tn": tn, "fp": fp, "fn": fn},
-        "kappa_note": "构造真值口径：30 真实 supported + 20 程序负类（数值/实体/错配）",
+        "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
+        "n_evaluated": kj["n"], "n_pipeline": kp["n"],
+        "cohens_kappa": kj["kappa"], "accuracy": kj["accuracy"],
+        "confusion": kj.get("confusion"),
+        "pipeline_kappa": kp["kappa"], "pipeline_accuracy": kp["accuracy"],
+        "pipeline_confusion": kp.get("confusion"),
+        "kappa_note": "构造真值口径：真实 supported + 程序负类（数值/实体/错配）；"
+                      "judge-only κ 读 semantic_status，pipeline κ 读 final status",
+        "batches": len(per_batch),
         "samples": samples,
     }
     dest = Path(__file__).parent / "kappa_report.json"
     dest.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\nκ = {kappa} | accuracy = {acc} | n = {n}")
-    print(f"混淆: TP={tp} TN={tn} FP={fp} FN={fn}")
-    print(f"κ≥0.60: {kappa >= 0.60} | κ≥0.75: {kappa >= 0.75}")
+    print(f"\n[判断器 L4] κ = {kj['kappa']} | acc = {kj['accuracy']} | n = {kj['n']} "
+          f"| 混淆 {kj.get('confusion')}")
+    print(f"[全管线]   κ = {kp['kappa']} | acc = {kp['accuracy']} | n = {kp['n']} "
+          f"| 混淆 {kp.get('confusion')}")
+    print(f"目标 κ≥0.60：judge={kj['kappa'] and kj['kappa'] >= 0.60} "
+          f"pipeline={kp['kappa'] and kp['kappa'] >= 0.60}")
     print(f"已写出 {dest}")
     return 0
 

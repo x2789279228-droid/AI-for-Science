@@ -44,6 +44,7 @@ from ..rag.answering import (
     validate_citations,
 )
 from ..rag.verify import verify_claims
+from .tools import is_boilerplate_hit
 from .state import (
     AGENT_INTENT,
     AGENT_LABEL,
@@ -391,6 +392,12 @@ def retrieve_task_node(payload: dict, config=None) -> dict:
     # （中文引用问句对英文参考文献正文是 BM25/dense 双盲区——结构化表是唯一可靠来源）
     if _CITE_INTENT.search(question or "") or _CITE_INTENT.search(step.get("query", "")):
         search["hits"] = list(search["hits"]) + _citation_reference_hits(step["paper_id"])
+    # 样板降级（Round6-P1）：版权/许可块移到分支列表尾部（只重排不删除——无更好
+    # 候选时仍可入池）；RRF 按位次给分，样板块不再挤进 Evidence Pack 头部
+    _boil = [h for h in search["hits"] if is_boilerplate_hit(h.get("text") or "")]
+    if _boil and len(_boil) < len(search["hits"]):
+        search["hits"] = ([h for h in search["hits"] if not is_boilerplate_hit(h.get("text") or "")]
+                          + _boil)
         search["channels"] = sorted(set(search.get("channels", []) + ["references"]))
     tagged = [{**h, "aspect": step["aspect"], "query": step["query"]} for h in search["hits"]]
     stat = {"paper_id": step["paper_id"], "query": step["query"], "aspect": step["aspect"],

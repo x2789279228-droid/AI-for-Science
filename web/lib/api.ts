@@ -658,7 +658,9 @@ export interface HealthReport {
            verifier_pass: number; verifier_fail: number; plans: number; replans: number;
            modes: Record<string, number> };
   qa_perf: { count: number; avg_latency_ms: number; p50_ms: number | null;
-             p95_ms: number | null; error_rate: number | null };
+             p95_ms: number | null; error_rate: number | null;
+             by_mode?: Record<string, { n: number; p50_ms: number | null;
+                                       p95_ms: number | null }> };
   parse: { value: number | null; page_weighted: number | null;
            quality_coverage: number | null; mean_text_coverage: number | null;
            mean_ref_parse: number | null; papers_with_quality: number;
@@ -673,6 +675,21 @@ export interface HealthReport {
              recall_at5?: number | null; mrr_at5?: number | null;
              refusal_accuracy?: number | null };
   external: { available: boolean; cap?: number | null } & Record<string, unknown>;
+  calibration?: {
+    judge_kappa: number | null;
+    pipeline_kappa: number | null;
+    kappa_note: string;
+    evaluated_at: string;
+    grounded_note: string;
+  };
+  trend?: { dir: string; recall_at5: number | null;
+            hallucination_rate: number | null; anchor_precision: number | null }[];
+  retrieval_health?: {
+    dense_vec_coverage: number | null;
+    papers_missing_vec: number;
+    note: string;
+    healthy: boolean;
+  };
 }
 
 /** 系统健康报告(健康中心页;只读聚合,公式随返回值下发)。 */

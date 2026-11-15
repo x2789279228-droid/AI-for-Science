@@ -262,8 +262,11 @@ def _mark_absence_claims(claims: list[dict]) -> int:
 # ---------- L4 语义支持 ----------
 
 _SYSTEM_JUDGE = (
-    "你是语义支持判定器。对每条论断判断它能否由其引用的证据文本推出（不要求逐字一致，"
-    "语义一致即可；证据不能推出或相矛盾时判 no）。"
+    "你是语义支持判定器。对每条论断判断它能否由其引用的证据文本推出，逐条独立判断：\n"
+    "1. 数值/单位/型号/专有名词必须与证据一致（千分位、小数位、单位换算等价表示算一致）；"
+    "证据支持该论断的主张但数值或实体对不上 → 判 no（语义相似≠可推出）。\n"
+    "2. 证据能完整推出论断 → yes；只能推出一部分或论断含证据未支持的限定 → partial；"
+    "证据不能推出或相矛盾 → no。\n"
     '输出 JSON：{"verdicts":[{"id":1,"verdict":"yes|partial|no"}]}，id 与输入编号一一对应，'
     "不要输出其他字段。"
 )
@@ -321,11 +324,17 @@ def judge_claims(claims: list[dict], eid_map: dict[int, dict]) -> tuple[list[dic
 
     for i, c in cand:
         verdict = vmap.get(i, "")
+        # P1 修订：verdict 全量落 semantic_status（观测口径）——eval_kappa 的
+        # judge-only κ 读它隔离测 L4 判别力，不再依赖「status 恰好被改写」推断
+        if verdict in ("yes", "partial", "no"):
+            c["semantic_status"] = verdict
         if verdict == "no":
             c["status"] = "unsupported"
             c.pop("unverified_numbers", None)  # 已判无支撑，数值黄标被覆盖
         elif verdict == "partial" and c.get("status") == "supported":
-            c["semantic_status"] = "partial"   # 保留 supported，前端可提示部分支撑
+            pass  # 保留 supported，semantic_status=partial 供前端提示部分支撑
+        # verdict=yes 且 status=needs_check（L2/L3 机械疑点）→ 黄标保留：
+        # 语义可推出不能洗掉「数值不在证据里」的机械事实（状态机不越级）
     n_absent = _mark_absence_claims(claims)
     if n_absent:
         guardrails.append(f"absence_claims:{n_absent}")

@@ -89,6 +89,8 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
 
     from .tools import set_doc_mode  # 双模式工具硬兜底（本线程 ContextVar）
     set_doc_mode(doc_mode)
+    # 每模式 SLO 数据源：本线程内所有 log_qa 落库带上 doc_mode（qa_logs.doc_mode）
+    db.qa_doc_mode.set(doc_mode)
 
     tee = _TeeQueue(q)
     graph = get_graph()

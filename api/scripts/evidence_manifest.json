@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15 15:45:28",
+  "generated_at": "2026-11-15 16:56:17",
   "algorithm": "sha256",
   "note": "评测证据包：报告数字 ← 这些脚本 × 这份源码 × 这些数据。复核=逐条比对 sha256。",
   "files": [
@@ -17,6 +17,11 @@
       "path": "docs\\acceptance\\eval-20261114-r3\\eval_gold.json",
       "bytes": 87646,
       "sha256": "333efc901ca156b2445fc7ed9db5066e4049e80b951b88e232182de6966f48fc"
+    },
+    {
+      "path": "docs\\acceptance\\eval-20261115-r1\\eval_gold.json",
+      "bytes": 86939,
+      "sha256": "25fc0a18c6423f623b231b58a9fc6e18e8c65fcb259452ce1901941757b41187"
     },
     {
       "path": "docs\\acceptance\\round2-20261108\\eval_gold.json",
@@ -65,13 +70,13 @@
     },
     {
       "path": "api\\scripts\\eval_gold.py",
-      "bytes": 46152,
-      "sha256": "5a48a0bf116071497fcdf3869bd3a0be7630ac9328d8addf375ef695dd33223b"
+      "bytes": 46832,
+      "sha256": "99d155be00ae1dcf3cec049f7ebe553bb9baa72cc653ec629080859eed514294"
     },
     {
       "path": "api\\scripts\\eval_kappa.py",
-      "bytes": 11227,
-      "sha256": "313174fc61586111ac414abf2cfc21e5e12648666ab88e9c30759ca82e1afc6b"
+      "bytes": 13695,
+      "sha256": "f1daa5ced0b6a39502c5db79d03895f4b2c53dfeea1058a4e3b41e6abcfdbec6"
     },
     {
       "path": "api\\scripts\\eval_quick.py",
@@ -120,8 +125,8 @@
     },
     {
       "path": "api\\scripts\\kappa_report.json",
-      "bytes": 27280,
-      "sha256": "8dbd9389824787a6bd4207d79eebfb2b04d8bc6dd8aca8cc838d9a2fbd7c25b0"
+      "bytes": 29360,
+      "sha256": "474763f1419e685e0c6123ed6ffb160f9f642533a17844f3e010c3e8c511bcd3"
     },
     {
       "path": "api\\scripts\\seeds_ci.json",
@@ -140,8 +145,8 @@
     },
     {
       "path": "api\\app\\agents\\nodes.py",
-      "bytes": 54338,
-      "sha256": "212caaeab855aa358aff4d330c4c6fe12aff26951d14768ee60a3761c8ca03be"
+      "bytes": 54864,
+      "sha256": "58da09824ff8ed6b3dc4808dda7d11638526839451d1dcbedd343acc34837ee7"
     },
     {
       "path": "api\\app\\agents\\graph.py",
@@ -150,8 +155,8 @@
     },
     {
       "path": "api\\app\\rag\\verify.py",
-      "bytes": 17090,
-      "sha256": "d52383a7124085b0ff29ea7808197d866cee5702c437bded7baca24f0ebd28bf"
+      "bytes": 17908,
+      "sha256": "b658946517929a955f03aceefb41d73c68c0934c153a417bc58c38e2e7977952"
     },
     {
       "path": "api\\app\\rag\\answering.py",
@@ -160,8 +165,8 @@
     },
     {
       "path": "api\\app\\api_routes\\routes.py",
-      "bytes": 55868,
-      "sha256": "015fbfd16f93da8fc3e2a34874828d54814e3d14ec8bf428cc769c80702b8b9f"
+      "bytes": 59441,
+      "sha256": "6b91a479461c02da6940c5bfa109ab2eed40f9d3f0988d535cb3ca9a1147c021"
     },
     {
       "path": "api\\app\\api_routes\\graph_routes.py",

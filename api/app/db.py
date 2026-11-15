@@ -11,6 +11,7 @@ import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 from .config import DB_PATH
@@ -279,7 +280,20 @@ def init_db() -> None:
         _migrate_papers_doc_type(conn)
         _migrate_references_rich(conn)
         _migrate_tracked_items_meta(conn)
+        _migrate_qa_doc_mode(conn)
         conn.commit()
+
+
+def _migrate_qa_doc_mode(conn: sqlite3.Connection) -> None:
+    """Round6-P1：qa_logs 加 doc_mode——每模式 SLO（专业/普通文档问答延迟分列）
+    的数据源。历史行 doc_mode=''（未知口径，趋势展示时如实标注）。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(qa_logs)")]
+    if cols and "doc_mode" not in cols:
+        conn.execute("ALTER TABLE qa_logs ADD COLUMN doc_mode TEXT DEFAULT ''")
+
+
+# 请求作用域 doc_mode（chat 端点 set，log_qa 读）——LLM 调用栈深处无需逐层透传
+qa_doc_mode: ContextVar[str] = ContextVar("qa_doc_mode", default="")
 
 
 def _migrate_tracked_items_meta(conn: sqlite3.Connection) -> None:
@@ -555,9 +569,11 @@ def log_qa(module: str, model: str = "", question: str = "", prompt: str = "",
     with tx() as c:
         c.execute(
             "INSERT INTO qa_logs(ts,module,model,question,prompt,answer,prompt_tokens,"
-            "completion_tokens,latency_ms,guardrail,prompt_version) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "completion_tokens,latency_ms,guardrail,prompt_version,doc_mode) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (now(), module, model, question, prompt[:4000], answer[:8000],
-             prompt_tokens, completion_tokens, latency_ms, guardrail, prompt_version),
+             prompt_tokens, completion_tokens, latency_ms, guardrail, prompt_version,
+             qa_doc_mode.get("")),
         )
 
 

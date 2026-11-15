@@ -30,7 +30,12 @@ def _endpoint() -> tuple[str, str, str] | None:
 def chat(messages: list[dict], model: str = "", temperature: float | None = None,
          max_tokens: int = 2048, json_mode: bool = False, module: str = "chat",
          audit_prompt: str = "", prompt_version: str = "") -> LLMResult:
-    """同步调用。失败返回 {"text":"","error":...}；全程落审计日志（含 prompt 版本号）。"""
+    """同步调用。失败返回 {"text":"","error":...}；全程落审计日志（含 prompt 版本号）。
+
+    Round6-P1：瞬时故障重试（429 限流 / 5xx / 网络异常，2 次退避 1s/3s）——
+    4xx 语义错误不重试。并发问答（compare 并行评测/多标签页）下 planner 等结构化
+    前置调用不再因单次 429 直接掉进规则兜底（劣化检索面语言，中文题检索崩溃）。
+    """
     ep = _endpoint()
     t0 = time.time()
     if not ep:
@@ -51,28 +56,47 @@ def chat(messages: list[dict], model: str = "", temperature: float | None = None
     if settings.llm_thinking_disabled:
         # 火山方舟 doubao-seed 系列：关闭默认思考模式（其他兼容端点忽略/需容忍该字段）
         payload["thinking"] = {"type": "disabled"}
-    try:
-        resp = httpx.post(f"{base_url}/chat/completions",
-                          headers={"Authorization": f"Bearer {api_key}"},
-                          json=payload, timeout=120)
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"] or ""
-        usage = data.get("usage", {})
-        db.log_qa(module=module, model=model, prompt=audit_prompt,
-                  prompt_tokens=usage.get("prompt_tokens", 0),
-                  completion_tokens=usage.get("completion_tokens", 0),
-                  latency_ms=int((time.time() - t0) * 1000),
-                  prompt_version=prompt_version)
-        return LLMResult(text=text, model=model,
-                         prompt_tokens=usage.get("prompt_tokens", 0),
-                         completion_tokens=usage.get("completion_tokens", 0))
-    except Exception as e:  # noqa: BLE001 —— 任何 LLM 故障都必须降级而非 500
-        db.log_qa(module=module, model=model, prompt=audit_prompt,
-                  guardrail=f"llm_error:{type(e).__name__}",
-                  latency_ms=int((time.time() - t0) * 1000),
-                  prompt_version=prompt_version)
-        return LLMResult(text="", error=str(e))
+    retried = 0
+    _BACKOFF = (1.0, 3.0)
+    for attempt in range(3):
+        try:
+            resp = httpx.post(f"{base_url}/chat/completions",
+                              headers={"Authorization": f"Bearer {api_key}"},
+                              json=payload, timeout=120)
+            if resp.status_code in (429, 500, 502, 503, 504):
+                retried += 1
+                if attempt < 2:
+                    time.sleep(_BACKOFF[min(attempt, 1)])
+                    continue
+                resp.raise_for_status()
+            resp.raise_for_status()
+            data = resp.json()
+            text = data["choices"][0]["message"]["content"] or ""
+            usage = data.get("usage", {})
+            db.log_qa(module=module, model=model, prompt=audit_prompt,
+                      prompt_tokens=usage.get("prompt_tokens", 0),
+                      completion_tokens=usage.get("completion_tokens", 0),
+                      latency_ms=int((time.time() - t0) * 1000),
+                      guardrail=f"llm_retry:{retried}" if retried else "",
+                      prompt_version=prompt_version)
+            return LLMResult(text=text, model=model,
+                             prompt_tokens=usage.get("prompt_tokens", 0),
+                             completion_tokens=usage.get("completion_tokens", 0))
+        except Exception as e:  # noqa: BLE001 —— 任何 LLM 故障都必须降级而非 500
+            transient = isinstance(e, (httpx.TimeoutException, httpx.TransportError)) \
+                or "429" in str(e) or "5xx" in str(e) or \
+                (isinstance(e, httpx.HTTPStatusError)
+                 and e.response is not None and e.response.status_code >= 500)
+            retried += 1
+            if transient and attempt < 2:
+                time.sleep(_BACKOFF[min(attempt, 1)])
+                continue
+            db.log_qa(module=module, model=model, prompt=audit_prompt,
+                      guardrail=f"llm_error:{type(e).__name__}"
+                                + (f"(retried{retried})" if retried else ""),
+                      latency_ms=int((time.time() - t0) * 1000),
+                      prompt_version=prompt_version)
+            return LLMResult(text="", error=str(e))
 
 
 def chat_json_validated(messages: list[dict], model_cls: Any, *, retries: int = 1,

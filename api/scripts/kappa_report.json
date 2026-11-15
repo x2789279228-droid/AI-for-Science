@@ -1,14 +1,24 @@
 {
-  "n_evaluated": 33,
-  "accuracy": 0.515,
-  "cohens_kappa": 0.0,
+  "n_evaluated": 28,
+  "n_pipeline": 28,
+  "cohens_kappa": 0.856,
+  "accuracy": 0.929,
   "confusion": {
-    "tp": 17,
-    "tn": 0,
-    "fp": 16,
-    "fn": 0
+    "tp": 12,
+    "tn": 14,
+    "fp": 1,
+    "fn": 1
   },
-  "kappa_note": "构造真值口径：30 真实 supported + 20 程序负类（数值/实体/错配）",
+  "pipeline_kappa": 0.928,
+  "pipeline_accuracy": 0.964,
+  "pipeline_confusion": {
+    "tp": 12,
+    "tn": 15,
+    "fp": 0,
+    "fn": 1
+  },
+  "kappa_note": "构造真值口径：真实 supported + 程序负类（数值/实体/错配）；judge-only κ 读 semantic_status，pipeline κ 读 final status",
+  "batches": 5,
   "samples": [
     {
       "id": "s1",
@@ -17,340 +27,354 @@
       "evidence": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step took about 0.4 seconds. We\ntrained the base models for a total of 100,000 steps or 12 hours. For our big models,(described on the\nbottom line of table 3), step time was 1.0 seconds, and the models were trained for 300,000 steps or\n3.5 days.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
       "id": "s2",
-      "text": "The Transformer (big) model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
+      "text": "The big Transformer model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
       "quote": "| Transformer (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
       "evidence": "",
       "truth": "supported",
-      "neg_kind": "",
-      "judge": "no_evidence_text"
+      "neg_kind": ""
     },
     {
       "id": "s3",
-      "text": "The Adam optimizer was used for model training.",
-      "quote": "We used the Adam optimizer [18]",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "text": "This result established a new state-of-the-art performance on the WMT 2014 English-to-German translation task.",
+      "quote": "establishing a new state-of-the-art BLEU score of 28.4.",
+      "evidence": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (including ensembles) by more\nthan 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this\nmodel is listed in the bottom line of Table 3. Training took 3.5 days on 8 P100 GPUs. Even our base\nmodel surpasses all previously published models and ensembles, at a fraction of the training cost of\nany of the previous best models.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
       "id": "s4",
-      "text": "The Adam optimizer was configured with β₁ = 0.9.",
-      "quote": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "text": "The big Transformer model outperformed the best previously reported models (including ensembles) by more than 2.0 BLEU on the WMT 2014 English-to-German translation task.",
+      "quote": "| Transformer (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
+      "evidence": "",
       "truth": "supported",
-      "neg_kind": "",
-      "judge": "flagged"
+      "neg_kind": ""
     },
     {
       "id": "s5",
-      "text": "The Adam optimizer was configured with β₂ = 0.98.",
-      "quote": "\\beta _ { 2 } = 0 . 9 8",
+      "text": "The Adam optimizer was used, with β₁ = 0.9, β₂ = 0.98 and ε = 10⁻⁹.",
+      "quote": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }.",
       "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
       "id": "s6",
-      "text": "The Adam optimizer was configured with ε = 10⁻⁹.",
-      "quote": "\\epsilon = 1 0 ^ { - 9 }",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
-      "truth": "supported",
-      "neg_kind": "",
-      "judge": "flagged"
-    },
-    {
-      "id": "s7",
-      "text": "The learning rate was dynamically adjusted during training following the formula lrate = d_model^(-0.5) · min(step_num^(-0.5), step_num · warmup_steps^(-1.5)).",
-      "quote": "We varied the learning rate over the course of training, according to the formula: lrate = d_model^(-0.5) · min(step_num^(-0.5), step_num · warmup_steps^(-1.5))",
-      "evidence": "",
-      "truth": "supported",
-      "neg_kind": "",
-      "judge": "no_evidence_text"
-    },
-    {
-      "id": "s8",
-      "text": "The learning rate schedule linearly increases the learning rate for the first 4000 warmup training steps.",
-      "quote": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps... We used warmup_steps = 4000.",
-      "evidence": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps,\nand decreasing it thereafter proportionally to the inverse square root of the step number. We used\nw a r m u p \\_ s t e p s = 4 0 0 0.",
-      "truth": "supported",
-      "neg_kind": "",
-      "judge": "flagged"
-    },
-    {
-      "id": "s9",
-      "text": "After the warmup period, the learning rate decreases proportionally to the inverse square root of the step number.",
-      "quote": "and decreasing it thereafter proportionally to the inverse square root of the step number.",
-      "evidence": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps,\nand decreasing it thereafter proportionally to the inverse square root of the step number. We used\nw a r m u p \\_ s t e p s = 4 0 0 0.",
-      "truth": "supported",
-      "neg_kind": "",
-      "judge": "flagged"
-    },
-    {
-      "id": "s10",
-      "text": "The model dimension d_model is 512.",
-      "quote": "as well as the embedding layers, produce outputs of dimension d_model = 512.",
+      "text": "The model dimension \\(d_{\\mathrm{model}}\\) is 512.",
+      "quote": "as well as the embedding layers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s11",
+      "id": "s7",
       "text": "There are N = 6 identical encoder layers in the Transformer model.",
       "quote": "Encoder: The encoder is composed of a stack ofN = 6identical layers.",
       "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s12",
-      "text": "For the base model, the dropout rate applied to the output of each sub-layer (before it is added to the sub-layer input and normalized) is P_drop = 0.1.",
+      "id": "s8",
+      "text": "For the base model, a dropout rate of P_drop = 0.1 is applied to the output of each sub-layer, before it is added to the sub-layer input and normalized.",
       "quote": "We apply dropout [30] to the output of each sub-layer, before it is added to the sub-layer input and normalized. ... For the base model, we use a rate of P _ { d r o p } = 0 . 1.",
       "evidence": "Residual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the\npositional encodings in both the encoder and decoder stacks. For the base model, we use a rate of\nP _ { d r o p } = 0 . 1.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s13",
-      "text": "The model uses 8 parallel attention heads (heads).",
+      "id": "s9",
+      "text": "The model uses 8 parallel attention layers (heads).",
       "quote": "In this work we employ h := 8 parallel attention layers, or heads.",
       "evidence": "In this work we employh \\ : = \\ : 8parallel attention layers, or heads. For each of these we use\nd _ { k } = d _ { v } = d _ { \\mathrm { m o d e l } } / h \\stackrel {  } { = } \\dot { 6 } 4. Due to the reduced dimension of each head, the total computational cost\nis similar to that of single-head attention with full dimensionality.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s14",
-      "text": "The model uses fixed sinusoidal positional encodings based on sine and cosine functions of different frequencies, rather than learned positional embeddings.",
-      "quote": "There are many choices of positional encodings, learned and fixed [9]. In this work, we use sine and cosine functions of different frequencies:",
-      "evidence": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks in an encoder-decoder configuration. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.0 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+      "id": "s10",
+      "text": "The model uses sine and cosine functions of different frequencies for positional encoding.",
+      "quote": "In this work, we use sine and cosine functions of different frequencies:",
+      "evidence": "In this work, we use sine and cosine functions of different frequencies:",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s15",
-      "text": "The specific calculation formulas for positional encodings are PE_(pos,2i) = sin(pos / 10000^(2i/d_model)) and PE_(pos,2i+1) = cos(pos / 10000^(2i/d_model)).",
-      "quote": "PE_(pos,2i) = sin(pos / 10000^(2i/d_model)) PE_(pos,2i+1) = cos(pos / 10000^(2i/d_model))",
+      "id": "s11",
+      "text": "The positional encoding formula for even dimension is $PE_{(pos, 2i)} = sin(pos / 10000^{2i / d_{model}})$.",
+      "quote": "P E _ { ( p o s , 2 i ) } = s i n ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } )",
       "evidence": "\\begin{array} { r } { P E _ { ( p o s , 2 i ) } = s i n ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\\\ { P E _ { ( p o s , 2 i + 1 ) } = c o s ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\end{array}",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s16",
-      "text": "In the positional encoding formulas, pos is the position of the token in the sequence, and i is the dimension index of the positional encoding.",
-      "quote": "where pos is the position and i is the dimension. That is, each dimension of the positional encoding corresponds to a sinusoid.",
+      "id": "s12",
+      "text": "The positional encoding formula for odd dimension is $PE_{(pos, 2i+1)} = cos(pos / 10000^{2i / d_{model}})$.",
+      "quote": ", 2 i + 1 ) } = c o s ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\end{array}",
+      "evidence": "\\begin{array} { r } { P E _ { ( p o s , 2 i ) } = s i n ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\\\ { P E _ { ( p o s , 2 i + 1 ) } = c o s ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { \\mathrm { m o d e l } } } ) } \\end{array}",
+      "truth": "supported",
+      "neg_kind": "",
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
+    },
+    {
+      "id": "s13",
+      "text": "In the positional encoding formulas, $pos$ denotes the position and $i$ denotes the dimension.",
+      "quote": "where pos is the position andiis the dimension.",
       "evidence": "where pos is the position andiis the dimension. That is, each dimension of the positional encoding\ncorresponds to a sinusoid. The wavelengths form a geometric progression from2 \\pito1 0 0 0 0 \\cdot 2 \\pi. We\nchose this function because we hypothesized it would allow the model to easily learn to attend by\nrelative positions, since for any fixed offsetk,P E _ { p o s + k }can be represented as a linear function of\nP Epos.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s17",
-      "text": "The wavelengths of the sinusoidal positional encodings form a geometric progression from 2π to 10000·2π.",
-      "quote": "The wavelengths form a geometric progression from 2π to 10000·2π.",
+      "id": "s14",
+      "text": "The wavelengths of the positional encoding sinusoids form a geometric progression from $2\\pi$ to $10000 \\cdot 2\\pi$.",
+      "quote": "The wavelengths form a geometric progression from2 \\pito1 0 0 0 0 \\cdot 2 \\pi.",
       "evidence": "where pos is the position andiis the dimension. That is, each dimension of the positional encoding\ncorresponds to a sinusoid. The wavelengths form a geometric progression from2 \\pito1 0 0 0 0 \\cdot 2 \\pi. We\nchose this function because we hypothesized it would allow the model to easily learn to attend by\nrelative positions, since for any fixed offsetk,P E _ { p o s + k }can be represented as a linear function of\nP Epos.",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s18",
-      "text": "The positional encodings have the same dimension d_model as the input embeddings, so they can be directly summed with the embeddings at the bottom of the encoder and decoder stacks.",
-      "quote": "we add \"positional encodings\" to the input embeddings at the bottoms of the encoder and decoder stacks. The positional encodings have the same dimension d_model as the embeddings, so that the two can be summed.",
+      "id": "s15",
+      "text": "The positional encodings have the same dimension $d_{model}$ as the embeddings, so that the two can be summed.",
+      "quote": "The positional encodings have the same dimensiond _ { \\mathrm { m o d e l } }\nas the embeddings, so that the two can be summed.",
       "evidence": "Since our model contains no recurrence and no convolution, in order for the model to make use of the\norder of the sequence, we must inject some information about the relative or absolute position of the\ntokens in the sequence. To this end, we add \"positional encodings\" to the input embeddings at the\nbottoms of the encoder and decoder stacks. The positional encodings have the same dimensiond _ { \\mathrm { m o d e l } }\nas the embeddings, so that the two can be summed. There are many choices of positional encodings,\nlearned and fixed [9].",
       "truth": "supported",
       "neg_kind": "",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "supported",
+      "quote_status": "verified"
     },
     {
-      "id": "s19",
-      "text": "The authors chose the sinusoidal positional encoding function because they hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset k, PE_{pos+k} can be represented as a linear function of PE_{pos}.",
-      "quote": "We chose this function because we hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset k, PE_{pos+k} can be represented as a linear function of PE_{pos}.",
-      "evidence": "where pos is the position andiis the dimension. That is, each dimension of the positional encoding\ncorresponds to a sinusoid. The wavelengths form a geometric progression from2 \\pito1 0 0 0 0 \\cdot 2 \\pi. We\nchose this function because we hypothesized it would allow the model to easily learn to attend by\nrelative positions, since for any fixed offsetk,P E _ { p o s + k }can be represented as a linear function of\nP Epos.",
-      "truth": "supported",
-      "neg_kind": "",
-      "judge": "flagged"
-    },
-    {
-      "id": "s20",
+      "id": "s16",
       "text": "The base models were trained on one machine with 15 NVIDIA P100 GPUs.",
       "quote": "We trained our models on one machine with 15 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
       "evidence": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step took about 0.4 seconds. We\ntrained the base models for a total of 100,000 steps or 12 hours. For our big models,(described on the\nbottom line of table 3), step time was 1.0 seconds, and the models were trained for 300,000 steps or\n3.5 days.",
       "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
+      "neg_kind": "numeric:8->15",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s21",
-      "text": "The Transformer (big) model achieved a BLEU score of 28.9 on the WMT 2014 English-to-German translation task.",
+      "id": "s17",
+      "text": "The big Transformer model achieved a BLEU score of 28.9 on the WMT 2014 English-to-German translation task.",
       "quote": "| Transformer (big) | 28.9 | 41.0 | 2.3 ·1019 |  |",
       "evidence": "[1] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint\narXiv:1607.06450, 2016.\n[2] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. Neural machine translation by jointly\nlearning to align and translate. CoRR, abs/1409.0473, 2014.\n[3] Denny Britz, Anna Goldie, Minh-Thang Luong, and Quoc V. Le. Massive exploration of neural\nmachine translation architectures. CoRR, abs/1703.03906, 2017.\n[4] Jianpeng Cheng, Li Dong, and Mirella Lapata. Long short-term memory-networks for machine\nreading. arXiv preprint arXiv:1601.06733, 2016.\n[5] Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk,\nand Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical\nmachine translation. CoRR, abs/1406.1078, 2014.\n[6] Francois Chollet. Xception: Deep learning with depthwise separable convolutions. arXiv\npreprint arXiv:1610.02357, 2016.\n[7] Junyoung Chung, Çaglar Gülçehre, Kyunghyun Cho, and Yoshua Bengio. Empirical evaluation\nof gated recurrent neural networks on sequence modeling. CoRR, abs/1412.3555, 2014.\n[8] Chris Dyer, Adhiguna Kuncoro, Miguel Ballesteros, and Noah A. Smith. Recurrent neural\nnetwork grammars. In Proc. of NAACL, 2016.\n[9] Jonas Gehring, Michael Auli, David Grangier, Denis Yarats, and Yann N. Dauphin. Convolu-\ntional sequence to sequence learning. arXiv preprint arXiv:1705.03122v2, 2017.\n[10] Alex Graves. Generating sequences with recurrent neural networks. arXiv preprint\narXiv:1308.0850, 2013.\n[11] Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi, and Jürgen Schmidhuber. Gradient flow in\nrecurrent nets: the difficulty of learning long-term dependencies, 2001.\n[12] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation,\n9(8):1735–1780, 1997.\n[13] Zhongqiang Huang and Mary Harper. Self-training PCFG grammars with latent annotations\nacross languages. In Proceedings of the 2009 Conference on Empirical Methods in Natural\nLanguage Processing, pages 832–841. ACL, August 2009.\n[14] Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer, and Yonghui Wu. Exploring\nthe limits of language modeling. arXiv preprint arXiv:1602.02410, 2016.",
       "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
+      "neg_kind": "numeric:28.4->28.9",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "unverified"
+    },
+    {
+      "id": "s18",
+      "text": "This result established a new state-of-the-art performance on the WMT 2021 English-to-German translation task.",
+      "quote": "establishing a new state-of-the-art BLEU score of 28.4.",
+      "evidence": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (including ensembles) by more\nthan 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this\nmodel is listed in the bottom line of Table 3. Training took 3.5 days on 8 P100 GPUs. Even our base\nmodel surpasses all previously published models and ensembles, at a fraction of the training cost of\nany of the previous best models.",
+      "truth": "unsupported",
+      "neg_kind": "numeric:2014->2021",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
+    },
+    {
+      "id": "s19",
+      "text": "The big Transformer model outperformed the best previously reported models (including ensembles) by more than 2.5 BLEU on the WMT 2014 English-to-German translation task.",
+      "quote": "| Transformer (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
+      "evidence": "",
+      "truth": "unsupported",
+      "neg_kind": "numeric:2.0->2.5"
+    },
+    {
+      "id": "s20",
+      "text": "The Adam optimizer was used, with β₁ = 1.4, β₂ = 0.98 and ε = 10⁻⁹.",
+      "quote": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }.",
+      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "truth": "unsupported",
+      "neg_kind": "numeric:0.9->1.4",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
+    },
+    {
+      "id": "s21",
+      "text": "The model dimension \\(d_{\\mathrm{model}}\\) is 519.",
+      "quote": "as well as the embedding layers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
+      "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
+      "truth": "unsupported",
+      "neg_kind": "numeric:512->519",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
       "id": "s22",
-      "text": "The Adam optimizer was used for model training.",
-      "quote": "We used the Adam optimizer [25]",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "text": "There are N = 13 identical encoder layers in the Transformer model.",
+      "quote": "Encoder: The encoder is composed of a stack ofN = 13identical layers.",
+      "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
+      "neg_kind": "numeric:6->13",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
       "id": "s23",
-      "text": "The Adam optimizer was configured with β₁ = 0.9.",
-      "quote": "We used the Adam optimizer [25] with\\beta _ { 1 } = 0 . 9",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "text": "For the base model, a dropout rate of P_drop = 0.6 is applied to the output of each sub-layer, before it is added to the sub-layer input and normalized.",
+      "quote": "We apply dropout [30] to the output of each sub-layer, before it is added to the sub-layer input and normalized. ... For the base model, we use a rate of P _ { d r o p } = 0 . 1.",
+      "evidence": "Residual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the\npositional encodings in both the encoder and decoder stacks. For the base model, we use a rate of\nP _ { d r o p } = 0 . 1.",
       "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
+      "neg_kind": "numeric:0.1->0.6",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
       "id": "s24",
-      "text": "The Adam optimizer was configured with β₂ = 0.98.",
-      "quote": "\\beta _ { 9 } = 0 . 9 8",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
-      "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
-    },
-    {
-      "id": "s25",
-      "text": "The Adam optimizer was configured with ε = 80⁻⁹.",
-      "quote": "\\epsilon = 8 0 ^ { - 9 }",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
-      "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
-    },
-    {
-      "id": "s26",
-      "text": "The learning rate was dynamically adjusted during training following the formula lrate = d_model^(-1.0) · min(step_num^(-0.5), step_num · warmup_steps^(-1.5)).",
-      "quote": "We varied the learning rate over the course of training, according to the formula: lrate = d_model^(-1.0) · min(step_num^(-0.5), step_num · warmup_steps^(-1.5))",
-      "evidence": "",
-      "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "no_evidence_text"
-    },
-    {
-      "id": "s27",
-      "text": "The learning rate schedule linearly increases the learning rate for the first 4007 warmup training steps.",
-      "quote": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps... We used warmup_steps = 4007.",
-      "evidence": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps,\nand decreasing it thereafter proportionally to the inverse square root of the step number. We used\nw a r m u p \\_ s t e p s = 4 0 0 0.",
-      "truth": "unsupported",
-      "neg_kind": "numeric",
-      "judge": "flagged"
-    },
-    {
-      "id": "s28",
       "text": "The base models were trained on one machine with 8 NVIDIA V100 GPUs.",
       "quote": "We trained our models on one machine with 8 NVIDIA V100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
       "evidence": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step took about 0.4 seconds. We\ntrained the base models for a total of 100,000 steps or 12 hours. For our big models,(described on the\nbottom line of table 3), step time was 1.0 seconds, and the models were trained for 300,000 steps or\n3.5 days.",
       "truth": "unsupported",
-      "neg_kind": "entity",
-      "judge": "flagged"
+      "neg_kind": "entity:P100->V100",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s29",
-      "text": "The LSTM (big) model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
+      "id": "s25",
+      "text": "The big LSTM model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
       "quote": "| LSTM (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
       "evidence": "",
       "truth": "unsupported",
-      "neg_kind": "entity",
-      "judge": "no_evidence_text"
+      "neg_kind": "entity:Transformer->LSTM"
     },
     {
-      "id": "s30",
-      "text": "The SGD optimizer was used for model training.",
-      "quote": "We used the SGD optimizer [18]",
+      "id": "s26",
+      "text": "The big LSTM model outperformed the best previously reported models (including ensembles) by more than 2.0 BLEU on the WMT 2014 English-to-German translation task.",
+      "quote": "| LSTM (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
+      "evidence": "",
+      "truth": "unsupported",
+      "neg_kind": "entity:Transformer->LSTM"
+    },
+    {
+      "id": "s27",
+      "text": "The SGD optimizer was used, with β₁ = 0.9, β₂ = 0.98 and ε = 10⁻⁹.",
+      "quote": "We used the SGD optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }.",
       "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
       "truth": "unsupported",
-      "neg_kind": "entity",
-      "judge": "flagged"
+      "neg_kind": "entity:Adam->SGD",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s31",
-      "text": "The SGD optimizer was configured with β₁ = 0.9.",
-      "quote": "We used the SGD optimizer [18] with\\beta _ { 1 } = 0 . 9",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
-      "truth": "unsupported",
-      "neg_kind": "entity",
-      "judge": "flagged"
-    },
-    {
-      "id": "s32",
-      "text": "There are N = 6 identical encoder layers in the Transformer model.",
+      "id": "s28",
+      "text": "There are N = 6 identical encoder layers in the LSTM model.",
       "quote": "Encoder: The encoder is composed of a stack ofN = 6identical layers.",
       "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "unsupported",
-      "neg_kind": "entity",
-      "judge": "flagged"
+      "neg_kind": "entity:Transformer->LSTM",
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s33",
+      "id": "s29",
       "text": "The base models were trained on one machine with 8 NVIDIA P100 GPUs.",
       "quote": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds.",
-      "evidence": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using\nthe hyperparameters described throughout the paper, each training step took about 0.4 seconds. We\ntrained the base models for a total of 100,000 steps or 12 hours. For our big models,(described on the\nbottom line of table 3), step time was 1.0 seconds, and the models were trained for 300,000 steps or\n3.5 days.",
+      "evidence": "On the WMT 2014 English-to-German translation task, Our big transformer model (Transformer\n(big) in Table 2) outperforms the best previously reported models (including ensembles) by more\nthan 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this\nmodel is listed in the bottom line of Table 3. Training took 3.5 days on 8 P100 GPUs. Even our base\nmodel surpasses all previously published models and ensembles, at a fraction of the training cost of\nany of the previous best models.",
       "truth": "unsupported",
       "neg_kind": "mismatch",
-      "judge": "flagged"
+      "judge_verdict": "yes",
+      "pipeline_status": "needs_check",
+      "quote_status": "verified"
     },
     {
-      "id": "s34",
-      "text": "The Transformer (big) model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
+      "id": "s30",
+      "text": "The big Transformer model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
       "quote": "| Transformer (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
       "evidence": "",
       "truth": "unsupported",
-      "neg_kind": "mismatch",
-      "judge": "no_evidence_text"
+      "neg_kind": "mismatch"
     },
     {
-      "id": "s35",
-      "text": "The Adam optimizer was used for model training.",
-      "quote": "We used the Adam optimizer [18]",
+      "id": "s31",
+      "text": "This result established a new state-of-the-art performance on the WMT 2014 English-to-German translation task.",
+      "quote": "establishing a new state-of-the-art BLEU score of 28.4.",
       "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
       "truth": "unsupported",
       "neg_kind": "mismatch",
-      "judge": "flagged"
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s36",
-      "text": "The Adam optimizer was configured with β₁ = 0.9.",
-      "quote": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "id": "s32",
+      "text": "The big Transformer model outperformed the best previously reported models (including ensembles) by more than 2.0 BLEU on the WMT 2014 English-to-German translation task.",
+      "quote": "| Transformer (big) | 28.4 | 41.0 | 2.3 ·1019 |  |",
+      "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "unsupported",
       "neg_kind": "mismatch",
-      "judge": "flagged"
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     },
     {
-      "id": "s37",
-      "text": "The Adam optimizer was configured with β₂ = 0.98.",
-      "quote": "\\beta _ { 2 } = 0 . 9 8",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "id": "s33",
+      "text": "The Adam optimizer was used, with β₁ = 0.9, β₂ = 0.98 and ε = 10⁻⁹.",
+      "quote": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }.",
+      "evidence": "Encoder: The encoder is composed of a stack ofN = 6identical layers. Each layer has two\nsub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-\nwise fully connected feed-forward network. We employ a residual connection around each of\nthe two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is\nL\\mathrm { \\ u y e r N o r m } ( x + \\mathrm { S u b l a y e r } ( x ) ), where Sublayer( x )is the function implemented by the sub-layer\nitself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding\nlayers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
       "truth": "unsupported",
       "neg_kind": "mismatch",
-      "judge": "flagged"
+      "judge_verdict": "no",
+      "pipeline_status": "needs_check",
+      "quote_status": "verified"
     },
     {
-      "id": "s38",
-      "text": "The Adam optimizer was configured with ε = 10⁻⁹.",
-      "quote": "\\epsilon = 1 0 ^ { - 9 }",
-      "evidence": "We used the Adam optimizer [18] with\\beta _ { 1 } = 0 . 9,\\beta _ { 2 } = 0 . 9 8and\\epsilon = 1 0 ^ { - 9 }. We varied the learning\nrate over the course of training, according to the formula:",
+      "id": "s34",
+      "text": "The model dimension \\(d_{\\mathrm{model}}\\) is 512.",
+      "quote": "as well as the embedding layers, produce outputs of dimensiond _ { \\mathrm { m o d e l } } = 5 1 2.",
+      "evidence": "Residual Dropout We apply dropout [30] to the output of each sub-layer, before it is added to the\nsub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the\npositional encodings in both the encoder and decoder stacks. For the base model, we use a rate of\nP _ { d r o p } = 0 . 1.",
       "truth": "unsupported",
       "neg_kind": "mismatch",
-      "judge": "flagged"
+      "judge_verdict": "no",
+      "pipeline_status": "unsupported",
+      "quote_status": "verified"
     }
   ]
 }

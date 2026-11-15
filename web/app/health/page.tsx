@@ -269,6 +269,22 @@ export default function HealthPage() {
                   <p className="kv num">
                     离线 recall@5 {ext?.recall_at5 ?? "—"} · mrr@5 {ext?.mrr_at5 ?? "—"}
                   </p>
+                  {report.retrieval_health && (
+                    <p className="kv num"
+                      title={report.retrieval_health.note}>
+                      dense 向量覆盖
+                      {" "}
+                      <b style={{
+                        color: report.retrieval_health.healthy
+                          ? "var(--ok)" : "var(--warn)",
+                      }}>
+                        {pct(report.retrieval_health.dense_vec_coverage)}
+                      </b>
+                      {report.retrieval_health.papers_missing_vec > 0
+                        ? ` · ${report.retrieval_health.papers_missing_vec} 篇缺向量（中文检索降级）`
+                        : " · 全库覆盖"}
+                    </p>
+                  )}
                 </div>
 
                 <div className="h-detail-block">
@@ -278,6 +294,14 @@ export default function HealthPage() {
                     均值 {perf?.avg_latency_ms ?? "—"}ms · n={perf?.count ?? 0} ·
                     失败率 {pct(perf?.error_rate ?? null)}
                   </p>
+                  {perf?.by_mode && Object.keys(perf.by_mode).length > 0 && (
+                    <p className="kv num">
+                      {Object.entries(perf.by_mode).map(([m, s]) =>
+                        `${m === "paper" ? "专业" : m === "general" ? "普通" : m} `
+                        + `p50 ${s.p50_ms ?? "n<10"}ms / p95 ${s.p95_ms ?? "—"}ms (n=${s.n})`
+                      ).join(" · ")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="h-detail-block">
@@ -325,6 +349,65 @@ export default function HealthPage() {
                   <p className="kv muted">
                     未全过时总分封顶 90；外部校准不替代运行时指标，只防止内部指标掩盖已知回归。
                   </p>
+                </div>
+
+                <div className="h-detail-block">
+                  <b>judge 校准 · 构造真值双 κ</b>
+                  {report.calibration && report.calibration.judge_kappa != null ? (
+                    <>
+                      <p className="kv num">
+                        judge-only κ（L4 判别力）
+                        {" "}
+                        <b style={{
+                          color: (report.calibration.judge_kappa ?? 0) >= 0.6
+                            ? "var(--ok)" : "var(--warn)",
+                        }}>
+                          {report.calibration.judge_kappa}
+                        </b>
+                        {" "}· pipeline κ（L2-L4 端到端）
+                        {" "}
+                        <b style={{
+                          color: (report.calibration.pipeline_kappa ?? 0) >= 0.6
+                            ? "var(--ok)" : "var(--warn)",
+                        }}>
+                          {report.calibration.pipeline_kappa}
+                        </b>
+                        {" "}· 目标 ≥0.60
+                      </p>
+                      <p className="kv muted">
+                        {report.calibration.kappa_note}
+                        {report.calibration.evaluated_at
+                          ? ` · 评测于 ${report.calibration.evaluated_at}` : ""}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="kv muted">{report.calibration?.kappa_note ?? "评测未运行"}</p>
+                  )}
+                </div>
+
+                <div className="h-detail-block">
+                  <b>金标评测轮次趋势（近 6 轮）</b>
+                  {(report.trend?.length ?? 0) > 0 ? (
+                    <>
+                      <div className="h-bars">
+                        {report.trend!.map((t) => (
+                          <div key={t.dir} className="h-bar-row" title={`${t.dir} · recall@5 ${t.recall_at5 ?? "—"}`}>
+                            <span className="kv" style={{ width: 116 }}>{t.dir}</span>
+                            <span className="kv num" style={{ flex: 1 }}>
+                              R@5 {t.recall_at5 ?? "—"} · hall{" "}
+                              {t.hallucination_rate ?? "—"} · anchor{" "}
+                              {t.anchor_precision ?? "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="kv muted">
+                        每轮来自 docs/acceptance/&lt;轮次&gt;/eval_gold.json，按时间升序。
+                      </p>
+                    </>
+                  ) : (
+                    <p className="kv muted">暂无历史金标轮次。</p>
+                  )}
                 </div>
               </div>
             </div>

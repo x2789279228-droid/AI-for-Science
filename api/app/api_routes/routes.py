@@ -884,6 +884,33 @@ def health_report():
             "page_total": page_total,
         }
 
+    # ---- ③′ 检索健康（Round6-P1 新增，仅披露不计分）：dense 向量覆盖——
+    # BM25 对纯中文查询零召回，dense 是中文维度唯一检索通道；入库时 embedding
+    # 失败会让整篇 vec IS NULL 且无任何告警（实测 11/21 篇全缺）——静默损伤必须
+    # 变成可见指标。低于 0.95 时给 retrieve_dense_low guardrail 式提示。
+    dense_cov = None
+    dense_papers_low = []
+    try:
+        cov_rows = db.query(
+            "SELECT p.id, COUNT(c.id) n, "
+            "SUM(CASE WHEN c.vec IS NOT NULL THEN 1 ELSE 0 END) v "
+            "FROM papers p JOIN chunks c ON c.paper_id=p.id "
+            "WHERE p.docir_path!='' GROUP BY p.id HAVING n>0")
+        if cov_rows:
+            tot = sum(r["n"] for r in cov_rows)
+            have = sum(r["v"] or 0 for r in cov_rows)
+            dense_cov = round(have / tot, 3) if tot else None
+            dense_papers_low = [r["id"][:16] for r in cov_rows
+                                if tot and (r["v"] or 0) < r["n"]]
+    except Exception:  # noqa: BLE001 —— 指标披露失败不影响健康报告
+        dense_cov = None
+    retrieval_health = {
+        "dense_vec_coverage": dense_cov,
+        "papers_missing_vec": len(dense_papers_low),
+        "note": "BM25 纯中文零召回——dense 是中文检索唯一通道；覆盖率<1 的论文中文提问检索降级",
+        "healthy": dense_cov is not None and dense_cov >= 0.95,
+    }
+
     # ---- ④ 性能（窗口内问答 LLM 调用：p50/p95 SLO；均值只作明细） ----
     lat_rows = db.query(
         "SELECT latency_ms FROM qa_logs WHERE CAST(ts AS REAL) >= ? "
@@ -896,6 +923,18 @@ def health_report():
     if p50 is not None and p95 is not None:
         performance = _clamp01(0.5 * _slo_score(p50, 3000, 10000)
                                + 0.5 * _slo_score(p95, 8000, 25000))
+    # 每模式 SLO（Round6-P1）：专业/普通文档延迟分列（qa_logs.doc_mode，
+    # runner 线程内落库）；样本 <10 条的模式不出分位数，如实标注
+    perf_by_mode: dict[str, dict] = {}
+    for mrow in db.query(
+            "SELECT COALESCE(NULLIF(doc_mode,''),'unknown') AS dm, latency_ms "
+            "FROM qa_logs WHERE CAST(ts AS REAL) >= ? "
+            "AND module IN ('qa', 'chat') AND latency_ms > 0", (cutoff,)):
+        perf_by_mode.setdefault(mrow["dm"], []).append(float(mrow["latency_ms"]))
+    mode_slo = {dm: {"n": len(v),
+                     "p50_ms": int(_percentile(sorted(v), 0.50)) if len(v) >= 10 else None,
+                     "p95_ms": int(_percentile(sorted(v), 0.95)) if len(v) >= 10 else None}
+                for dm, v in perf_by_mode.items()}
 
     # ---- ⑤ 数据卫生（陈旧去重积压 + 解析失败；新鲜的 pending 是正常待办不扣分） ----
     dedup_rows = db.query("SELECT status, COUNT(*) c FROM dedup_alerts GROUP BY status")
@@ -1075,8 +1114,10 @@ def health_report():
         "qa_perf": {"count": len(lat), "avg_latency_ms": round(avg_lat),
                     "p50_ms": int(p50) if p50 is not None else None,
                     "p95_ms": int(p95) if p95 is not None else None,
-                    "error_rate": (failed_traces / n_traces) if n_traces else None},
+                    "error_rate": (failed_traces / n_traces) if n_traces else None,
+                    "by_mode": mode_slo},
         "parse": parse,
+        "retrieval_health": retrieval_health,
         "dedup": {"total": dedup_total, "pending": dedup_pending,
                   "stale_pending": stale_pending,
                   "covered": dedup.get("covered", 0), "kept": dedup.get("kept", 0),
@@ -1085,14 +1126,32 @@ def health_report():
         "external": {**offline, "cap": external_cap} if offline.get("available") else offline,
         # Round6 可信度披露：judge 校准状态（κ 如实，未达 0.6 前明确标注）+
         # 金标三轮趋势（评测轮次关键指标，历史来源 docs/acceptance/）
-        "calibration": {
-            "judge_kappa": 0.536,
-            "judge_note": "LLM judge 校准中（构造真值口径 κ=0.536，目标 ≥0.60；"
-                          "FP=0/负类全检出，正类偏保守）",
-            "grounded_note": "回答可信=claims 四态口径；supported 已附逐字原文引文",
-        },
+        "calibration": _calibration(),
         "trend": _eval_trend(),
     }
+
+
+def _calibration() -> dict:
+    """judge 校准披露（P1：读 eval_kappa.py 产出的 kappa_report.json 实测值，
+    不再硬编码——报告没跑过/缺文件时如实标注「未评测」而非展示旧数字）。"""
+    report_path = Path(__file__).resolve().parents[2] / "scripts" / "kappa_report.json"
+    try:
+        d = json.loads(report_path.read_text(encoding="utf-8"))
+        kj, kp = d.get("cohens_kappa"), d.get("pipeline_kappa")
+        ok = (isinstance(kj, (int, float)) and kj >= 0.60
+              and isinstance(kp, (int, float)) and kp >= 0.60)
+        note = "judge-only κ（L4 判别力）+ pipeline κ（L2-L4 端到端防御），" \
+               "构造真值口径，目标双 κ≥0.60"
+        if not ok:
+            note += "；未达标——校准进行中"
+        return {"judge_kappa": kj, "pipeline_kappa": kp, "kappa_note": note,
+                "evaluated_at": d.get("time", ""),
+                "grounded_note": "回答可信=claims 四态口径；supported 已附逐字原文引文"}
+    except Exception:  # noqa: BLE001 —— 无报告=未评测，如实披露
+        return {"judge_kappa": None, "pipeline_kappa": None,
+                "kappa_note": "评测未运行（scripts/eval_kappa.py 无报告产出）——如实披露，不展示历史数字",
+                "evaluated_at": "",
+                "grounded_note": "回答可信=claims 四态口径；supported 已附逐字原文引文"}
 
 
 def _eval_trend() -> list[dict]:
