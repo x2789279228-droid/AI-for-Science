@@ -188,15 +188,34 @@ function RowView({ row, open, toggle }: {
         </div>
       );
     case "verifier":
-      return row.ev.verdict === "pass" ? (
-        <div className="tl-row">
-          <span className="tl-dot tl-done" />
-          <div>
-            <b>证据校验</b>
-            <span className="kv"> · 通过 · {row.ev.evidence_count} 块覆盖全部检索面</span>
+      if (row.ev.verdict === "pass") {
+        return (
+          <div className="tl-row">
+            <span className="tl-dot tl-done" />
+            <div>
+              <b>证据校验</b>
+              <span className="kv"> · 通过 · {row.ev.evidence_count} 块覆盖全部检索面</span>
+            </div>
           </div>
-        </div>
-      ) : (
+        );
+      }
+      if (row.ev.verdict === "partial") {
+        // v2.3.0 部分覆盖：已覆盖面正常作答，缺面补检索/如实标注（不再整题拒答）
+        return (
+          <div className="verifier-alert recover">
+            <div className="verifier-alert-head">
+              <span className="tl-dot tl-warn" />
+              <b>部分覆盖</b>
+              <span className="badge warn">→ 缺面补检索 · 已覆盖面照常作答</span>
+            </div>
+            <div className="kv">
+              {row.ev.missing.length} 个检索面暂缺证据：{row.ev.missing.join("、") || "—"}
+              （补检索无果将如实标注「文档未明确说明」）
+            </div>
+          </div>
+        );
+      }
+      return (
         <div className="verifier-alert">
           <div className="verifier-alert-head">
             <span className="tl-dot tl-fail" />

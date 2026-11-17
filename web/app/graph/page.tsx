@@ -23,7 +23,8 @@ import { canvasTheme } from "@/lib/theme-palettes";
 import { Maximize } from "@/components/icons";
 import type { Paper } from "@/lib/api";
 
-// 社区色板已按主题收敛至 lib/theme-palettes.ts（v1.3，design-tokens 使用规则 6）
+// 社区色板按主题收敛于 lib/theme-registry.ts（v1.6 起真身；theme-palettes 仅为 shim，
+// v1.3，design-tokens 使用规则 6）
 
 const ROLE_BADGE: Record<string, string> = { cornerstone: "🪨 基石", peripheral: "🌿 边缘衍生" };
 
@@ -661,6 +662,10 @@ export default function GraphPage() {
                 ? "calc(100vh - var(--topbar-h) - var(--space-8))"
                 : "max(560px, calc(100vh - var(--topbar-h) - 180px))",
               position: "relative", ["--i" as string]: 1,
+              // v2.3.1 抽屉交互修复：画布浮于 drawer-mask(z-90) 之上——抽屉开着时节点
+              // 仍可点（点其他节点直接切换详情），空白画布由 canvas:click 负责关闭；
+              // 遮罩只罩画布以外的页面区域。z-92 介于遮罩(90)与抽屉(95)之间。
+              zIndex: selected ? 92 : undefined,
             }}>
               <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
               <div className="graph-legend">

@@ -118,8 +118,8 @@ function CitationChips({ text, onCite, highlightRef }: {
                     className="chip anchor-chip"
                     style={{
                       cursor: "pointer", fontSize: 11, padding: "0 6px",
-                      background: highlightRef === n ? "var(--accent, #2563eb)" : undefined,
-                      color: highlightRef === n ? "var(--accent-contrast, #fff)" : undefined,
+                      background: highlightRef === n ? "var(--accent)" : undefined,
+                      color: highlightRef === n ? "var(--accent-contrast)" : undefined,
                     }}
                     title={`跳转到参考文献 [${n}]`}
                     onClick={() => onCite(n)}>[{n}]</span>
@@ -188,11 +188,11 @@ function QualityPanel({ meta, paperId, showRefs = true }:
       {meta.parse_memory && (
         <div>
           {row("解析峰值内存", `${Math.round(meta.parse_memory.peak_mb)} MB（${meta.parse_memory.samples} 采样点）`)}
-          <div style={{ height: 6, background: "var(--line, #eee)", borderRadius: 3, marginTop: 6 }}>
+          <div style={{ height: 6, background: "var(--line)", borderRadius: 3, marginTop: 6 }}>
             <div style={{
               width: `${Math.min(100, Math.round((meta.parse_memory.peak_mb / 2048) * 100))}%`,
               height: "100%",
-              background: meta.parse_memory.peak_mb < 2048 ? "var(--ok, #16a34a)" : "var(--warn)",
+              background: meta.parse_memory.peak_mb < 2048 ? "var(--ok)" : "var(--warn)",
               borderRadius: 3 }} />
           </div>
           <p className="kv" style={{ fontSize: 11, marginTop: 4 }}>
@@ -317,7 +317,7 @@ function SelectionPopup({ sel, targetLang, onClose }: {
   return (
     <div style={{
       position: "fixed", left: Math.min(sel.x, window.innerWidth - 360), top: sel.y + 12,
-      width: 340, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,.18)",
+      width: 340, zIndex: 50, boxShadow: "var(--shadow-lg)",
     }} className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <b style={{ fontSize: 12 }}>划词翻译</b>
@@ -331,7 +331,7 @@ function SelectionPopup({ sel, targetLang, onClose }: {
         <>
           <p style={{ fontSize: 13, margin: "6px 0" }}>{result.translation || "（翻译不可用）"}</p>
           {term && (
-            <p className="kv" style={{ color: "var(--ok, #16a34a)" }}>
+            <p className="kv" style={{ color: "var(--ok)" }}>
               术语表命中：{term.term} → {term.translation}
             </p>
           )}
@@ -1169,7 +1169,7 @@ function ReaderInner() {
     const lower = new Set(terms.map((t) => t.toLowerCase()));
     return snippet.split(re).map((part, i) =>
       lower.has(part.toLowerCase())
-        ? <mark key={i} style={{ background: "var(--warn-soft, #fef3c7)" }}>{part}</mark>
+        ? <mark key={i} style={{ background: "var(--warn-soft)" }}>{part}</mark>
         : <span key={i}>{part}</span>);
   };
 
@@ -1405,14 +1405,14 @@ function ReaderInner() {
                 title={`阅读进度：第 ${page}/${meta.page_count} 页`}>
                 <div style={{
                   width: `${Math.min(100, Math.round((page / Math.max(1, meta.page_count)) * 100))}%`,
-                  height: "100%", background: "var(--ok, #16a34a)", borderRadius: 2,
+                  height: "100%", background: "var(--ok)", borderRadius: 2,
                   transition: "width .3s" }} />
               </div>
               {translating && (
                 <div style={{ height: 4, background: "var(--line)", borderRadius: 2, marginTop: 8 }}>
                   <div style={{
                     width: `${translating.total ? Math.round((translating.done / translating.total) * 100) : 5}%`,
-                    height: "100%", background: "var(--accent, #2563eb)", borderRadius: 2,
+                    height: "100%", background: "var(--accent)", borderRadius: 2,
                     transition: "width .3s",
                   }} />
                 </div>
@@ -1486,7 +1486,7 @@ function ReaderInner() {
                   onScroll={trackSection}
                   style={{ marginBottom: 0, overflowY: "auto",
                     maxHeight: "calc(100vh - 230px)", minHeight: 320 }}>
-                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg, #fff)", margin: "0 0 8px", paddingBottom: 6 }}>
+                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg)", margin: "0 0 8px", paddingBottom: 6 }}>
                     译文（第 {page} 页 · 点击块锚定 PDF）
                   </h2>
                   {blocks.map((b) => {
@@ -1530,7 +1530,7 @@ function ReaderInner() {
                   onScroll={trackSection}
                   style={{ marginBottom: 0, overflowY: "auto",
                     maxHeight: "calc(100vh - 230px)", minHeight: 320 }}>
-                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg, #fff)", margin: 0, paddingBottom: 6 }}>原文</h2>
+                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg)", margin: 0, paddingBottom: 6 }}>原文</h2>
                   {blocks.map((b) => (
                     <div key={b.id} data-bid={b.id}
                       className={`block-item${flashBid === b.id ? " flash" : ""}`}
@@ -1544,12 +1544,12 @@ function ReaderInner() {
                 <div className="card" ref={zhPaneRef}
                   style={{ marginBottom: 0, overflowY: "auto",
                     maxHeight: "calc(100vh - 230px)", minHeight: 320 }}>
-                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg, #fff)", margin: 0, paddingBottom: 6 }}>译文（block 级对齐）</h2>
+                  <h2 style={{ position: "sticky", top: 0, background: "var(--bg)", margin: 0, paddingBottom: 6 }}>译文（block 级对齐）</h2>
                   {blocks.map((b) => {
                     const t = trans[b.id];
                     return (
                       <div key={b.id} data-bid={b.id} className="block-item"
-                        style={!t ? { opacity: 0.45, background: "var(--line-soft, #f5f5f5)", borderRadius: 6 } : undefined}>
+                        style={!t ? { opacity: 0.45, background: "var(--surface-2)", borderRadius: 6 } : undefined}>
                         {b.type === "formula" ? (
                           <p className="kv">（公式块不翻译 · KaTeX 见左栏）</p>
                         ) : t ? (
@@ -1588,7 +1588,7 @@ function ReaderInner() {
                     </span>
                   )}
                   {refQuality && (
-                    <span style={{ fontSize: 10, color: "var(--ink-3, #888)" }}>
+                    <span style={{ fontSize: 10, color: "var(--ink-3)" }}>
                       实质 {Object.values(refQuality).filter((q) => q.cls === "substantive").length}
                       · 背景 {Object.values(refQuality).filter((q) => q.cls === "background").length}
                       · 凑数 {Object.values(refQuality).filter((q) => q.cls === "perfunctory").length}
@@ -1610,7 +1610,7 @@ function ReaderInner() {
                       style={{
                         display: "flex", gap: 8, alignItems: "baseline", cursor: "pointer",
                         padding: "4px 6px", borderRadius: 6,
-                        background: highlightRef === r.index ? "var(--accent-soft, #eef2ff)" : undefined,
+                        background: highlightRef === r.index ? "var(--accent-soft)" : undefined,
                       }}>
                       <b className="kv" style={{ minWidth: 34 }}>[{r.index}]</b>
                       <span style={{ fontSize: 12, flex: 1 }}>

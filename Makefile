@@ -4,7 +4,7 @@
 
 SHELL := /bin/bash
 
-.PHONY: install api web dev demo test lint cases smoke corpus clean
+.PHONY: install api web dev demo test lint cases smoke corpus contrast clean
 
 install:            ## 安装后端 + 前端依赖
 	cd api && uv sync
@@ -35,6 +35,9 @@ lint:               ## 仅静态检查
 
 cases:              ## 官方 3 用例断言式验收（进程内，无需起服务）
 	cd api && uv run python scripts/run_official_cases.py
+
+contrast:           ## 皮肤对比度门禁（v1.6：逐肤 WCAG 校验，产出 latest-verify/contrast.log）
+	python scripts/audit_theme_contrast.py
 
 smoke:              ## 真 HTTP 冒烟（先 make api 或 compose 起栈）
 	cd api && uv run python scripts/smoke_web.py

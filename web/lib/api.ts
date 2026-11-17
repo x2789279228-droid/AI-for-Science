@@ -72,6 +72,7 @@ export interface Hit {
   rerank?: number;         // bge-reranker 精排分（配置了 rerank key 时存在）
   kind?: string;           // detail | summary | table
   aspect?: string;
+  aspects?: string[];      // v2.3.0 多面归并：同块支撑的全部检索面
   text: string;
 }
 
@@ -129,6 +130,7 @@ export interface FinalEvent {
   agent?: string;          // 实际承接的 Agent（reader/compare/…）
   handoffs?: Handoff[];    // Agent 交接日志
   anchors?: Record<string, Anchor>;  // E# → 块级锚点（引用点击跳 PDF + bbox 高亮）
+  partial_missing?: string[];        // v2.3.0 部分回答：证据缺失的子问题面（「部分回答」徽标）
   compare_table?: CompareTable;
   graph_data?: GraphData;
   outline?: Outline;
@@ -492,6 +494,10 @@ export interface SSEHandlers {
   verifier?: (d: VerifierEvent) => void;
   // 多智能体：结构化产物（compare_table 等）
   artifact?: (d: ArtifactEvent) => void;
+  // ChatGLM 式深度思考：meta 先行下发 thread_id（流式中可发起停止）；
+  // reasoning_delta 为思维链增量（reasoning_content），先于 delta 到达
+  meta?: (d: { thread_id: string; conversation_id?: string }) => void;
+  reasoningDelta?: (t: string) => void;
 }
 
 /** SSE 帧解析（EventSource 不支持 POST，手写 fetch 流解析；streamChat/resumeChat 共用）。 */
@@ -516,6 +522,8 @@ async function consumeSSE(resp: Response, on: SSEHandlers): Promise<void> {
           else if (event === "guardrail") on.guardrail?.(data);
           else if (event === "retrieval") on.retrieval?.(data);
           else if (event === "delta") on.delta?.(data.text);
+          else if (event === "reasoning_delta") on.reasoningDelta?.(data.text);
+          else if (event === "meta") on.meta?.(data);
           else if (event === "final") on.final?.(data);
           else if (event === "plan") on.plan?.(data);
           else if (event === "tool_call") on.toolCall?.(data);
@@ -533,14 +541,16 @@ async function consumeSSE(resp: Response, on: SSEHandlers): Promise<void> {
 
 /** POST SSE 流式问答。conversationId 可选：断点续跑按会话归属，缺省由后端生成。
  * agent 为 UI 强制指定的 Agent（auto/reader/…），最高路由优先级，缺省 auto。
- * docMode：paper（学术文献）| general（普通文档）——决定后端工具/意图白名单。 */
+ * docMode：paper（学术文献）| general（普通文档）——决定后端工具/意图白名单。
+ * thinking：深度思考（ChatGLM 模式）开关，responder 流式 reasoning_delta。 */
 export async function streamChat(
   question: string,
   paperIds: string[],
   on: SSEHandlers,
   conversationId?: string,
   agent: string = "auto",
-  docMode: "paper" | "general" = "paper"
+  docMode: "paper" | "general" = "paper",
+  thinking: boolean = true
 ): Promise<void> {
   const resp = await fetch(`${API}/api/chat`, {
     method: "POST",
@@ -551,6 +561,7 @@ export async function streamChat(
       conversation_id: conversationId ?? "",
       agent,
       doc_mode: docMode,
+      thinking,
     }),
   });
   if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
@@ -563,6 +574,78 @@ export async function resumeChat(threadId: string, on: SSEHandlers): Promise<voi
     `${API}/api/chat/${encodeURIComponent(threadId)}/resume`, { method: "POST" });
   if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
   await consumeSSE(resp, on);
+}
+
+/** 停止生成（协作式）：后端置位取消标志，responder 中断并以已生成部分收尾。 */
+export async function stopChat(threadId: string): Promise<void> {
+  const r = await fetch(`${API}/api/chat/${encodeURIComponent(threadId)}/stop`, { method: "POST" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+}
+
+// ---------------- 会话管理（ChatGLM 式会话侧栏数据源） ----------------
+
+export interface ConversationInfo {
+  id: string;
+  title: string;
+  turns: number;
+  last_question?: string;
+  updated_at: number;
+}
+
+/** 会话指针 localStorage 键：按模式隔离（专业/普通各自记住活跃会话，互不串历史）。 */
+export const convKeyFor = (docMode: "paper" | "general"): string =>
+  `meridian_conversation_id:${docMode === "general" ? "general" : "paper"}`;
+
+export interface TurnRecord {
+  thread_id: string;
+  turn: number;
+  question: string;
+  answer: string;
+  status: "running" | "done" | "failed";
+  created_at: number;
+}
+
+export async function listConversations(
+  limit = 50, force = false, docMode?: "paper" | "general"
+): Promise<ConversationInfo[]> {
+  const p = new URLSearchParams({ limit: String(limit) });
+  if (docMode) p.set("doc_mode", docMode);
+  const d = await cachedJSON<{ conversations: ConversationInfo[] }>(
+    `${API}/api/conversations?${p}`, 3000, { force });
+  return d.conversations;
+}
+
+export async function getConversationTurns(conversationId: string): Promise<TurnRecord[]> {
+  const d = await cachedJSON<{ turns: TurnRecord[] }>(
+    `${API}/api/conversations/${encodeURIComponent(conversationId)}/turns`, 10000);
+  return d.turns;
+}
+
+export async function renameConversation(conversationId: string, title: string): Promise<void> {
+  const r = await fetch(`${API}/api/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  _invalidate("api/conversations");
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const r = await fetch(`${API}/api/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  _invalidate("api/conversations");
+}
+
+/** Trace 回放（thread_id 即 trace_id）：会话历史还原 final 元数据的数据源。 */
+export async function fetchQaTraceOrNull(traceId: string): Promise<QaTrace | null> {
+  try {
+    return await fetchQaTrace(traceId);
+  } catch {
+    return null;   // 回放缺失（旧数据/降级）→ 调用方走纯文本兜底
+  }
 }
 
 // ---------------- 协议 v1.1：Trace 时间线结构化事件 ----------------
@@ -609,7 +692,7 @@ export interface EvidenceEvent {
 }
 
 export interface VerifierEvent {
-  verdict: "pass" | "insufficient";
+  verdict: "pass" | "partial" | "insufficient";   // partial=v2.3.0 部分覆盖（缺面仍补检索）
   missing: string[];
   evidence_count: number;
   action: "respond" | "recover";
@@ -626,7 +709,9 @@ export interface QaTrace {
   trace_id: string;
   question: string;
   status: string;
-  events: TLEvent[];
+  // 宽类型：回放账本含 trace/plan/…/delta/reasoning_delta/final/done 全量事件
+  //（超出 TLEvent 时间线 kind 的部分由消费方按需收窄）
+  events: { kind: string; data: Record<string, unknown> }[];
 }
 
 export interface HealthScore {

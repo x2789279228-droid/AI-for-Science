@@ -63,6 +63,7 @@ class AgentState(TypedDict, total=False):
     question: str
     paper_ids: list[str]
     doc_mode: str                                             # paper（学术）| general（普通文档）
+    thinking: bool                                            # 深度思考开关（UI per-request；进 checkpoint，续跑保留）
     fast_path: bool                                           # TTFT 快路径：跳过 Router/Planner 前置 LLM
     # 路由 / 规划
     intent: Intent
@@ -84,6 +85,9 @@ class AgentState(TypedDict, total=False):
     claims: list[dict[str, Any]]
     mode: Literal["generative", "extractive", "refusal", "none"]
     anchors: dict[str, dict[str, Any]]                        # E# → 块级溯源锚点（responder 产出，final 事件下发）
+    # 分级作答（v2.3.0）：复合问题子问题覆盖状态（verifier 产出，responder 消费）
+    aspect_verdicts: dict[str, Any] | None                    # LLM 可答性 judge：{"answerable": {面: [E#]}, "unanswerable": [...]}
+    partial_missing: list[str]                                # 证据缺失面清单（final 下发前端「部分回答」徽标）
     # 防线与轨迹
     guardrails: Annotated[list[str], operator.add]
     trace: Annotated[list[dict[str, Any]], operator.add]

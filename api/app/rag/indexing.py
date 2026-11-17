@@ -262,11 +262,12 @@ def rerank_available() -> bool:
     return bool(settings.rerank_api_key)
 
 
-def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 3.0) -> list[dict] | None:
+def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 5.0) -> list[dict] | None:
     """精排：query × 候选块相关性重排。失败返回 None（调用方降级回融合排序）。
 
-    接口：POST {rerank_base_url}/rerank {"model", "query", "documents"} → results[{index, relevance_score}]
-    （SiliconFlow/Jina 兼容格式；bge-reranker-v2-m3）。
+    接口：POST {rerank_base_url}/rerank {"model", "query", "top_n", "documents"}
+    → results[{index, relevance_score}]（智谱 BigModel / SiliconFlow / Jina 兼容格式；
+    v2.3.0 起默认端点为智谱 open.bigmodel.cn 的 rerank 模型，实测响应字段同名兼容）。
     """
     global _RERANK_LAST_ERROR
     if not hits:
@@ -278,7 +279,8 @@ def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 3
         resp = httpx.post(
             f"{settings.rerank_base_url.rstrip('/')}/rerank",
             headers={"Authorization": f"Bearer {settings.rerank_api_key}"},
-            json={"model": settings.rerank_model, "query": query[:1000], "documents": docs},
+            json={"model": settings.rerank_model, "query": query[:1000],
+                  "top_n": top_k, "documents": docs},
             timeout=timeout,
         )
         resp.raise_for_status()
@@ -292,7 +294,11 @@ def rerank_hits(query: str, hits: list[dict], top_k: int = 8, timeout: float = 3
         idx = item.get("index")
         if not isinstance(idx, int) or not (0 <= idx < len(hits)):
             continue
-        h = {**hits[idx], "rerank": round(float(item.get("relevance_score") or 0.0), 4)}
+        # 兼容字段名：智谱/SiliconFlow 用 relevance_score，部分兼容端点用 score
+        score = item.get("relevance_score")
+        if score is None:
+            score = item.get("score", 0.0)
+        h = {**hits[idx], "rerank": round(float(score or 0.0), 4)}
         out.append(h)
         if len(out) >= top_k:
             break
@@ -329,7 +335,12 @@ def _boost_table_hits(hits: list[dict]) -> list[dict]:
 # ---------- RRF 融合 ----------
 
 def rrf_fuse(*channel_lists: tuple[str, list[dict]], k: int = 60, top_k: int = 20) -> list[dict]:
-    """Reciprocal Rank Fusion：多路检索结果按 rank 融合，保留元数据与来源通道。"""
+    """Reciprocal Rank Fusion：多路检索结果按 rank 融合，保留元数据与来源通道。
+
+    v2.3.0 多面归并：同一 chunk 被多个检索面分支命中时聚合 `aspects`（sorted 去重），
+    `aspect` 保留首分支值向后兼容——修复「一块证据只归属一个检索面」造成的
+    机械性覆盖误判（该块实际同时支撑两个面时，另一面被误记缺失）。
+    """
     scores: dict[str, float] = {}
     meta: dict[str, dict] = {}
     for channel, lst in channel_lists:
@@ -338,10 +349,20 @@ def rrf_fuse(*channel_lists: tuple[str, list[dict]], k: int = 60, top_k: int = 2
             scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank + 1)
             if cid not in meta:
                 meta[cid] = {**hit, "sources": []}
+            else:
+                # 多面归并：二次出现的同块聚合检索面标签（首分支 aspect 不变）
+                prev = {a for a in (meta[cid].get("aspects")
+                                    or [meta[cid].get("aspect")]) if a}
+                cur = hit.get("aspect")
+                if cur:
+                    prev.add(cur)
+                meta[cid]["aspects"] = sorted(prev)
             meta[cid]["sources"].append({"channel": channel, "rank": rank, "score": hit["score"]})
     fused = sorted(meta.values(), key=lambda h: -scores[h["chunk_id"]])[:top_k]
     for h in fused:
         h["rrf"] = round(scores[h["chunk_id"]], 6)
+        if not h.get("aspects") and h.get("aspect"):
+            h["aspects"] = [h["aspect"]]
     return fused
 
 

@@ -800,3 +800,142 @@ def test_table_chunks_indexed(indexed_paper):
     indexing.index_chunks("p_tbl", chunks)
     hits = indexing.fts_search(["p_tbl"], "29.3 BLEU", top_k=5)
     assert hits and hits[0]["kind"] == "table"
+
+
+# ---------------- v2.3.0 分级作答 / 多面归并 / 每面保底 / 智谱 rerank ----------------
+
+def test_rrf_fuse_multi_aspect_merge():
+    """多面归并：同 chunk 被两个检索面分支命中 → aspects 聚合两标签（首分支 aspect 不变）。"""
+    hit_a = {"chunk_id": "c1", "paper_id": "p1", "page": 0, "text": "底放冰块隔冰打奶盖",
+             "aspect": "作用", "score": 1.0}
+    hit_b = {**hit_a, "aspect": "场景", "score": 0.9}
+    fused = indexing.rrf_fuse(("b0", [hit_a]), ("b1", [hit_b]), top_k=5)
+    assert len(fused) == 1, "chunk 去重：Evidence 不重复"
+    assert set(fused[0]["aspects"]) == {"作用", "场景"}
+    assert fused[0]["aspect"] == "作用", "首分支标签向后兼容"
+    hit_c = {"chunk_id": "c2", "paper_id": "p1", "page": 0, "text": "用量 5g",
+             "aspect": "用量", "score": 0.5}
+    fused2 = indexing.rrf_fuse(("b0", [hit_c]), top_k=5)
+    assert fused2[0]["aspects"] == ["用量"], "单分支块 aspects 回填单标签"
+
+
+def test_aspect_coverage_union_and_partial_verdict(indexed_paper):
+    """覆盖口径：aspects 并集判覆盖；部分覆盖 → verifier partial（LLM 不可用回退标签口径）。"""
+    plan = {"steps": [{"paper_id": indexed_paper, "query": "q1", "aspect": "作用"},
+                      {"paper_id": indexed_paper, "query": "q2", "aspect": "场景"}]}
+    both = {"plan": plan, "evidence": [{"chunk_id": "c1", "aspect": "作用",
+                                        "aspects": ["作用", "场景"], "text": "x"}]}
+    assert _check_sufficiency(both) is True, "同块挂两面标签应同时覆盖两面"
+    partial = {"plan": plan, "evidence": [{"chunk_id": "c1", "aspect": "作用", "text": "x"}],
+               "retries": 0}
+    upd = verifier_node(partial)
+    assert upd["pending_failure"]["missing"] == ["场景"], "缺面仍触发补检索"
+    assert upd["trace"][0]["payload"]["verdict"] == "partial"
+    assert _check_sufficiency(partial) is False
+
+
+def test_fuse_per_aspect_floor():
+    """每面保底（qa）：弱势面最优块必进 Evidence Pack（不被强势面全局排序挤出）。"""
+    from app.agents.nodes import fuse_node
+    strong = [{"chunk_id": f"s{i}", "paper_id": "p1", "page": 0, "section_path": "x",
+               "bbox": [], "block_ids": [], "text": f"strong {i}", "aspect": "A",
+               "rrf": 0.9 - i * 0.01, "score": 0.9} for i in range(10)]
+    weak = [{"chunk_id": "w1", "paper_id": "p1", "page": 1, "section_path": "y",
+             "bbox": [], "block_ids": [], "text": "weak", "aspect": "B",
+             "rrf": 0.01, "score": 0.01}]
+    st = {"raw_hits": strong + weak, "plan": {"mode": "single", "steps": []},
+          "branch_stats": [], "question": "q"}
+    out = fuse_node(st)
+    ev_aspects = {a for h in out["evidence"] for a in (h.get("aspects") or [h.get("aspect")])}
+    assert "B" in ev_aspects, "弱势面最优块应被每面保底保留"
+    assert len(out["evidence"]) == 8, "证据预算仍为 8"
+
+
+def test_responder_partial_answer(indexed_paper, monkeypatch):
+    """分级作答：有据面正常回答 + 缺失面「未能回答的部分」→ generative + partial_missing 下发。"""
+    from app.llm import client as llm_client
+
+    fake_answer = ("泡茶时冰块与水正负不能超过 5g [E1]。\n\n**未能回答的部分**\n"
+                   "- 文档未明确说明：冰块在泡茶中的具体作用与使用场景")
+    claims_json = ('{"claims":[{"text":"冰块与水正负不能超过5g","evidence_ids":[1],'
+                   '"quote":"冰块与水正负不能超过5g"}]}')
+    monkeypatch.setattr(llm_client, "available", lambda force=False: True)
+    monkeypatch.setattr(llm_client, "stream_chat", lambda msgs, **kw: iter([fake_answer]))
+    monkeypatch.setattr(llm_client, "chat", lambda msgs, **kw: {"text": claims_json, "model": "stub"})
+    monkeypatch.setattr(llm_client, "_endpoint", lambda: ("stub", "k", "stub"))
+
+    hits = [{"chunk_id": "c1", "paper_id": indexed_paper, "page": 0, "bbox": [0, 0, 1, 1],
+             "section_path": "s", "text": "冰块与水正负不能超过5g", "aspect": "用量"}]
+    state = {"question": "冰块在泡茶中的作用和常见场景？",
+             "intent": {"type": "qa_single", "language": "zh"},
+             "agent": "reader", "doc_mode": "general",
+             "plan": {"mode": "single", "steps": [
+                 {"paper_id": indexed_paper, "query": "q1", "aspect": "用量"},
+                 {"paper_id": indexed_paper, "query": "q2", "aspect": "场景"}]},
+             "evidence": hits, "retries": 0}
+    out = responder_node(state)
+    assert out["mode"] == "generative"
+    assert out["partial_missing"] == ["场景"]
+    assert any(g.startswith("partial_answer:1/2") for g in out["guardrails"])
+    assert "未能回答的部分" in out["answer"], "分级说明不被 partial_refusal trim"
+    assert "未找到依据" not in out["answer"], "部分覆盖不升级为整题拒答"
+
+
+def test_near_evidence_block_missing():
+    """拒答附录点名缺失面：用户看到「X 未明确说明」而非笼统「未找到」。"""
+    from app.rag.answering import near_evidence_block
+    hits = [{"page": 0, "section_path": "前言",
+             "text": "茶叶正负不能超过1g，冰块与水正负不能超过5g"}]
+    block = near_evidence_block(hits, missing=["冰块的作用", "使用场景"])
+    assert "冰块的作用" in block and "使用场景" in block
+    assert "最接近的证据" in block and "[E1]" in block
+
+
+def test_chunking_enum_split_and_table_context():
+    """SOP 枚举拆项：关键句独立成块；表格块带标题 + 上文语境。"""
+    docir = {
+        "blocks": [
+            {"id": "b0", "type": "paragraph", "page": 0, "bbox": [0, 0, 1, 1],
+             "section_path": "", "text": "茶叶正负不能超过1g，水温正负不能超过1度，冰块与水正负不能超过5g。"},
+            {"id": "b1", "type": "paragraph", "page": 1, "bbox": [0, 0, 1, 1],
+             "section_path": "SOP", "text": "底放冰块隔冰打奶盖】【过稠需报废不可加入牛奶调稀】【隔夜奶盖变稀需重新搅打】"},
+        ],
+        "tables": [{"id": "t1", "page": 2, "bbox": [0, 0, 1, 1],
+                    "markdown": "| 茶叶/g | 热水/g | 温度 | 冰块/g |\n|---|---|---|---|\n| 50 | 500 | 85 | 1050 |",
+                    "title": "配方表", "number": 1}],
+        "toc": [],
+    }
+    chunks = chunk_docir(docir)
+    assert any("底放冰块隔冰打奶盖" in c["text"] and len(c["text"]) < 60
+               for c in chunks), "SOP 关键句应独立成块"
+    tbl = next(c for c in chunks if c["kind"] == "table")
+    assert "配方表" in tbl["text"], "表格块带标题"
+    assert "上文" in tbl["text"] and "底放冰块隔冰打奶盖" in tbl["text"], "表格块带上文语境"
+
+
+def test_rerank_hits_zhipu_payload(monkeypatch):
+    """智谱 rerank：payload 带 top_n；响应 relevance_score / score 字段兼容解析。"""
+    import app.rag.indexing as idx
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": [{"index": 1, "relevance_score": 0.9},
+                                {"index": 0, "score": 0.5}]}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured.update(url=url, payload=json)
+        return FakeResp()
+
+    monkeypatch.setattr(idx.httpx, "post", fake_post)
+    monkeypatch.setattr(idx.settings, "rerank_api_key", "test-key")   # 密闭环境无凭据，注入假 key
+    hits = [{"chunk_id": "a", "text": "甲"}, {"chunk_id": "b", "text": "乙"}]
+    out = idx.rerank_hits("q", hits, top_k=2)
+    assert captured["payload"]["top_n"] == 2, "智谱口径需下发 top_n"
+    assert out[0]["chunk_id"] == "b" and out[0]["rerank"] == 0.9, "relevance_score 优先"
+    assert out[1]["chunk_id"] == "a" and out[1]["rerank"] == 0.5, "score 字段回退兼容"

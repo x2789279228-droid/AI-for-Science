@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS chat_threads (
   status          TEXT NOT NULL DEFAULT 'running',  -- running|done|failed
   error           TEXT DEFAULT '',
   answer          TEXT DEFAULT '',
+  doc_mode        TEXT NOT NULL DEFAULT '',         -- paper|general|''(legacy：两模式均可见)
   resume_attempts INTEGER NOT NULL DEFAULT 0,
   created_at      REAL NOT NULL,
   updated_at      REAL NOT NULL
@@ -31,16 +32,29 @@ CREATE INDEX IF NOT EXISTS idx_threads_conv ON chat_threads(conversation_id, tur
 CREATE INDEX IF NOT EXISTS idx_threads_status ON chat_threads(status);
 """
 
+# 会话标题表（ChatGLM 式会话侧栏的重命名）：核心账本 chat_threads 不动，标题可选覆盖
+_CONV_DDL = """
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  conversation_id TEXT PRIMARY KEY,
+  title           TEXT NOT NULL DEFAULT '',
+  created_at      REAL NOT NULL
+);
+"""
+
 _inited = False
 
 
 def init() -> None:
-    """建表（幂等）；进程内只执行一次。"""
+    """建表（幂等）；进程内只执行一次。含旧库 doc_mode 列迁移。"""
     global _inited
     if _inited:
         return
     with db.tx() as c:
         c.executescript(_DDL)
+        c.executescript(_CONV_DDL)
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(chat_threads)").fetchall()}
+        if "doc_mode" not in cols:   # 旧库迁移：补列（已有行留空 = legacy，两模式均可见）
+            c.execute("ALTER TABLE chat_threads ADD COLUMN doc_mode TEXT NOT NULL DEFAULT ''")
     _inited = True
 
 
@@ -57,14 +71,15 @@ def make_thread_id(conversation_id: str, turn: int) -> str:
 
 
 def start_thread(thread_id: str, conversation_id: str, turn: int, question: str,
-                 paper_ids: list[str]) -> None:
+                 paper_ids: list[str], doc_mode: str = "") -> None:
     init()
     with db.tx() as c:
         c.execute(
             "INSERT OR REPLACE INTO chat_threads(thread_id,conversation_id,turn,question,"
-            "paper_ids_json,status,created_at,updated_at) VALUES(?,?,?,?,?,'running',?,?)",
+            "paper_ids_json,status,doc_mode,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,'running',?,?,?)",
             (thread_id, conversation_id, turn, question,
-             json.dumps(paper_ids, ensure_ascii=False), db.now(), db.now()))
+             json.dumps(paper_ids, ensure_ascii=False), doc_mode, db.now(), db.now()))
 
 
 def finish_thread(thread_id: str, status: str, error: str = "", answer: str = "") -> None:
@@ -115,6 +130,70 @@ def pending_recovery() -> list[dict]:
         "SELECT * FROM chat_threads WHERE status IN ('running','failed')"
         " AND resume_attempts < ? ORDER BY updated_at ASC", (MAX_RESUME_ATTEMPTS,))
     return [_decode(r) for r in rows]
+
+
+# ---------- 会话管理（ChatGLM 式会话侧栏数据源；会话=conversation_id） ----------
+
+def set_title(conversation_id: str, title: str) -> None:
+    """重命名会话（无则建标题行）；首问兜底由 list_conversations 的 COALESCE 承担。"""
+    init()
+    with db.tx() as c:
+        c.execute(
+            "INSERT INTO chat_conversations(conversation_id,title,created_at) VALUES(?,?,?) "
+            "ON CONFLICT(conversation_id) DO UPDATE SET title=excluded.title",
+            (conversation_id, title[:80], db.now()))
+
+
+def list_conversations(limit: int = 50, doc_mode: str = "") -> list[dict]:
+    """会话列表：chat_threads 按 conversation_id 聚合（轮数/最后活跃/首末问），
+    自定义标题优先于首问，截 40 字。按最后活跃倒序。
+    doc_mode 过滤：paper|general 只看对应模式；legacy 空标记行两种模式均可见
+    （迁移前历史不消失）。空串 = 不过滤（全量）。"""
+    init()
+    sql = (
+        "SELECT t.conversation_id AS id,"
+        "       COUNT(*) AS turns,"
+        "       MAX(t.updated_at) AS updated_at,"
+        "       (SELECT question FROM chat_threads x WHERE x.conversation_id=t.conversation_id"
+        "         ORDER BY turn ASC LIMIT 1) AS first_question,"
+        "       (SELECT question FROM chat_threads x WHERE x.conversation_id=t.conversation_id"
+        "         ORDER BY turn DESC LIMIT 1) AS last_question,"
+        "       COALESCE((SELECT title FROM chat_conversations c"
+        "         WHERE c.conversation_id=t.conversation_id),'') AS custom_title"
+        " FROM chat_threads t WHERE 1=1"
+    )
+    params: list = []
+    if doc_mode in ("paper", "general"):
+        sql += " AND (t.doc_mode=? OR t.doc_mode='')"
+        params.append(doc_mode)
+    sql += " GROUP BY t.conversation_id ORDER BY updated_at DESC LIMIT ?"
+    params.append(min(limit, 200))
+    out = []
+    for r in db.query(sql, tuple(params)):
+        d = dict(r)
+        d["title"] = (d.pop("custom_title") or d.pop("first_question") or "新对话")[:40]
+        d.pop("first_question", None)
+        out.append(d)
+    return out
+
+
+def conversation_turns(conversation_id: str, limit: int = 100) -> list[dict]:
+    """会话内全部轮次（turn 升序）：前端侧栏点开会话还原历史。"""
+    init()
+    rows = db.query(
+        "SELECT thread_id,turn,question,answer,status,created_at FROM chat_threads "
+        "WHERE conversation_id=? ORDER BY turn ASC LIMIT ?",
+        (conversation_id, min(limit, 500)))
+    return [dict(r) for r in rows]
+
+
+def delete_conversation(conversation_id: str) -> int:
+    """删除会话：全部线程行 + 标题行；返回删除线程数（trace/checkpoint 由调用方 best-effort 清）。"""
+    init()
+    with db.tx() as c:
+        cur = c.execute("DELETE FROM chat_threads WHERE conversation_id=?", (conversation_id,))
+        c.execute("DELETE FROM chat_conversations WHERE conversation_id=?", (conversation_id,))
+        return cur.rowcount
 
 
 def _decode(row) -> dict:

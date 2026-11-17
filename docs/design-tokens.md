@@ -1,6 +1,8 @@
-# Meridian 设计令牌标准 v1.5
+# Meridian 设计令牌标准 v1.6
 
 > 全部 UI 的唯一取值依据。定义于 `web/app/tokens.css`，组件样式**只准引用 Semantic / Component 层**，禁止写死色值、字号、圆角。新增 token 必须先改本文档再改代码。
+>
+> **v1.6 变更**（皮肤体系保守优化）：① 新增 `--hl-border` 语义令牌（强调描边，classic=天蓝，三工作肤随母题换金/橙）；② `CANVAS` 画布色板新增 `text/textSoft/axisLine/splitLine` 四字段，ECharts 图例/轴文字完成深色适配（修 wuxia 图表文字隐形）；③ wuxia 补 `--shadow-sm/md/lg` 深色阴影覆盖（修深色下卡片失浮）；④ 主题知识收敛为单一清单 `web/lib/theme-registry.ts`（Theme/THEMES/CANVAS/mermaid 映射），`theme-palettes.ts` 降级为 re-export shim；⑤ 新增对比度门禁 `scripts/audit_theme_contrast.py`（FAIL <3.0 拦截 / WARN 3.0–4.5 记录，产出 `docs/acceptance/latest-verify/contrast.log`）。
 >
 > **v1.5 变更**（质感打磨）：`--ink-2` 次级文字 gray-500→**gray-600**（压灰提层）；三层阴影整体加重（sm 双层、md/lg 扩散半径与不透明度上调），卡片浮起更明确。
 >
@@ -54,6 +56,7 @@ Primitive（原始阶：gray / blue 色板）
 | `--accent` / `--accent-hover` | `--blue-600/700` | 主按钮、链接、激活文字 |
 | `--accent-soft` | `--blue-50` | 激活底、选中项背景 |
 | `--accent-border` | `--blue-200` | 选中项边 |
+| `--hl-border` | `--sky-400`（v1.6） | 强调描边（缝隙卡翻面等装饰性强调边；wuxia=鎏金 / majorelle=藏红花 / riso=国际橙） |
 | `--accent-contrast` | `#ffffff`（v1.4） | 压在 --accent 上的文字色（深色皮肤覆盖为玄墨） |
 | `--ok` / `--ok-soft` | `#067647` / `#e6f4ee` | 成功、已验证、服务健康 |
 | `--warn` / `--warn-soft` | `#b25e09` / `#fff4e5` | 未验证论断、降级提示 |
@@ -66,9 +69,9 @@ Primitive（原始阶：gray / blue 色板）
 | 布局 | `--sidebar-w` | `272px` |
 | 布局 | `--topbar-h` | `56px` |
 | 圆角 | `--radius-sm / md / lg / full` | `6 / 10 / 14 / 999px` |
-| 阴影 | `--shadow-sm` | `0 1px 2px rgba(16,24,40,.06), 0 1px 4px rgba(16,24,40,.05)` |
-| 阴影 | `--shadow-md` | `0 8px 24px -6px rgba(16,24,40,.14), 0 3px 8px -3px rgba(16,24,40,.07)` |
-| 阴影 | `--shadow-lg` | `0 20px 44px -12px rgba(16,24,40,.24), 0 6px 14px -6px rgba(16,24,40,.10)` |
+| 阴影 | `--shadow-sm` | `0 1px 2px rgba(16,24,40,.06), 0 1px 4px rgba(16,24,40,.05)`（wuxia 覆盖为纯黑深影，v1.6） |
+| 阴影 | `--shadow-md` | `0 8px 24px -6px rgba(16,24,40,.14), 0 3px 8px -3px rgba(16,24,40,.07)`（wuxia 覆盖，v1.6） |
+| 阴影 | `--shadow-lg` | `0 20px 44px -12px rgba(16,24,40,.24), 0 6px 14px -6px rgba(16,24,40,.10)`（wuxia 覆盖，v1.6） |
 | 字号 | `--text-xs / sm / md / lg / xl / 2xl` | `12 / 13 / 14 / 15 / 17 / 20px` |
 | 间距 | `--space-1~6, 8` | `4 / 8 / 12 / 16 / 20 / 24 / 32px` |
 | 字体 | `--font` | Segoe UI / PingFang SC / Microsoft YaHei 栈 |
@@ -80,7 +83,9 @@ Primitive（原始阶：gray / blue 色板）
 3. **状态色语义**：论断「已验证」用 `--ok`，「未验证/降级」用 `--warn`，服务异常用 `--danger`
 4. **深色模式预留**：未来只需覆盖 Semantic 层（Primitive 不动），组件代码零改动
 5. 新增 token：先改本文档 → 再改 `tokens.css` → PR 说明用途
-6. **画布图表例外（v1.3）**：G6 / ECharts 画布不走 CSS 变量，色板统一收敛在 `web/lib/theme-palettes.ts` 的 `CANVAS[theme]`，组件经 `canvasTheme(useShell().theme)` 取用；新增皮肤必须同时补画布色板并保持各主题图表语义一致（社区色环、边权三档、基石徽章）。
+6. **画布图表例外（v1.3）**：G6 / ECharts 画布不走 CSS 变量，色板统一收敛在 `web/lib/theme-registry.ts` 的 `CANVAS[theme]`（v1.6 起 `theme-palettes.ts` 仅为 re-export shim），组件经 `canvasTheme(useShell().theme)` 取用；新增皮肤必须同时补画布色板并保持各主题图表语义一致（社区色环、边权三档、基石徽章、图例/轴文字 `text`/`axisLine`/`splitLine`——深色皮肤靠这组字段保证图表可读，v1.6）。
+7. **主题单一清单（v1.6）**：`Theme` 类型、`THEMES` 元数据、`isTheme`、`CANVAS` 色板、`themeMermaid` 映射只准定义于 `web/lib/theme-registry.ts`；`ShellContext` 与各消费方经 import/re-export 取用，禁止再散落第二份皮肤枚举。`app/layout.tsx` 防闪烁内联脚本因水合前执行无法 import TS，是唯一豁免点——修改皮肤集合时必须同步其字面量。
+8. **对比度门禁（v1.6）**：`scripts/audit_theme_contrast.py` 逐肤校验核心语义对（FAIL <3.0 / WARN 3.0–4.5），产出 `docs/acceptance/latest-verify/contrast.log`；新增皮肤或改 Semantic 取值后必须复跑，退出码非 0 不得合入。
 
 ## 4. RISO 品牌层（v1.2 降级；v1.3 起可经外观面板选用）
 
@@ -180,9 +185,9 @@ G6/ECharts 色板见 `web/lib/theme-palettes.ts` `CANVAS.majorelle`（社区色�
 
 `--bg→玄墨` `--surface→浓墨` `--ink→月白` `--accent→朱砂亮部`（hover 更亮——深色主题 hover 向亮走）；状态色：`--ok→竹青` `--warn→鎏金` `--danger→胭脂`；`--grad-brand→鎏金→朱砂`（海报题字渐变）；`--glow→鎏金晕`；`--claim-absent→淡墨`。
 
-### 深色皮肤适配条款（v1.4 新增强制项）
+### 深色皮肤适配条款（v1.4 新增强制项，v1.6 扩充）
 
-新增深色皮肤必须同时完成：① mermaid 主题按皮肤映射（wuxia→`"dark"`，见 `app/copilot/page.tsx` MermaidPreview，theme 入 deps）；② `.intro-overlay` 基础浅幕整体覆盖；③ 亮 accent 上的白字一律改 `var(--accent-contrast, #fff)`（新语义令牌：wuxia 覆盖为玄墨 `#16130f`，classic/majorelle/riso 保持白）。G6 标签 chip 保持深底白字（`CANVAS.wuxia.labelBg`）。
+新增深色皮肤必须同时完成：① mermaid 主题按皮肤映射（`theme-registry.ts` 的 `themeMermaid`，wuxia→`"dark"`；消费于 `app/copilot/page.tsx` MermaidPreview，theme 入 deps）；② `.intro-overlay` 基础浅幕整体覆盖；③ 亮 accent 上的白字一律改 `var(--accent-contrast, #fff)`（新语义令牌：wuxia 覆盖为玄墨 `#16130f`，classic/majorelle/riso 保持白）；④ `CANVAS[theme]` 补 `text/textSoft/axisLine/splitLine` 并确认 ECharts 图例/轴/3D 轴标签全部接线（v1.6，防图表文字隐形）；⑤ `--shadow-sm/md/lg` 覆盖为深色深影（v1.6，防卡片失浮）。G6 标签 chip 保持深底白字（`CANVAS.wuxia.labelBg`）。
 
 ### 中性收敛层换装
 

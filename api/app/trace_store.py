@@ -63,3 +63,17 @@ def get_trace(thread_id: str) -> dict | None:
     d["trace_id"] = d.pop("thread_id")
     d["events"] = json.loads(d.pop("events_json") or "[]")
     return d
+
+
+def delete_trace(thread_id: str) -> None:
+    """删除单线程回放账本（删除会话时随 chat_threads 一并清理）。"""
+    init()
+    with db.tx() as c:
+        c.execute("DELETE FROM trace_events WHERE thread_id=?", (thread_id,))
+
+
+def delete_traces_by_conversation(conversation_id: str) -> None:
+    """删除整会话回放账本（trace_events 与 chat_threads 同库同 conversation_id 键）。"""
+    init()
+    with db.tx() as c:
+        c.execute("DELETE FROM trace_events WHERE conversation_id=?", (conversation_id,))

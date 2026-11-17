@@ -8,6 +8,44 @@ from typing import Any
 TARGET = 900
 OVERLAP = 100
 MIN_LEN = 40
+ENUM_MIN = 8     # v2.3.0 枚举项成块下限（低于此与相邻项合并）
+
+# v2.3.0 枚举/SOP 拆项：完整【】注记（残缺首尾括号留在 core）
+_BRACKET = re.compile(r"【[^】]{2,80}】")
+# 步骤边界：句界（全角标点/换行）后跟 1-2 位编号 + [.、)）]——英文半角句号不在
+# 句界集内，英文正文（"model. 2. We…"）不误切；1400W/（1-2）/版本号无编号标点不触发
+_STEP_BOUND = re.compile(r"(?<=[。；！？\n])[ \t]*(?=\d{1,2}[.、)）])")
+
+
+def _enum_items(text: str) -> list[str]:
+    """枚举/SOP 块拆项（v2.3.0）：①≥2 条完整【】注记逐条抽出；②"句界+编号"步骤逐条切。
+
+    背景：茶饮 SOP 类文档的"底放冰块隔冰打奶盖"这类关键句原先被并进 ~900 字大块，
+    与反复出现列名的配方表竞争 BM25 时词面重合被稀释——逐项成块后短句自身即
+    高密度检索单元。<2 项视为普通段落（返回空，走原缓冲合并路径）。
+    """
+    items: list[str] = []
+    core = text
+    brackets = _BRACKET.findall(text)
+    if len(brackets) >= 2:
+        core = _BRACKET.sub(" ", text)
+        items.extend(b.strip() for b in brackets)
+    core = core.strip()
+    if _STEP_BOUND.search(core):
+        items.extend(s.strip(" \t；;") for s in _STEP_BOUND.split(core) if s.strip(" \t；;"))
+    elif len(core) >= 4:
+        items.append(core)   # 残缺括号的首尾片段常是关键句（解析丢括号），保留
+    # 过短项并入相邻项（<ENUM_MIN 的孤立短语与邻项合并，保检索词面密度）
+    merged: list[str] = []
+    for it in items:
+        it = it.strip()
+        if not it:
+            continue
+        if merged and (len(it) < ENUM_MIN or len(merged[-1]) < ENUM_MIN):
+            merged[-1] = f"{merged[-1]} {it}"
+        else:
+            merged.append(it)
+    return merged if len(merged) >= 2 else []
 
 
 def chunk_docir(docir: dict[str, Any]) -> list[dict]:
@@ -58,6 +96,21 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
             if blk["type"] == "heading":
                 continue
             text = blk["text"]
+            # v2.3.0 枚举/SOP 拆项：步骤/【】注记逐条成块（先清缓冲，不与散文混并）
+            items = _enum_items(text)
+            if items:
+                flush()
+                for it in items:
+                    chunks.append({
+                        "text": it,
+                        "page": blk["page"],
+                        "pages": [blk["page"]],
+                        "bbox": blk["bbox"],
+                        "section_path": sp,
+                        "block_ids": [blk["id"]] if blk.get("id") else [],
+                        "kind": "detail",
+                    })
+                continue
             # 超长段内切（句子边界）
             for piece in _split_long(text):
                 if buf_len + len(piece) > TARGET and buf_len > MIN_LEN:
@@ -78,16 +131,25 @@ def chunk_docir(docir: dict[str, Any]) -> list[dict]:
         flush()
 
     # 表格块：每表一个 chunk（markdown 原文），数值/超参类问题靠它被 BM25 精确命中
+    # v2.3.0：表头行带编号/标题/所属章节 + 同页上文——纯表格块反复出现列名（如
+    # "冰块/g"）会抢占 BM25 却回答不了"作用/场景"类问题；带上下文让"该表在讲什么"
+    # 可被语义检索命中，也帮助 rerank/judge 正确判其可答范围
     for t in docir.get("tables", []):
         md = (t.get("markdown") or "").strip()
         if len(md) < MIN_LEN:
             continue
+        sec = _table_section(docir, t)
+        cap = " · ".join(x for x in [str(t["number"]) if t.get("number") else "",
+                                     (t.get("title") or "").strip()] if x)
+        head = f"[表格 {t.get('id', '')}" + (f" · {cap}" if cap else "") + f" · §{sec}]"
+        prev = _table_prev_text(docir, t)
+        body = head + (f"\n上文：{prev}" if prev else "") + f"\n{md[:4000]}"
         chunks.append({
-            "text": f"[表格 {t.get('id', '')}]\n{md[:4000]}",
+            "text": body,
             "page": t.get("page", 0),
             "pages": [t.get("page", 0)],
             "bbox": t.get("bbox") or [],
-            "section_path": _table_section(docir, t),
+            "section_path": sec,
             "block_ids": [t.get("id", "")] if t.get("id") else [],
             "kind": "table",
         })
@@ -130,6 +192,24 @@ def _table_section(docir: dict[str, Any], table: dict[str, Any]) -> str:
         if blk.get("section_path"):
             sec = blk["section_path"]
     return sec or "前言"
+
+
+def _table_prev_text(docir: dict[str, Any], table: dict[str, Any], limit: int = 120) -> str:
+    """表格上文（v2.3.0）：阅读顺序中表格前最后一个正文块的尾部（≤120 字）。
+
+    给表格块补"它在讲什么"的叙述语境——配方表/超参表的上文常是操作说明或
+    实验设置，语义检索与 rerank 据此才能把表与"作用/场景"类问题正确关联或排除。
+    """
+    page = table.get("page", 0)
+    prev = ""
+    for blk in docir.get("blocks", []):
+        if blk.get("page", 0) > page:
+            break
+        if blk.get("type") not in ("heading", "table"):
+            t = (blk.get("text") or "").strip()
+            if len(t) >= 4:
+                prev = t
+    return prev[-limit:].strip()
 
 
 def _split_long(text: str, max_len: int = TARGET) -> list[str]:

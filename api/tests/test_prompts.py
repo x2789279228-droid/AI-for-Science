@@ -52,7 +52,7 @@ def test_yaml_catalog_complete():
         assert isinstance(catalog[m]["changelog"], list) and catalog[m]["changelog"]
         assert "default" in catalog[m]["slots"]
     # 2.2.0：双模式改造（qa/compare 新增 *_general 槽位）
-    assert catalog["qa"]["version"] == "2.2.0"
+    assert catalog["qa"]["version"] == "2.3.1"
     assert catalog["compare"]["version"] == "2.2.0"
 
 
@@ -60,7 +60,7 @@ def test_loader_resolves_and_falls_back():
     p = prompts.get_prompt("qa", "system_qa")
     assert p is not None
     assert "科研文献问答助手" in p.text
-    assert p.version == "2.2.0"
+    assert p.version == "2.3.1"
     # 槽位缺失 → 内置兜底
     text, ver = prompts.resolve("qa", "nope_slot", "BUILTIN")
     assert text == "BUILTIN" and ver == "builtin"
@@ -111,6 +111,28 @@ def test_refusal_constants_keep_placeholders():
     assert "未找到依据" in answering.NO_EVIDENCE
     assert "{n}" in answering.COMPARE_REFUSAL
     assert "{n}" in answering.WRITER_REFUSAL and "{m}" in answering.WRITER_REFUSAL
+
+
+def test_qa_rule3_tiered_answering():
+    """v2.3.0 分级作答：四份 system_qa（YAML default/strict + 内置回退）均为
+    「能答的子问题作答 + 缺失面单列」，仅全缺才整体拒答——复合问题不再整题拒答。"""
+    for slot in ("system_qa", "system_qa_general"):
+        p = prompts.get_prompt("qa", slot)
+        assert "分级作答" in p.text, f"{slot} 缺分级作答规则"
+        assert "未能回答的部分" in p.text and "未明确说明" in p.text
+        assert "仅当所有子问题都无据可答" in p.text or "仅当所有子问题均无据可答" in p.text
+        strict = prompts.get_prompt("qa", slot, variant="strict")
+        assert "分级作答" in strict.text and "未能回答的部分" in strict.text
+    # 内置常量与 YAML 回退一致
+    assert "分级作答" in answering.SYSTEM_QA and "分级作答" in answering.SYSTEM_QA_GENERAL
+    # 组装消息：子问题清单 + 覆盖提示进 user message
+    msgs = answering.build_qa_messages(
+        "冰块的作用和场景？", [{"chunk_id": "c", "paper_id": "p", "page": 0,
+                              "section_path": "s", "text": "冰块 5g"}],
+        aspects=["作用", "场景"], missing=["场景"])
+    user = msgs[1]["content"]
+    assert "<sub_questions>" in user and "作用" in user
+    assert "<coverage_note>" in user and "场景" in user
 
 
 # ---------- chat_json_validated ----------

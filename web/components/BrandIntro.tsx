@@ -15,6 +15,7 @@
  * 退场后经 ShellContext.setIntroDone 触发侧边栏 stagger。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isTheme } from "@/lib/theme-registry";
 import { useShell } from "./ShellContext";
 
 const WORD = "MERIDIAN";
@@ -68,9 +69,9 @@ export default function BrandIntro() {
     try {
       const qTheme = new URLSearchParams(window.location.search).get("theme");
       const saved = localStorage.getItem("meridian:theme");
-      // ?theme= 优先(不落盘);classic/未知 → 无换装分支
+      // ?theme= 优先(不落盘);classic/未知 → 无换装分支（有效性判断走主题清单,不本地重抄）
       const eff = qTheme && qTheme !== "classic" ? qTheme : saved;
-      setAltTheme(eff === "riso" || eff === "majorelle" || eff === "wuxia" ? eff : null);
+      setAltTheme(isTheme(eff) && eff !== "classic" ? eff : null);
     } catch { /* 隐私模式忽略 */ }
     setPhase("play");
   }, [setIntroDone]);

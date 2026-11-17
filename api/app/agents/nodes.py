@@ -19,6 +19,7 @@ import time
 from langgraph.types import Send
 
 from .. import db
+from ..config import settings
 from ..llm import client as llm
 from ..llm import prompts
 from ..log import logger
@@ -44,6 +45,7 @@ from ..rag.answering import (
     validate_citations,
 )
 from ..rag.verify import verify_claims
+from . import cancel as cancel_mod
 from .state import (
     AGENT_INTENT,
     AGENT_LABEL,
@@ -279,12 +281,18 @@ def planner_node(state: AgentState, config=None) -> dict:
                         "（如 预训练目标、上下文表示方式、训练数据规模——每个维度一面），"
                         "不要只保留泛泛的整体问题面。"
                         if intent.get("type") == "qa_compare" else "")
+        # v2.3.0 查询语言修正：中文文档（茶饮 SOP/教材等 general 模式）被改写成英文
+        # 子查询后 BM25 双盲区（正文是中文）；改写必须跟随文档语言并补同义说法
+        # （如 冰块 → 冰镇/冷泡/隔冰），中文面只在学术 paper 模式才译英。
+        has_cjk = any(re.search(r"[\u4e00-\u9fff]", a or "") for a in aspects)
+        zh_mode = is_general or has_cjk
         planner_prompt = \
-            ("你是检索规划器。把每个检索面改写为更适合文档全文检索的英文子查询"
-             "（保留原意、补全术语，如 神经网络训练 → neural network training）。"
+            ("你是检索规划器。把每个检索面改写为更适合文档全文检索的中文关键词查询："
+             "保留原意与中文关键词，并补全 2~3 个文档正文中更可能出现的同义说法或术语"
+             "（如 冰块 → 冰镇/冷泡/隔冰），不要译成英文。"
              + compare_hint +
              '输出 JSON：{"queries":["..."]}，数量与输入检索面一一对应。'
-             if is_general else
+             if zh_mode else
              "你是检索规划器。把每个检索面改写为更适合学术 PDF 全文检索的英文子查询"
              "（保留原意、补全术语，如 GPU/训练 → training hardware GPUs）。"
              + compare_hint +
@@ -441,14 +449,31 @@ def fuse_node(state: AgentState, config=None) -> dict:
         # 弱势面整组出局 → 对比表退化为单行。compare 模式下每组最优优先入包（组轮转），
         # 剩余名额再按全局序补齐——保证"每面×每篇"至少 1 条进 Evidence Pack；
         # chunk_id 去重贯穿（Evidence 契约：chunk 不重复）。
+        # v2.3.0 泛化到 qa：强势面（如反复命中关键词的表格块）同样会挤掉弱势面
+        # → verifier 误判缺失 → 复合问题整题拒答；qa 按「面」（跨文档）保底。
         group_best = [_group_best(lst) for lst in groups.values()]
         rest = [h for h in [x for lst in groups.values() for x in lst]
                 if not any(h.get("chunk_id") == g.get("chunk_id") for g in group_best)]
         rest.sort(key=lambda h: h.get("rrf") or h.get("score") or 0, reverse=True)
-        floor = group_best if is_compare else []
         fused = indexing.rrf_fuse(*[(f"b{i}", lst) for i, lst in enumerate(groups.values())],
                                   top_k=20)
+        fused_by_cid = {h.get("chunk_id"): h for h in fused}
         if is_compare:
+            floor = group_best
+        else:
+            by_aspect: dict[str, list[dict]] = {}
+            for h in results:
+                by_aspect.setdefault(h.get("aspect", ""), []).append(h)
+            _seen_f: set[str] = set()
+            floor = []
+            for lst in by_aspect.values():
+                best = _group_best(lst)
+                cid = best.get("chunk_id")
+                if cid and cid not in _seen_f:
+                    _seen_f.add(cid)
+                    # 优先用融合后同块（aspects 已多面归并），不在 top-20 时回退原始块
+                    floor.append(fused_by_cid.get(cid) or best)
+        if floor:
             seen_cids = {g.get("chunk_id") for g in floor}
             merged = list(floor)
             for h in fused:
@@ -456,7 +481,8 @@ def fuse_node(state: AgentState, config=None) -> dict:
                     merged.append(h)
                     seen_cids.add(h.get("chunk_id"))
             fused = merged[:20]
-            rest = [h for h in rest if h.get("chunk_id") not in seen_cids]
+            if is_compare:
+                rest = [h for h in rest if h.get("chunk_id") not in seen_cids]
         # 四层防御①最后一环：bge-reranker 全局精排（每问 1 次调用），失败降级回融合排序
         fused_final: list[dict] | None = None
         if indexing.rerank_available():
@@ -471,13 +497,13 @@ def fuse_node(state: AgentState, config=None) -> dict:
         else:
             fused = fused[:8]
             rerank_note = "rerank 降级/未配置 → 融合排序截断"
-        if is_compare:
-            # rerank/截断后仍保证每组最优在场（按 chunk_id 去重补位，Evidence 不重复）
+        if floor:
+            # rerank/截断后仍保证每面最优在场（按 chunk_id 去重补位，Evidence 不重复）
             missing = [g for g in floor
                        if not any(h.get("chunk_id") == g.get("chunk_id") for h in fused)]
             if missing:
                 fused = (fused[:max(0, 8 - len(missing))] + missing)[:8]
-                rerank_note += " · compare 组保底补位"
+                rerank_note += " · compare 组保底补位" if is_compare else " · 每面保底补位"
     else:
         fused = []
         rerank_note = ""
@@ -500,19 +526,47 @@ def fuse_node(state: AgentState, config=None) -> dict:
 
 # ---------------- Verifier ----------------
 
+def _aspect_coverage(state: AgentState) -> tuple[list[str], list[str]]:
+    """子问题覆盖（v2.3.0 分级作答）：返回 (plan_aspects 有序去重, 缺失面列表)。
+
+    覆盖口径：证据块 aspects|aspect 标签并集（多面归并见 indexing.rrf_fuse）；
+    aspect_verdicts（verifier LLM 可答性 judge）存在时以其 answerable 键为准——
+    修正「表格命中 ≠ 可回答」「同块只挂一面标签」的机械误判。
+    """
+    plan_aspects = list(dict.fromkeys(
+        s.get("aspect", "") for s in (state.get("plan", {}) or {}).get("steps", [])
+        if s.get("aspect")))
+    if not plan_aspects:
+        return [], []
+    verdicts = state.get("aspect_verdicts") or {}
+    answerable = verdicts.get("answerable")
+    if isinstance(answerable, dict) and answerable:
+        covered = {a for a in answerable if a}
+    else:
+        covered = set()
+        for h in state.get("evidence", []):
+            for a in (h.get("aspects") or [h.get("aspect")]):
+                if a:
+                    covered.add(a)
+    missing = [a for a in plan_aspects if a not in covered]
+    return plan_aspects, missing
+
+
 def _check_sufficiency(state: AgentState) -> bool:
-    """证据充分性：每个检索面至少 1 条有效命中；compare 另要求每篇论文覆盖；graph 走元数据证据。"""
+    """证据充分性：每个检索面至少 1 条有效命中；compare 另要求每篇论文覆盖；graph 走元数据证据。
+
+    v2.3.0：覆盖口径改为 `_aspect_coverage`（aspects 并集 / judge verdicts 优先）——
+    同块多面命中不再被「首分支标签独占」误判缺失。
+    """
     if state.get("agent") == "graph":
         return True  # Graph Agent 的证据是 references 元数据（graph_build 产出），不以 chunk 覆盖论充分
     plan = state.get("plan", {})
     evidence = state.get("evidence", [])
     if not evidence:
         return False
-    aspects = {s.get("aspect", "") for s in plan.get("steps", [])}
-    if aspects:
-        hit_aspects = {h.get("aspect", "") for h in evidence}
-        if not aspects <= hit_aspects:
-            return False
+    plan_aspects, missing = _aspect_coverage(state)
+    if plan_aspects and missing:
+        return False
     if plan.get("mode") == "compare":
         # Compare Guardrail：防止一篇论文的证据占满上下文、另一篇零命中被"脑补对比"
         planned_papers = {s.get("paper_id", "") for s in plan.get("steps", [])}
@@ -521,9 +575,75 @@ def _check_sufficiency(state: AgentState) -> bool:
     return True
 
 
+def _aspect_judge(state: AgentState) -> dict | None:
+    """检索面可答性 judge（v2.3.0 分级作答）：LLM 逐面判断证据是否**真能回答**该面。
+
+    标签口径的机械误判有二：①「表格命中 ≠ 可回答」——配方表反复出现"冰块/g"能压过
+    正确句子进 top-8，但用量表回答不了"冰块的作用/使用场景"；②「标签错挂」——
+    同一块证据支撑两面但只挂一面标签。仅在规则判缺时调用（每轮 1 次），
+    失败/输出面不一一对应 → 返回 None 回退标签口径（不阻断主流程）。
+    """
+    evidence = state.get("evidence", [])
+    question = state.get("question", "")
+    state_no_judge = {k: v for k, v in state.items() if k != "aspect_verdicts"}
+    plan_aspects, _tag_missing = _aspect_coverage(state_no_judge)
+    if not (plan_aspects and evidence and llm.available()):
+        return None
+    context, _ = format_context(evidence)
+    prompt = (
+        "你是检索充分性审核员。问题被拆成若干检索面（子问题），下面给出检索到的证据包。"
+        "逐面判断证据是否真的存在能回答该面的内容——注意「提及关键词」不等于「能回答该面」"
+        "（如配方表给出冰块用量，并不能回答冰块的作用或使用场景）。"
+        '输出 JSON：{"answerable":{"检索面":["E1"],"...":[]},"unanswerable":["检索面"]}。'
+        "answerable 的值是该面的支撑证据编号数组（可为空数组）；"
+        "两个键的检索面合起来必须与输入一一对应，不得遗漏或新增。"
+    )
+    try:
+        res = llm.chat(
+            [{"role": "system", "content": prompt},
+             {"role": "user", "content":
+                 "原问题：" + question + "\n检索面：\n" + "\n".join(f"- {a}" for a in plan_aspects)
+                 + f"\n\n证据包：\n{context[:6000]}"}],
+            json_mode=True, temperature=0, module="verifier", audit_prompt=question[:200],
+        )
+        data = llm.parse_json(res.get("text", ""))
+    except Exception as e:  # noqa: BLE001 —— judge 属增强项，失败回退标签口径
+        logger.warning(f"aspect judge 失败 → 回退标签口径: {type(e).__name__}: {e}",
+                       module="verifier")
+        return None
+    if not isinstance(data, dict):
+        return None
+    answerable = data.get("answerable")
+    unanswerable = data.get("unanswerable")
+    if not isinstance(answerable, dict) or not isinstance(unanswerable, list):
+        return None
+    a_keys = {str(a).strip() for a in answerable if str(a).strip()}
+    u_set = {str(a).strip() for a in unanswerable if str(a).strip()}
+    if (a_keys | u_set) != set(plan_aspects) or (a_keys & u_set):
+        return None   # 面不一一对应 → 输出不可信，弃用
+    return {"answerable": {a: (answerable.get(a) or []) for a in a_keys},
+            "unanswerable": sorted(u_set)}
+
+
 def verifier_node(state: AgentState, config=None) -> dict:
+    # 上轮 judge 结果对应旧证据（recover 重检索后已失效）——每轮先失效重算
+    state = {**state, "aspect_verdicts": None}
     ok = _check_sufficiency(state)
     evidence_count = len(state.get("evidence", []))
+    out_extra: dict = {}
+    guardrails: list[str] = []
+    if not ok and settings.aspect_judge:
+        # v2.3.0 可答性 judge：规则判缺时 LLM 逐面复核（表格命中≠可回答/标签错挂）
+        verdicts = _aspect_judge(state)
+        if verdicts is not None:
+            judged_state = {**state, "aspect_verdicts": verdicts}
+            _pa, tag_missing = _aspect_coverage(
+                {k: v for k, v in state.items() if k != "aspect_verdicts"})
+            _pa2, judged_missing = _aspect_coverage(judged_state)
+            out_extra = {"aspect_verdicts": verdicts}
+            if sorted(tag_missing) != sorted(judged_missing):
+                guardrails.append("aspect_judge_applied")
+            ok = _check_sufficiency(judged_state)
     if ok:
         card = trace_card("verifier", "证据校验", f"通过 · {evidence_count} 块覆盖全部检索面",
                           {"sufficient": True})
@@ -531,21 +651,37 @@ def verifier_node(state: AgentState, config=None) -> dict:
         _emit_event(config, "verifier", {"verdict": "pass", "missing": [],
                                          "evidence_count": evidence_count,
                                          "action": "respond"})
-        return {"trace": [card]}
-    missing = {s.get("aspect", "") for s in state.get("plan", {}).get("steps", [])} - \
-              {h.get("aspect", "") for h in state.get("evidence", [])}
-    missing_sorted = sorted(missing)
-    card = trace_card("verifier", "证据校验",
-                      f"不足 · 缺少 {len(missing_sorted)} 个检索面 → 交由 recover 恢复",
-                      {"sufficient": False, "missing": missing_sorted})
+        out = {"trace": [card], "aspect_verdicts": out_extra.get("aspect_verdicts")}
+        # 恒写回（含 None）：清掉上一轮残留的旧 judge 结果，防 responder 误读旧口径
+        if guardrails:
+            out["guardrails"] = guardrails
+        return out
+    plan_aspects, missing = _aspect_coverage(
+        {**state, **out_extra} if out_extra else state)
+    missing_sorted = sorted(set(missing))
+    covered_n = len([a for a in plan_aspects if a not in set(missing)])
+    # v2.3.0 partial 判定：部分面已覆盖 → 部分覆盖（仍走 recover 补齐；预算尽时
+    # responder 分级作答，不再整题拒答）；零覆盖/compare 篇缺失才是 insufficient
+    if missing_sorted and covered_n and evidence_count:
+        verdict = "partial"
+        label = f"部分覆盖 · {covered_n}/{len(plan_aspects)} 面 · 缺 {len(missing_sorted)} 面 → 补检索"
+    else:
+        verdict = "insufficient"
+        label = f"不足 · 缺少 {len(missing_sorted)} 个检索面 → 交由 recover 恢复"
+    card = trace_card("verifier", "证据校验", label,
+                      {"sufficient": False, "missing": missing_sorted, "verdict": verdict})
     _emit(config, card)
-    _emit_event(config, "verifier", {"verdict": "insufficient", "missing": missing_sorted,
+    _emit_event(config, "verifier", {"verdict": verdict, "missing": missing_sorted,
                                      "evidence_count": evidence_count, "action": "recover"})
-    return {"pending_failure": {"kind": "insufficient_evidence", "missing": missing_sorted,
-                                "node": "verifier"},
-            "failures": [{"node": "verifier", "kind": "insufficient_evidence",
-                          "detail": f"missing:{','.join(missing_sorted)}"[:120]}],
-            "trace": [card]}
+    out = {"pending_failure": {"kind": "insufficient_evidence", "missing": missing_sorted,
+                               "node": "verifier"},
+           "failures": [{"node": "verifier", "kind": "insufficient_evidence",
+                         "detail": f"{verdict}:missing:{','.join(missing_sorted)}"[:120]}],
+           "trace": [card],
+           "aspect_verdicts": out_extra.get("aspect_verdicts")}   # 恒写回（含 None）
+    if guardrails:
+        out["guardrails"] = guardrails
+    return out
 
 
 # ---------------- Recover（失败恢复统一调度，第 6 节点） ----------------
@@ -558,15 +694,21 @@ _REGEN_FEEDBACK = (
 
 
 def _rewrite_aspects(missing: list[str], question: str, doc_mode: str = "paper") -> dict[str, str]:
-    """策略①：为零命中检索面生成替换查询（LLM 换措辞补术语；失败回退原检索面文本）。"""
+    """策略①：为零命中检索面生成替换查询（LLM 换措辞补术语；失败回退原检索面文本）。
+
+    v2.3.0：改写跟随文档语言——中文文档用中文同义术语（冰块→冰镇/冷泡/隔冰），
+    不再默认「中文面给英文术语面」（中文正文对英文查询是 BM25/dense 双盲区）。
+    """
     if llm.available() and missing:
         rewrite_prompt = \
             ("你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
-             "换一种措辞、使用文档正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
+             "换一种措辞、使用文档正文中更可能出现的同义术语（跟随文档语言——中文文档给中文"
+             "同义词，如 冰块→冰镇/冷泡/隔冰），不要复述原句，不要译成英文。"
              '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。'
              if doc_mode == "general" else
              "你是检索恢复器。以下检索面在全文检索中零命中，请为每个生成一个替换查询："
-             "换一种措辞、使用论文正文中更可能出现的术语（如中文面给英文术语面），不要复述原句。"
+             "换一种措辞、使用正文中更可能出现的术语（中文文献给中文同义词，英文文献给英文），"
+             "不要复述原句。"
              '输出 JSON：{"rewrites":{"原检索面":"新查询",...}}，键必须与输入检索面一一对应。')
         res = llm.chat(
             [{"role": "system", "content": rewrite_prompt},
@@ -713,15 +855,21 @@ def responder_node(state: AgentState, config=None) -> dict:
     is_general = state.get("doc_mode") == "general"
     refusal_chitchat = REFUSAL_CHITCHAT_GENERAL if is_general else REFUSAL_CHITCHAT
     no_evidence = NO_EVIDENCE_GENERAL if is_general else NO_EVIDENCE
+    # 分级作答（v2.3.0）：子问题清单 + 证据缺失面（qa 路径消费；compare/writer/graph 自有覆盖机制）
+    plan_aspects, missing_aspects = _aspect_coverage(state)
 
-    def finish(answer: str, claims: list[dict], mode: str, summary: str) -> dict:
+    def finish(answer: str, claims: list[dict], mode: str, summary: str,
+               partial_missing: list[str] | None = None) -> dict:
         card = trace_card("responder", "生成回答", summary,
-                          {"mode": mode, "claims": len(claims), "agent": agent})
+                          {"mode": mode, "claims": len(claims), "agent": agent,
+                           **({"partial_missing": partial_missing} if partial_missing else {})})
         _emit(config, card)
         out: dict = {"answer": answer, "claims": claims, "mode": mode,
                      "guardrails": guardrails, "trace": [card], "retry_prompt": "",
                      "anchors": build_anchors({i: h for i, h in
                                                enumerate(state.get("evidence", []), 1)})}
+        if partial_missing:
+            out["partial_missing"] = partial_missing
         if is_compare:
             out["compare_table"] = state.get("compare_table") or {}
         return out
@@ -835,16 +983,30 @@ def responder_node(state: AgentState, config=None) -> dict:
                                         question, hits, language=language)
     else:
         messages = build_qa_messages(question, hits, language=language,
-                                     doc_mode=state.get("doc_mode", "paper"))
+                                     doc_mode=state.get("doc_mode", "paper"),
+                                     aspects=plan_aspects or None,
+                                     missing=missing_aspects or None)
     if retry_prompt and prev_answer:
         # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
         messages += [{"role": "assistant", "content": prev_answer},
                      {"role": "user", "content": retry_prompt}]
+    # 深度思考（ChatGLM 模式）：仅 responder 流式启用——UI per-request 开关（state.thinking，
+    # 进 checkpoint 续跑保留）+ 全局熔断（settings.llm_qa_thinking）。思考 token 预算与正文
+    # 共用 max_tokens（Ark 口径）：实测 4000 会被长推理吃满（2071 字推理 → 正文仅 124 字被
+    # length 掐断 → 残句触发 partial_refusal_trimmed 裁成空答案），故上调 12000。
+    thinking_on = bool(state.get("thinking", True)) and settings.llm_qa_thinking
+    tid = ((config or {}).get("configurable") or {}).get("thread_id") or ""
+    on_reason = (lambda t: q.put(("reasoning_delta", {"text": t}))) if q is not None else None
+    # 用户停止：下沉到 stream_chat 逐 SSE 行检查——思维链阶段（无正文 piece）也即时生效
+    should_stop = (lambda: bool(tid) and cancel_mod.is_cancelled(tid)) if tid else None
     parts: list[str] = []
     streamed = False
+    stopped = False
     try:
-        for piece in llm.stream_chat(messages, max_tokens=1500, module=pv_module,
-                                     audit_prompt=question, prompt_version=prompt_version):
+        for piece in llm.stream_chat(messages, max_tokens=12000 if thinking_on else 1500,
+                                     module=pv_module, audit_prompt=question,
+                                     prompt_version=prompt_version, thinking=thinking_on,
+                                     on_reasoning=on_reason, should_stop=should_stop):
             streamed = True
             parts.append(piece)
             if q is not None:
@@ -852,7 +1014,17 @@ def responder_node(state: AgentState, config=None) -> dict:
     except Exception:  # noqa: BLE001 —— 流中断走同步兜底
         streamed = False
     answer = "".join(parts)
-    if not streamed or not answer.strip():
+    if should_stop is not None and should_stop():
+        stopped = True
+    if stopped:
+        # 已停止：以已生成部分收尾（不回退非流式补全——那等于违背用户的停止指令）；
+        # verifier/claims 照常校验已显示部分，与前端所见一致
+        guardrails.append("user_stopped")
+        if not answer.strip():
+            answer = "（已手动停止生成，本次未产出内容。）"
+            if q is not None:
+                q.put(("delta", {"text": answer}))
+    elif not streamed or not answer.strip():
         res = llm.chat(messages, max_tokens=1500, module=pv_module, audit_prompt=question,
                        prompt_version=prompt_version)
         answer = res.get("text", "")
@@ -892,8 +1064,10 @@ def responder_node(state: AgentState, config=None) -> dict:
             answer = answer.split(_REFUSAL_MARK, 1)[0].rstrip()
         guardrails.append("partial_refusal_trimmed")
     elif _REFUSAL_MARK in answer and not has_citations:
-        # 全文无引用的真拒答：不进重写环（合法无引用），附「最接近的 3 条证据」
-        answer += near_evidence_block(hits)
+        # 全文无引用的真拒答：不进重写环（合法无引用），附「最接近的 3 条证据」；
+        # v2.3.0：缺失面如实点名（「X 未在文档中找到明确表述」）——用户不再看到
+        # 「明明有相关内容却说没有」的笼统拒答
+        answer += near_evidence_block(hits, missing=missing_aspects or None)
         return finish(answer, [], "refusal", "证据不足拒答 · 已附最近证据供人工判断")
 
     invalid = [g for g in cited_guards
@@ -969,6 +1143,15 @@ def responder_node(state: AgentState, config=None) -> dict:
     if agent == "graph":
         return finish(answer, [], "generative",
                       "图谱综述 · 指标来自 references 元数据真实计算")
+    # v2.3.0 部分回答：有据可答面已正常作答、缺失面由 responder 按 <coverage_note>
+    # 单列「未能回答的部分」——guardrail 如实记录覆盖比，final 携带缺失面清单（前端徽标）
+    if missing_aspects and re.search(r"\[E\d+\]", answer):
+        covered_n = len(plan_aspects) - len(missing_aspects)
+        guardrails.append(f"partial_answer:{covered_n}/{len(plan_aspects)}")
+        return finish(answer, claims, "generative",
+                      f"生成式 · {len(claims)} 条论断{verify_note()}"
+                      f" · 部分回答 {covered_n}/{len(plan_aspects)} 面",
+                      partial_missing=missing_aspects)
     return finish(answer, claims, "generative",
                   f"生成式 · {len(claims)} 条论断{verify_note()}")
 

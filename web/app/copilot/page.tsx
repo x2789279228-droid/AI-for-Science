@@ -20,7 +20,7 @@ import {
 } from "@/lib/api";
 import type { Paper } from "@/lib/api";
 import { useShell } from "@/components/ShellContext";
-import { canvasTheme } from "@/lib/theme-palettes";
+import { canvasTheme, themeMermaid } from "@/lib/theme-registry";
 
 type Tab = "write" | "viz" | "translate" | "diagram";
 
@@ -56,12 +56,19 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
       const chart = echarts.init(ref.current);
       instRef.current = chart;
       const pal = canvasTheme(theme);   // 画布色随皮肤切换
-      const common = { tooltip: {}, legend: { top: 4 }, color: pal.community };
+      // v1.6 深色适配四件套：图例/轴文字、轴线、分隔线随肤取色（wuxia 深底下默认深灰文字不可读）
+      const axis = {
+        axisLabel: { color: pal.text },
+        axisLine: { lineStyle: { color: pal.axisLine } },
+        splitLine: { lineStyle: { color: pal.splitLine } },
+      };
+      const common = { tooltip: {}, legend: { top: 4, textStyle: { color: pal.text } }, color: pal.community };
       if (spec.type === "line" || spec.type === "bar") {
         chart.setOption({
           ...common,
-          xAxis: { type: "category", name: spec.x?.name, data: spec.x?.data },
-          yAxis: { type: "value" },
+          xAxis: { type: "category", name: spec.x?.name, data: spec.x?.data,
+            nameTextStyle: { color: pal.textSoft }, ...axis },
+          yAxis: { type: "value", ...axis },
           series: (spec.series ?? []).map((s) => ({
             name: s.name, type: spec.type === "line" ? "line" : "bar",
             data: s.data, smooth: true,
@@ -71,8 +78,11 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
         const radarSeries = (spec.series ?? []).map((s) => ({ name: s.name, value: s.data }));
         chart.setOption({
           ...common,
-          legend: { top: 4, type: "scroll" },
-          radar: { indicator: spec.indicators ?? [], splitArea: { areaStyle: { opacity: 0.12 } } },
+          legend: { top: 4, type: "scroll", textStyle: { color: pal.text } },
+          radar: { indicator: spec.indicators ?? [], axisName: { color: pal.text },
+            axisLine: { lineStyle: { color: pal.axisLine } },
+            splitLine: { lineStyle: { color: pal.splitLine } },
+            splitArea: { areaStyle: { opacity: 0.12 } } },
           series: [{ type: "radar", data: radarSeries, symbolSize: 4 }],
         });
       } else if (spec.type === "scatter3d") {
@@ -84,10 +94,14 @@ function EChart({ spec }: { spec: ChartOut["spec"] }) {
           visualMap: s3.visual_dim
             ? { show: true, dimension: 3, inRange: { color: pal.visualMap } }
             : undefined,
-          xAxis3D: { type: "value", name: s3.axes[0] },
-          yAxis3D: { type: "value", name: s3.axes[1] },
-          zAxis3D: { type: "value", name: s3.axes[2] },
-          grid3D: { boxWidth: 110, boxDepth: 110, viewControl: { autoRotate: false } },
+          xAxis3D: { type: "value", name: s3.axes[0], nameTextStyle: { color: pal.textSoft },
+            axisLabel: { color: pal.text } },
+          yAxis3D: { type: "value", name: s3.axes[1], nameTextStyle: { color: pal.textSoft },
+            axisLabel: { color: pal.text } },
+          zAxis3D: { type: "value", name: s3.axes[2], nameTextStyle: { color: pal.textSoft },
+            axisLabel: { color: pal.text } },
+          grid3D: { boxWidth: 110, boxDepth: 110, viewControl: { autoRotate: false },
+            splitLine: { lineStyle: { color: pal.splitLine } } },
           series: [{ type: "scatter3D", data: s3.points, symbolSize: 6 }],
         });
       }
@@ -104,11 +118,11 @@ function Radar3DLayers({ spec }: { spec: ChartOut["spec"] }) {
   const plates = [
     {
       top: 26, scale: 0.9, opacity: 0.16, rot: 26,
-      bg: "linear-gradient(135deg, var(--surface-2,#dbe4f0), transparent 72%)",
+      bg: "linear-gradient(135deg, var(--surface-2), transparent 72%)",
     },
     {
       top: 13, scale: 0.95, opacity: 0.26, rot: 17,
-      bg: "linear-gradient(135deg, var(--surface-2,#e8eef7), transparent 70%)",
+      bg: "linear-gradient(135deg, var(--surface-2), transparent 70%)",
     },
   ];
   return (
@@ -119,13 +133,13 @@ function Radar3DLayers({ spec }: { spec: ChartOut["spec"] }) {
           borderRadius: 14, border: "1px solid var(--line)", background: p.bg,
           opacity: p.opacity, transformOrigin: "50% 100%",
           transform: `rotateX(${p.rot}deg) scale(${p.scale})`,
-          boxShadow: "0 10px 24px rgba(15,23,42,.08)", pointerEvents: "none",
+          boxShadow: "var(--shadow-md)", pointerEvents: "none",
         }} />
       ))}
       <div style={{
         position: "relative", borderRadius: 14, overflow: "visible",
         transform: "rotateX(9deg) rotateZ(-2deg)", transformOrigin: "50% 100%",
-        boxShadow: "0 20px 40px rgba(15,23,42,.20)",
+        boxShadow: "var(--shadow-lg)",
       }}>
         <EChart spec={spec} />
       </div>
@@ -151,7 +165,7 @@ function MermaidPreview({ code }: { code: string }) {
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: theme === "wuxia" ? "dark" : "neutral" });
+        mermaid.initialize({ startOnLoad: false, theme: themeMermaid[theme] });
         const { svg } = await mermaid.render(`mmd-${Date.now()}`, code);
         if (alive) { setSvg(svg); setErr(""); }
       } catch (e) {
@@ -500,7 +514,7 @@ export default function CopilotPage() {
             </div>
             {trNote && <p className="kv" style={{ marginTop: 8 }}>{trNote}</p>}
             {enOut && (
-              <div style={{ marginTop: 10, background: "var(--surface-2, #f8fafc)", borderRadius: 8, padding: 12 }}>
+              <div style={{ marginTop: 10, background: "var(--surface-2)", borderRadius: 8, padding: 12 }}>
                 <p style={{ fontSize: 13, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>{enOut}</p>
               </div>
             )}
@@ -551,7 +565,7 @@ export default function CopilotPage() {
                       <button className="chip" style={{ cursor: "pointer", fontSize: 10, marginLeft: 8 }}
                         onClick={() => copySrc(diagram.sources[k])}>复制源码</button>
                     </h2>
-                    <pre style={{ fontSize: 11, overflowX: "auto", background: "var(--surface-2, #f8fafc)",
+                    <pre style={{ fontSize: 11, overflowX: "auto", background: "var(--surface-2)",
                       padding: 10, borderRadius: 8 }}>{diagram.sources[k]}</pre>
                   </div>
                 ))}

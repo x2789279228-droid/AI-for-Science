@@ -130,6 +130,7 @@
   --accent-soft: var(--blue-50);   /* 选中/强调底 */
   --accent-border: var(--blue-200);
   --accent-contrast: #ffffff;      /* 压在 accent 上的文字色（深色皮肤换玄墨，v1.4） */
+  --hl-border: var(--sky-400);     /* 强调描边（缝隙卡翻面等装饰边；各肤随母题换装，v1.6） */
   /* 渐变光感层（视觉识别层，功能色不占用） */
   --grad-brand: linear-gradient(135deg, var(--blue-600) 0%, var(--sky-400) 100%);
   --grad-brand-soft: linear-gradient(135deg, var(--blue-50) 0%, var(--sky-200) 100%);
@@ -149,7 +150,8 @@
   --claim-absent: #5b6b7c;                     /* absent 未涉及（中性灰蓝，≠unsupported 红） */
 
   /* ---------- 3. Component / Layout ---------- */
-  --sidebar-w: 272px;
+  --sidebar-w: 248px;
+  --sidebar-collapsed-w: 56px;   /* ChatGLM 式折叠图标栏 */
   --topbar-h: 56px;
 
   --radius-sm: 6px;
@@ -227,6 +229,7 @@
   --accent-hover: var(--riso-klein-deep);
   --accent-soft: #e5e7f6;                        /* 淡蓝印泥 */
   --accent-border: #b9bff0;
+  --hl-border: var(--riso-orange);               /* 强调描边随母题：国际橙 */
   --ok: var(--riso-klein-deep);                  /* 已验证 = 蓝墨章 */
   --ok-soft: #e5e7f6;
   --warn: var(--riso-orange-deep);               /* 未验证 = 橙墨章 */
@@ -260,6 +263,7 @@
   --accent-hover: var(--maj-blue-deep);
   --accent-soft: var(--maj-blue-soft);
   --accent-border: #c5c5f0;
+  --hl-border: var(--maj-saffron);               /* 强调描边随母题：藏红花黄 */
   --ok: var(--maj-palm-deep);
   --ok-soft: #e2ede1;
   --warn: var(--maj-saffron-deep);
@@ -311,6 +315,13 @@
   --accent-soft: rgba(224, 100, 72, 0.14);
   --accent-border: rgba(224, 100, 72, 0.42);
   --accent-contrast: var(--wx-night);            /* 朱砂亮部上压玄墨字 */
+  --hl-border: var(--wx-gold);                   /* 强调描边随母题：鎏金 */
+
+  /* 深色阴影覆盖（v1.6 深色适配条款 ⑤）：浅页阴影 rgba(16,24,40,…) 在玄墨底上不可见，
+     卡片失浮；换纯黑系并加深，与 wuxia 装饰层 .book 阴影（rgba(0,0,0,.4~.55)）同语言 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px -6px rgba(0, 0, 0, 0.5), 0 3px 8px -3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 44px -12px rgba(0, 0, 0, 0.6), 0 6px 14px -6px rgba(0, 0, 0, 0.4);
   --ok: var(--wx-bamboo-2);
   --ok-soft: rgba(79, 169, 124, 0.16);
   --warn: var(--wx-gold-2);

@@ -19,6 +19,7 @@ import uuid
 from .. import db, threads_store, trace_store
 from ..config import settings
 from ..rag.answering import hit_summary
+from . import cancel as cancel_mod
 from .checkpointer import get_graph
 from .nodes import graph_path
 
@@ -35,7 +36,15 @@ class _TeeQueue:
         self.captured: list[tuple] = []
 
     def put(self, item) -> None:
-        self.captured.append(item)
+        # reasoning_delta 记账合并：连续思维链增量帧并入上一条（真实队列仍逐帧转发，
+        # 流式不受影响）——防几百帧 delta 把 trace_events 回放数据撑爆
+        if (item[0] == "reasoning_delta" and self.captured
+                and self.captured[-1][0] == "reasoning_delta"):
+            prev = self.captured[-1]
+            self.captured[-1] = ("reasoning_delta",
+                                 {"text": prev[1].get("text", "") + item[1].get("text", "")})
+        else:
+            self.captured.append(item)
         self._sink.put(item)
 
     def record_only(self, item) -> None:
@@ -72,20 +81,21 @@ def _resume_doc_mode(paper_ids_json: str) -> None:
 def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
                thread_id: str | None = None, conversation_id: str | None = None,
                turn: int | None = None, forced_agent: str = "auto",
-               doc_mode: str = "paper") -> None:
+               doc_mode: str = "paper", thinking: bool = True) -> None:
     """阻塞执行完整状态图，事件逐条入队；最后一条必为 done。
 
     thread_id/conversation_id/turn 缺省时自动生成（conversation_id → next_turn 推导），
     向后兼容旧的三位置参数调用。forced_agent 为 UI 强制指定的 Agent（auto/reader/…）。
     doc_mode=paper|general：普通文档模式（graph/writer 改道、意图/提示词/工具白名单收敛）。
-    事件流经 _TeeQueue 记账并落盘 trace_events（回放数据源）。
+    thinking：深度思考开关（responder 流式 reasoning_content → reasoning_delta 事件），
+    进 checkpoint，续跑自动保留。事件流经 _TeeQueue 记账并落盘 trace_events（回放数据源）。
     """
     if thread_id is None:
         conversation_id = conversation_id or uuid.uuid4().hex
         turn = turn if turn is not None else threads_store.next_turn(conversation_id)
         thread_id = threads_store.make_thread_id(conversation_id, turn)
     threads_store.start_thread(thread_id, conversation_id or "", turn or 0,
-                               question, paper_ids)
+                               question, paper_ids, doc_mode=doc_mode)
 
     from .tools import set_doc_mode  # 双模式工具硬兜底（本线程 ContextVar）
     set_doc_mode(doc_mode)
@@ -99,7 +109,8 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
     try:
         final = graph.invoke(
             {"question": question, "paper_ids": paper_ids, "retries": 0,
-             "forced_agent": forced_agent, "doc_mode": doc_mode}, config)
+             "forced_agent": forced_agent, "doc_mode": doc_mode, "thinking": thinking},
+            config)
     except Exception as e:  # noqa: BLE001 —— 图级故障也必须以 done 收尾；断点已落盘可恢复
         threads_store.finish_thread(thread_id, "failed", error=f"{type(e).__name__}: {e}")
         tee.put(("final", {"answer": f"[执行失败：{type(e).__name__}: {e}]",
@@ -110,8 +121,10 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
         tee.record_only(("done", {}))
         _save_trace(tee, thread_id, conversation_id, turn, question, "failed")
         tee.put(("done", {}))
+        cancel_mod.pop(thread_id)
         return
 
+    cancel_mod.pop(thread_id)
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))
     _push_success(tee, final, question, t0, thread_id, conversation_id, defer_done=True)
     _save_trace(tee, thread_id, conversation_id, turn, question, "done")
@@ -174,8 +187,10 @@ def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
         _save_trace(tee, thread_id, row["conversation_id"], row["turn"],
                     row["question"], "failed")
         tee.put(("done", {}))
+        cancel_mod.pop(thread_id)
         return
 
+    cancel_mod.pop(thread_id)
     threads_store.finish_thread(thread_id, "done", answer=final.get("answer", ""))
     _push_success(tee, final, row["question"], t0, thread_id, row["conversation_id"],
                   defer_done=True)
@@ -216,6 +231,8 @@ def _push_success(q, final: dict, question: str, t0: float,
                      "agent": final.get("agent", "reader"),
                      "handoffs": final.get("handoffs", []),
                      "anchors": final.get("anchors", {}),   # 恒在：溯源链路字段稳定（空=抽取式无锚点）
+                     **({"partial_missing": final["partial_missing"]}
+                        if final.get("partial_missing") else {}),   # v2.3.0 部分回答缺失面
                      **({"compare_table": final["compare_table"]}
                         if final.get("compare_table") else {}),
                      **({"graph_data": final["graph_data"]}

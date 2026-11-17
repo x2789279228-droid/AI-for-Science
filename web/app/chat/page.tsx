@@ -2,16 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import "katex/dist/katex.min.css";
 import {
-  Anchor, ChartSpec, Claim, CompareCell, CompareTable, FinalEvent, GraphData, Hit,
-  Outline, Paper, TLEvent, TraceCard, getPaper, listPapers, resumeChat, streamChat,
+  Anchor, ChartSpec, Claim, CompareCell, CompareTable, ConversationInfo, FinalEvent, GraphData, Hit,
+  Outline, Paper, TLEvent, TraceCard, TurnRecord, convKeyFor,
+  fetchQaTraceOrNull, getConversationTurns, getPaper, listConversations, listPapers,
+  resumeChat, stopChat, streamChat,
 } from "@/lib/api";
-import { ChevronRight, Spark } from "@/components/icons";
+import { Activity, ChevronRight, List, Spark } from "@/components/icons";
 import { useShell } from "@/components/ShellContext";
 import { useIsland } from "@/lib/island";
 import Stamp from "@/components/Stamp";
 import TracePanel from "@/components/chat/TracePanel";
 import PdfAnchored from "@/components/PdfAnchored";
+import ThinkingBlock from "@/components/chat/ThinkingBlock";
+import MarkdownWithCitations from "@/components/chat/MarkdownWithCitations";
 
 /** 证据浮层定位：anchor（paper/page/bbox）+ 可选引文与编号。 */
 interface EvidenceLoc {
@@ -23,10 +28,13 @@ interface EvidenceLoc {
 interface Turn {
   question: string;
   answer: string;
+  thinking: string;        // 深度思考流（reasoning_delta 累加；空=未开启/降级）
+  thinkingActive: boolean; // 思考进行中（首个正文 delta 到达即 false）
+  thinkingMs?: number;     // 思考用时（前端实测：首 reasoning → 首 delta）
   trace: TraceCard[];
   retrieval: { channels: string[]; hits: Hit[] } | null;
   final: FinalEvent | null;
-  threadId?: string;   // 断点续跑：本轮线程 id，失败后「继续执行」用
+  threadId?: string;   // 断点续跑/停止生成：meta 事件先行下发（无需等 final）
   failed?: boolean;    // 图级执行失败（可恢复）
   tl: TLEvent[];       // 协议 v1.1：有序时间线事件流（右侧 TracePanel 数据源）
 }
@@ -48,6 +56,9 @@ const GUARD_LABEL: Record<string, string> = {
   number_not_in_evidence: "部分数值未在证据中命中",
   semantic_judge_skipped: "语义 judge 跳过（LLM 不可用）",
   semantic_judge_off: "语义 judge 关闭 · 论断仅过 L1-L3",
+  user_stopped: "已手动停止生成",
+  aspect_judge_applied: "检索面可答性复核（LLM judge 修正覆盖判定）",
+  rerank_not_configured: "Rerank 未配置 → 融合排序截断",
 };
 
 /** guardrail 标签：精确匹配 + 前缀匹配（graph_error:* / quote_unverified:2 等动态键）。 */
@@ -62,8 +73,22 @@ const guardLabel = (g: string): string => {
   if (g.startsWith("compare_conflict:")) return `${g.slice("compare_conflict:".length)} 个维度双侧数值冲突`;
   if (g.startsWith("compare_one_sided:"))
     return `对比单侧风险：叙述仅覆盖 ${g.slice("compare_one_sided:".length)} 篇`;
+  if (g.startsWith("partial_answer:"))
+    return `部分回答：${g.slice("partial_answer:".length)} 个子问题有据可答，其余如实标注未明确说明`;
+  if (g.startsWith("doc_scope_pruned"))
+    return "未指定文档：已按相关度自动收窄检索范围";
   return "";
 };
+
+/** 分级作答折叠（v2.3.0 UI）：把「未能回答的部分」小节从正文切出，final 后折叠成
+ *  chip（默认收起、点击展开）——主体回答一屏可读；流式期照常全量显示不跳变。 */
+const UNANSWERED_HEAD = /(?:^|\n)\s*(?:#{1,6}\s*)?\**\s*未能回答的部分\s*\**\s*[:：]?[ \t]*(?=\n|$)/;
+
+function splitUnanswered(text: string): { main: string; tail: string | null } {
+  const m = text.match(UNANSWERED_HEAD);
+  if (!m || m.index === undefined) return { main: text, tail: null };
+  return { main: text.slice(0, m.index).trimEnd(), tail: text.slice(m.index).trim() };
+}
 
 const AGENT_LABEL: Record<string, string> = {
   reader: "Reader · 单篇精读",
@@ -88,7 +113,7 @@ const AGENT_OPTIONS: { value: string; label: string; ready: boolean }[] = [
 const isFailedFinal = (d: FinalEvent): boolean =>
   d.answer.startsWith("[执行失败") || d.guardrails.some((g) => g.startsWith("graph_error:"));
 
-const CONV_KEY = "meridian_conversation_id";
+const THINK_KEY = "meridian_think_enabled";
 
 const secName = (s: string) => (s === "_front" || !s ? "前言" : s);
 
@@ -99,6 +124,21 @@ function appendTL(t: Turn[], i: number, kind: TLEvent["kind"], data: TLEvent["da
   return c;
 }
 
+/** 流式合帧缓冲：reasoning/delta 高密度到达时 ~50ms 批量应用，防全页重渲染风暴。 */
+interface StreamAcc {
+  idx: number;
+  thinking: string;      // 思考流全量（替换式）
+  answer: string;        // 正文增量（追加式，应用后清零）
+  thinkingActive: boolean;
+  thinkStart: number | null;
+  answerStart: number | null;
+}
+
+const emptyAcc = (idx: number): StreamAcc => ({
+  idx, thinking: "", answer: "", thinkingActive: false,
+  thinkStart: null, answerStart: null,
+});
+
 export default function ChatPage() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -107,15 +147,23 @@ export default function ChatPage() {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [showScope, setShowScope] = useState(false);
-  const [showTrace, setShowTrace] = useState(true);   // 右侧 Trace 时间线开关
+  const [traceOpen, setTraceOpen] = useState(false);   // Trace 右侧抽屉（localStorage 持久化，默认收起）
   const [agent, setAgent] = useState("auto");          // UI 强制指定 Agent（auto=自动路由）
   const [evidence, setEvidence] = useState<EvidenceLoc | null>(null);  // 引用点击 → 原文浮层
+  // ChatGLM 模式：会话侧栏 + per-request 深度思考开关
+  const [conversations, setConversations] = useState<ConversationInfo[]>([]);
+  const [activeConvId, setActiveConvId] = useState("");
+  const [thinkEnabled, setThinkEnabled] = useState(true);
   const island = useIsland();
   const { docMode, setDocMode } = useShell();
   const isGeneral = docMode === "general";
   const docModeParam = isGeneral ? "general" as const : "paper" as const;
   const msgsRef = useRef<HTMLDivElement>(null);
-  const convRef = useRef<string>("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const accRef = useRef<StreamAcc>(emptyAcc(-1));
+  const flushTimer = useRef<number | null>(null);
+  const smoothRef = useRef<{ pending: string; raf: number | null; last: number }>(
+    { pending: "", raf: null, last: 0 });
 
   /** 普通模式 Agent 子集（与后端 GENERAL_FORCED_AGENTS 对齐：无 Graph/Writer）。 */
   const agentOptions = useMemo(
@@ -153,14 +201,107 @@ export default function ChatPage() {
     setEvidence({ eid, anchor, quote });
   };
 
-  /** 会话级 conversation_id（localStorage 持久化）：断点续跑按会话归属。 */
-  const conversationId = () => {
-    if (!convRef.current) {
-      convRef.current = localStorage.getItem(CONV_KEY) ?? crypto.randomUUID();
-      localStorage.setItem(CONV_KEY, convRef.current);
-    }
-    return convRef.current;
+  const refreshConversations = () => {
+    listConversations(50, true, docModeParam).then(setConversations)
+      .catch(() => { /* 后端未起时静默 */ });
   };
+
+  // 挂载：恢复上次会话（ChatGLM 行为，按模式隔离）+ 会话列表 + Trace 抽屉状态持久化。
+  // 旧版单键迁移：meridian_conversation_id → 专业模式键（一次性、幂等）
+  useEffect(() => {
+    const legacy = localStorage.getItem("meridian_conversation_id");
+    if (legacy && !localStorage.getItem(convKeyFor("paper"))) {
+      localStorage.setItem(convKeyFor("paper"), legacy);
+    }
+    localStorage.removeItem("meridian_conversation_id");
+    refreshConversations();
+    const savedConv = localStorage.getItem(convKeyFor(docModeParam)) ?? "";
+    const savedThink = localStorage.getItem(THINK_KEY);
+    if (savedThink != null) setThinkEnabled(savedThink === "1");
+    setTraceOpen(localStorage.getItem("meridian:trace-open") === "1");
+    if (savedConv) {
+      setActiveConvId(savedConv);
+      void loadConversation(savedConv);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 模式切换 → 切换到该模式的活跃会话（无则清空为新对话）；busy 中不切防打断流式
+  const modeInitRef = useRef(false);
+  useEffect(() => {
+    if (!modeInitRef.current) { modeInitRef.current = true; return; }
+    if (busy) return;
+    const savedConv = localStorage.getItem(convKeyFor(docModeParam)) ?? "";
+    setActiveConvId(savedConv);
+    if (savedConv) void loadConversation(savedConv);
+    else {
+      setTurns([]);
+      setQuestion("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docModeParam]);
+
+  // 全局侧栏 ↔ 问答页协调（window CustomEvent，见 AppShell 事件契约）：
+  // conv-new=就地新建 / conv-open=打开指定会话 / conv-deleted=活跃会话被删 / conv-refresh=侧栏改名删除后同步标题
+  useEffect(() => {
+    const onNew = () => newConversation();
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (id) openConversation(id);
+    };
+    const onDeleted = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (id && id === activeConvId) newConversation();
+    };
+    const onRefresh = () => refreshConversations();
+    window.addEventListener("meridian:conv-new", onNew);
+    window.addEventListener("meridian:conv-open", onOpen);
+    window.addEventListener("meridian:conv-deleted", onDeleted);
+    window.addEventListener("meridian:conv-refresh", onRefresh);
+    return () => {
+      window.removeEventListener("meridian:conv-new", onNew);
+      window.removeEventListener("meridian:conv-open", onOpen);
+      window.removeEventListener("meridian:conv-deleted", onDeleted);
+      window.removeEventListener("meridian:conv-refresh", onRefresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvId, busy]);
+
+  const flipTrace = () => setTraceOpen((v) => {
+    localStorage.setItem("meridian:trace-open", v ? "0" : "1");
+    return !v;
+  });
+
+  /** 加载会话历史：chat_threads 轮次 + 逐轮回放还原 final 元数据（claims/anchors 等）。 */
+  async function loadConversation(convId: string) {
+    let recs: TurnRecord[] = [];
+    try {
+      recs = await getConversationTurns(convId);
+    } catch {
+      return;   // 会话不存在（旧 localStorage 残留）→ 保持空态
+    }
+    const hydrated = await Promise.all(recs.map(async (r) => {
+      const turn: Turn = { question: r.question, answer: r.answer || "", trace: [],
+        retrieval: null, final: null, tl: [], thinking: "", thinkingActive: false,
+        threadId: r.thread_id, failed: r.status === "failed" };
+      if (r.status === "done" || r.status === "failed") {
+        const tr = await fetchQaTraceOrNull(r.thread_id);
+        const fin = tr?.events.find((e) => e.kind === "final")?.data as unknown as FinalEvent | undefined;
+        if (fin) {
+          turn.final = { ...fin, thread_id: r.thread_id, conversation_id: convId };
+          turn.answer = fin.answer || r.answer || "";
+          turn.failed = isFailedFinal(fin);
+        }
+        // 合并记账后的思维链（回放里连续 reasoning_delta 已由后端合并）
+        const think = (tr?.events ?? [])
+          .filter((e) => e.kind === "reasoning_delta")
+          .map((e) => String((e.data as { text?: string }).text ?? "")).join("");
+        if (think) turn.thinking = think;
+      }
+      return turn;
+    }));
+    setTurns(hydrated);
+  }
 
   // 深链自动切模式只处理一次：防止与用户手动切换模式互相拉扯
   const handledPaperRef = useRef<string | null>(null);
@@ -183,24 +324,144 @@ export default function ChatPage() {
     });
   }, [docModeParam, isGeneral, setDocMode]);
 
+  // 智能跟随：仅当用户本就贴在底部附近时才跟随新内容滚动；发新问题（轮次增加）强制聚焦；
+  // 用户上翻阅读时不拽回（ChatGLM 同款），由悬浮「↓」按钮一键回底。
+  const atBottomRef = useRef(true);
+  const prevTurnsLenRef = useRef(0);
+  const [showJump, setShowJump] = useState(false);
   useEffect(() => {
-    msgsRef.current?.scrollTo({ top: msgsRef.current.scrollHeight });
+    const el = msgsRef.current;
+    if (!el) return;
+    const grew = turns.length > prevTurnsLenRef.current;
+    prevTurnsLenRef.current = turns.length;
+    if (grew || atBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight });
+    }
   }, [turns]);
+
+  // ---- 流式合帧：~50ms 批量应用 reasoning/delta，final/catch/finally 强制 flush ----
+
+  const applyAcc = () => {
+    const a = accRef.current;
+    if (a.idx < 0) return;
+    const idx = a.idx;
+    // 关键：updater 被 React 延迟执行（并发调度/微任务），绝不能让它读可变 ref——
+    // 否则同步执行的 a.answer = "" 会先于 updater 跑，读到的缓冲已清空 → delta 全丢，
+    // 正文憋到 final 一次性吐出。先取快照、再清缓冲、updater 闭包只碰快照（纯函数）。
+    const thinking = a.thinking;
+    const chunk = a.answer;
+    const active = a.thinkingActive;
+    const ms = (a.answerStart != null && a.thinkStart != null)
+      ? a.answerStart - a.thinkStart : undefined;
+    a.answer = "";
+    setTurns((t) => {
+      const c = [...t];
+      const turn = c[idx];
+      if (!turn) return t;
+      c[idx] = {
+        ...turn,
+        thinking,
+        answer: turn.answer + chunk,
+        thinkingActive: active,
+        thinkingMs: ms ?? turn.thinkingMs,
+      };
+      return c;
+    });
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer.current != null) return;
+    flushTimer.current = window.setTimeout(() => {
+      flushTimer.current = null;
+      applyAcc();
+    }, 50);
+  };
+
+  const flushNow = () => {
+    if (flushTimer.current != null) {
+      window.clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    applyAcc();
+  };
+
+  /** 正文平滑渲染：方舟网关对短/固定格式回答会把 content 段憋完一次性推送（实测 40 帧
+   * 挤在 1ms 内到达，长回答则逐帧流式）——逐帧直渲会表现为「一次性吞吐」。delta 进平滑
+   * 队列，按真实时间（dt）自适应出队：积压约 1.5 秒排完。时间驱动而非帧驱动——后台标签
+   * rAF 被节流到 1fps 时 dt 变大、单帧多出队，排空节奏不变。正常逐 token 流式时队列近
+   * 空、逐字透传零感知。ChatGLM 前端同款平滑层。 */
+  const drainSmooth = () => {
+    const s = smoothRef.current;
+    const a = accRef.current;
+    if (a.idx < 0 || !s.pending) {
+      s.raf = null;
+      return;
+    }
+    const now = performance.now();
+    const dt = Math.min(Math.max(now - s.last, 8), 500);   // 首帧/长停顿钳制，防一次吐全量
+    s.last = now;
+    const chunk = Math.max(1, Math.ceil((s.pending.length / 1500) * dt));
+    a.answer += s.pending.slice(0, chunk);
+    s.pending = s.pending.slice(chunk);
+    applyAcc();
+    s.raf = requestAnimationFrame(drainSmooth);
+  };
+
+  const startSmooth = () => {
+    if (smoothRef.current.raf == null) {
+      smoothRef.current.last = performance.now();
+      smoothRef.current.raf = requestAnimationFrame(drainSmooth);
+    }
+  };
+
+  const stopSmooth = () => {
+    if (smoothRef.current.raf != null) {
+      cancelAnimationFrame(smoothRef.current.raf);
+      smoothRef.current.raf = null;
+    }
+    smoothRef.current.pending = "";
+  };
+
+  /** 会话标识：当前模式的会话，无则生成并持久化（「新对话」首次提问时落库）。 */
+  const conversationId = () => {
+    if (activeConvId) return activeConvId;
+    const id = crypto.randomUUID();
+    setActiveConvId(id);
+    localStorage.setItem(convKeyFor(docModeParam), id);
+    return id;
+  };
+
+  const flipThink = () => {
+    setThinkEnabled((v) => {
+      localStorage.setItem(THINK_KEY, v ? "0" : "1");
+      return !v;
+    });
+  };
 
   const ask = async (override?: string) => {
     const q = (typeof override === "string" ? override : question).trim();
     if (!q || busy) return;
     setQuestion("");
+    if (taRef.current) taRef.current.style.height = "auto";
     setShowScope(false);
     setBusy(true);
     const t0 = performance.now();
-    const turn: Turn = { question: q, answer: "", trace: [], retrieval: null, final: null, tl: [] };
+    stopSmooth();
+    accRef.current = emptyAcc(turns.length);
+    const turn: Turn = { question: q, answer: "", thinking: "", thinkingActive: false,
+      trace: [], retrieval: null, final: null, tl: [] };
     setTurns((t) => [...t, turn]);
     island.emit({ key: "qa", kind: "progress", title: "溯源问答执行中",
       detail: "Router → Planner → Executor → Verifier → Responder", indeterminate: true });
     try {
       await streamChat(q, Array.from(selected), {
         guardrail: (d) => setCapHint(String(d.message ?? "")),
+        meta: (d) => setTurns((t) => {
+          const c = [...t];
+          const i = c.length - 1;
+          if (c[i]) c[i] = { ...c[i], threadId: d.thread_id };
+          return c;
+        }),
         trace: (card) => setTurns((t) => {
           const c = [...t];
           const i = c.length - 1;
@@ -215,30 +476,56 @@ export default function ChatPage() {
         retrieval: (d) => setTurns((t) => {
           const c = [...t]; c[c.length - 1] = { ...c[c.length - 1], retrieval: d }; return c;
         }),
-        delta: (text) => setTurns((t) => {
-          const c = [...t];
-          c[c.length - 1] = { ...c[c.length - 1], answer: c[c.length - 1].answer + text };
-          return c;
-        }),
-        final: (d) => setTurns((t) => {
-          const c = [...t];
-          c[c.length - 1] = {
-            ...c[c.length - 1],
-            answer: c[c.length - 1].answer || d.answer,  // 抽取式模式无 delta，答案在 final 里
-            trace: d.trace?.length ? d.trace : c[c.length - 1].trace,
-            final: d,
-            threadId: d.thread_id ?? c[c.length - 1].threadId,
-            failed: isFailedFinal(d),
-          };
-          const secs = Math.round((performance.now() - t0) / 1000);
-          island.emit(isFailedFinal(d)
-            ? { key: "qa", kind: "info", title: "图执行中断", detail: "断点已保存,可从失败节点恢复" }
-            : { key: "qa", kind: "success", title: `问答完成 · 用时 ${secs}s`,
-              detail: `论断 ${d.claims?.length ?? 0} 条已逐条校验` });
-          return c;
-        }),
-      }, conversationId(), agent, docModeParam);
+        reasoningDelta: (text) => {
+          const a = accRef.current;
+          if (a.thinkStart == null) a.thinkStart = performance.now();
+          a.thinking += text;
+          a.thinkingActive = true;
+          scheduleFlush();
+        },
+        delta: (text) => {
+          const a = accRef.current;
+          if (a.answerStart == null) {
+            a.answerStart = performance.now();
+            a.thinkingActive = false;   // 正文首字 → 自动收起思考（ThinkingBlock 联动）
+          }
+          smoothRef.current.pending += text;   // 进平滑队列，rAF 逐帧渲染
+          startSmooth();
+        },
+        final: (d) => {
+          flushNow();
+          setTurns((t) => {
+            const c = [...t];
+            const i = c.length - 1;
+            const cur = c[i]?.answer ?? "";
+            // 正文对齐（纯函数，updater 内完成）：
+            // a) 流式无内容（抽取式/拒答直达）→ 用 final 全文；
+            // b) final 以流式为前缀（如拒答轮 final 追加「最接近证据块」）→ 用 final，
+            //    React DOM diff 下前缀不变、仅追加尾块，视觉自然；
+            // c) 校验改写且非前缀（仅剔除无效引用标记）→ 保留已渲染流式文本。
+            const answer = !cur ? d.answer
+              : d.answer.startsWith(cur) ? d.answer
+              : cur;
+            c[i] = {
+              ...c[i],
+              answer,
+              thinkingActive: false,   // final 到达 → 思考必然结束（无 delta 的拒答/抽取式轮也正确收起）
+              trace: d.trace?.length ? d.trace : c[i].trace,
+              final: d,
+              threadId: d.thread_id ?? c[i].threadId,
+              failed: isFailedFinal(d),
+            };
+            const secs = Math.round((performance.now() - t0) / 1000);
+            island.emit(isFailedFinal(d)
+              ? { key: "qa", kind: "info", title: "图执行中断", detail: "断点已保存,可从失败节点恢复" }
+              : { key: "qa", kind: "success", title: `问答完成 · 用时 ${secs}s`,
+                detail: `论断 ${d.claims?.length ?? 0} 条已逐条校验` });
+            return c;
+          });
+        },
+      }, conversationId(), agent, docModeParam, thinkEnabled);
     } catch (e) {
+      flushNow();
       island.emit({ key: "qa", kind: "error", title: "问答请求失败",
         detail: e instanceof Error ? e.message : String(e) });
       setTurns((t) => {
@@ -250,7 +537,12 @@ export default function ChatPage() {
         return c;
       });
     } finally {
+      flushNow();
+      // 注意：不停平滑、不重置 accRef——final 后队列仍在排空（idx 保持有效），
+      // 下次 ask/resume 启动时才 stopSmooth() 清理
       setBusy(false);
+      refreshConversations();
+      window.dispatchEvent(new CustomEvent("meridian:conv-refresh"));   // 全局侧栏「最近对话」同步
     }
   };
 
@@ -259,9 +551,12 @@ export default function ChatPage() {
     const turn = turns[ti];
     if (!turn?.threadId || busy) return;
     setBusy(true);
+    stopSmooth();
+    accRef.current = emptyAcc(ti);
     setTurns((t) => {   // 先清空该轮，防恢复重放 delta 造成文本串接
       const c = [...t];
-      c[ti] = { ...c[ti], answer: "", trace: [], retrieval: null, final: null, tl: [] };
+      c[ti] = { ...c[ti], answer: "", thinking: "", thinkingActive: false, thinkingMs: undefined,
+        trace: [], retrieval: null, final: null, tl: [] };
       return c;
     });
     try {
@@ -279,25 +574,47 @@ export default function ChatPage() {
         retrieval: (d) => setTurns((t) => {
           const c = [...t]; if (c[ti]) c[ti] = { ...c[ti], retrieval: d }; return c;
         }),
-        delta: (text) => setTurns((t) => {
-          const c = [...t];
-          if (c[ti]) c[ti] = { ...c[ti], answer: c[ti].answer + text };
-          return c;
-        }),
-        final: (d) => setTurns((t) => {
-          const c = [...t];
-          if (c[ti]) c[ti] = {
-            ...c[ti],
-            answer: c[ti].answer || d.answer,
-            trace: d.trace?.length ? d.trace : c[ti].trace,
-            final: d,
-            threadId: d.thread_id ?? c[ti].threadId,
-            failed: isFailedFinal(d),
-          };
-          return c;
-        }),
+        reasoningDelta: (text) => {
+          const a = accRef.current;
+          if (a.thinkStart == null) a.thinkStart = performance.now();
+          a.thinking += text;
+          a.thinkingActive = true;
+          scheduleFlush();
+        },
+        delta: (text) => {
+          const a = accRef.current;
+          if (a.answerStart == null) {
+            a.answerStart = performance.now();
+            a.thinkingActive = false;
+          }
+          smoothRef.current.pending += text;
+          startSmooth();
+        },
+        final: (d) => {
+          flushNow();
+          setTurns((t) => {
+            const c = [...t];
+            if (c[ti]) {
+              const cur = c[ti].answer;
+              const answer = !cur ? d.answer
+                : d.answer.startsWith(cur) ? d.answer
+                : cur;
+              c[ti] = {
+                ...c[ti],
+                answer,
+                thinkingActive: false,   // 同 ask：final 即思考结束
+                trace: d.trace?.length ? d.trace : c[ti].trace,
+                final: d,
+                threadId: d.thread_id ?? c[ti].threadId,
+                failed: isFailedFinal(d),
+              };
+            }
+            return c;
+          });
+        },
       });
     } catch (e) {
+      flushNow();
       setTurns((t) => {
         const c = [...t];
         if (c[ti]) c[ti] = {
@@ -307,7 +624,56 @@ export default function ChatPage() {
         return c;
       });
     } finally {
+      flushNow();
       setBusy(false);
+      refreshConversations();
+    }
+  };
+
+  /** 停止生成（ChatGLM ■）：后端协作中断 → responder 以已生成部分收尾（guardrail=user_stopped），
+   * final/done 正常到达，流自然结束——无需前端断连，已显示内容照常完成逐论断校验。 */
+  const stopGeneration = () => {
+    const tid = turns[turns.length - 1]?.threadId;
+    if (!tid) return;
+    stopChat(tid).catch(() => {
+      island.emit({ key: "qa", kind: "error", title: "停止失败", detail: "线程不存在或已结束" });
+    });
+  };
+
+  // ---- 会话管理 ----
+
+  const newConversation = () => {
+    if (busy) return;
+    setActiveConvId("");
+    localStorage.removeItem(convKeyFor(docModeParam));
+    setTurns([]);
+    setQuestion("");
+  };
+
+  const openConversation = (convId: string) => {
+    if (busy || !convId || convId === activeConvId) return;
+    setActiveConvId(convId);
+    localStorage.setItem(convKeyFor(docModeParam), convId);
+    setTurns([]);
+    void loadConversation(convId);
+  };
+
+  /** 重新生成（ChatGLM ↻）：移除该轮后以原问题重问（后端自然产生新 thread）。 */
+  const regenerate = (ti: number) => {
+    if (busy) return;
+    const q = turns[ti]?.question;
+    if (!q) return;
+    setTurns((t) => t.filter((_, i) => i !== ti));
+    void ask(q);
+  };
+
+  const copyAnswer = async (turn: Turn) => {
+    const text = turn.final?.answer ?? turn.answer;
+    try {
+      await navigator.clipboard.writeText(text);
+      island.emit({ key: "qa", kind: "success", title: "已复制到剪贴板" });
+    } catch {
+      island.emit({ key: "qa", kind: "error", title: "复制失败", detail: "剪贴板不可用" });
     }
   };
 
@@ -317,200 +683,310 @@ export default function ChatPage() {
     : selected.size === 1
       ? papers.find((p) => selected.has(p.id))?.title.slice(0, 24) ?? (isGeneral ? "1 份文档" : "1 篇论文")
       : isGeneral ? `${selected.size} 份文档` : `${selected.size} 篇论文`;
+  const convTitle = conversations.find((c) => c.id === activeConvId)?.title
+    ?? (lastTurn ? lastTurn.question.slice(0, 30) : "溯源问答");
 
   return (
-    <div className={`chat-shell ${showTrace ? "with-trace" : ""}`}>
-      <div className="topbar">
-        <span className="topbar-title">溯源问答</span>
-        <span className="chip accent">ClaimTrace 逐论断验证</span>
-        <span style={{ flex: 1 }} />
-        <span className="chip" title="本次回答的检索范围">{scopeTitle}</span>
-        {capHint && <span className="chip warn" title="选文/截断提示">{capHint}</span>}
-        <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowScope((s) => !s)}>
-          检索范围 <ChevronRight size={11} style={{ transform: showScope ? "rotate(90deg)" : "none" }} />
-        </button>
-        <button className="chip" style={{ cursor: "pointer" }} onClick={() => setShowTrace((s) => !s)}>
-          Trace <ChevronRight size={11} style={{ transform: showTrace ? "rotate(90deg)" : "none" }} />
-        </button>
-        {showScope && (
-          <div style={{ position: "absolute", top: "var(--topbar-h)", right: "var(--space-6)",
-            zIndex: 20, background: "var(--surface)", border: "1px solid var(--line)",
-            borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-md)",
-            padding: "var(--space-3) var(--space-4)", minWidth: 260 }}>
-            <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
-              {isGeneral ? "选择参与检索的文档" : "选择参与检索的论文"}
-            </p>
-            {papers.filter((p) => p.parsed).map((p) => (
-              <label key={p.id} style={{ display: "flex", gap: "var(--space-2)",
-                alignItems: "center", padding: "4px 0", fontSize: "var(--text-sm)", cursor: "pointer" }}>
-                <input type="checkbox" checked={selected.has(p.id)}
-                  onChange={(e) => setSelected((s) => {
-                    const n = new Set(s);
-                    if (e.target.checked) {
-                      if (n.size >= 8) {           // 前端钳制：选文上限 ≤8（与后端护栏一致）
-                        setCapHint("选文上限 8 篇，已停止勾选（超出部分不参与检索）");
-                        e.target.checked = false;
-                        return n;
-                      }
-                      n.add(p.id);
-                    } else {
-                      n.delete(p.id);
-                    }
-                    setCapHint("");
-                    return n;
-                  })} />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {p.title.slice(0, 30)}
-                </span>
-              </label>
-            ))}
-            {papers.filter((p) => p.parsed).length === 0 && (
-              <p className="kv">{isGeneral ? "文档库为空，先去上传 PDF。" : "文献库为空，先去上传 PDF。"}</p>
-            )}
-          </div>
-        )}
-      </div>
+    <div className="chat-shell">
+      <div className="chat-main">
+        <div className="topbar" style={{ position: "relative" }}>
+          <span className="topbar-title">溯源问答</span>
+          <span className="topbar-title-center" title={convTitle}>{convTitle}</span>
+          <span style={{ flex: 1 }} />
+          <button className={`topbar-icon${traceOpen ? " on" : ""}`} data-testid="trace-toggle"
+            onClick={flipTrace} title="Agent Trace 时间线（执行步骤实时点亮）">
+            <Activity size={15} />
+          </button>
+        </div>
 
-      <div className="chat-body">
-        <div className="chat-col">
-          <div className="msgs" ref={msgsRef}>
-            <div className="msgs-inner">
-              {turns.length === 0 && (
-                <div className="chat-hero" data-testid="chat-empty">
-                  <p className="chat-hero-title">
-                    <Spark size={16} /> {isGeneral ? "向文档提问 —— 每个论断都带证据" : "向文献提问 —— 每个论断都带证据"}
-                  </p>
-                  <div className="chat-demo-cards">
-                    {demoQuestions.map((q, i) => (
-                      <button key={i} className="chat-demo-card" data-testid={`demo-q-${i}`}
-                        onClick={() => { setQuestion(q); ask(q); }}>
-                        {q}
-                      </button>
-                    ))}
+        <div className="chat-body">
+          <div className="chat-col">
+            <div className="msgs" ref={msgsRef}
+              onScroll={() => {
+                const el = msgsRef.current;
+                if (!el) return;
+                const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+                atBottomRef.current = atBottom;
+                setShowJump(!atBottom && el.scrollHeight > el.clientHeight + 60);
+              }}>
+              <div className="msgs-inner">
+                {capHint && (
+                  <div className="chat-cap-hint">
+                    <span className="chip warn" title="选文/截断提示">{capHint}</span>
                   </div>
-                  <p className="chat-hero-sub">点击即提问 · 全程可溯源 · 右侧 Trace 实时点亮</p>
-                </div>
-              )}
-              {turns.map((turn, ti) => (
-                <div key={ti}>
-                  <div className="msg user"><span>{turn.question}</span></div>
-                  <div className="msg bot">
-                    {turn.trace.length > 0 && <Pipeline cards={turn.trace} done={!!turn.final} />}
-                    {turn.retrieval && turn.retrieval.hits.length > 0 && (
-                      <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
-                        <details>
-                          <summary className="chip" style={{ cursor: "pointer", listStyle: "none" }}>
-                            检索明细（{turn.retrieval.hits.length} 块）
-                          </summary>
-                          <div style={{ marginTop: "var(--space-2)" }}>
-                            {turn.retrieval.hits.slice(0, 5).map((h) => (
-                              <div key={h.chunk_id} className="kv" style={{
-                                borderBottom: "1px dashed var(--line)", padding: "6px 0" }}>
-                                <b style={{ color: "var(--accent)" }}>p{h.page} §{secName(h.section_path)}</b>
-                                {h.rerank ? ` · rerank ${h.rerank}` : h.rrf ? ` · RRF ${h.rrf}` : ` · ${h.score}`}
-                                <br />{h.text.slice(0, 110)}…
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-                      </p>
-                    )}
-                    {turn.answer && (
-                      <div className="bubble">
-                        {turn.final
-                          ? <AnswerWithAnchors text={turn.final.answer}
-                              anchors={turn.final.anchors} onEvidence={showEvidence} />
-                          : turn.answer}
-                        {turn.final?.compare_table && turn.final.compare_table.rows.length > 0 && (
-                          <CompareTableView table={turn.final.compare_table}
-                            anchors={turn.final.anchors} onEvidence={showEvidence} />
-                        )}
-                        {turn.final?.outline && turn.final.outline.sections.length > 0 && (
-                          <OutlineView outline={turn.final.outline} />
-                        )}
-                        {turn.final?.graph_data && (turn.final.graph_data.metrics?.nodes.length ?? 0) > 0 && (
-                          <GraphView graph={turn.final.graph_data} />
-                        )}
-                        {turn.final?.chart_spec && (turn.final.chart_spec.data?.length ?? 0) > 0 && (
-                          <ChartView spec={turn.final.chart_spec} />
-                        )}
-                        {turn.final && <FinalMeta final={turn.final} />}
-                      </div>
-                    )}
-                    {turn.failed && turn.final?.resumable && turn.threadId && (
-                      <div style={{ marginTop: "var(--space-2)", display: "flex",
-                        gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
-                        <span className="badge warn">⚠ 图执行中断 · 断点已保存</span>
-                        <button className="chip" style={{ cursor: "pointer" }} disabled={busy}
-                          onClick={() => resumeTurn(ti)}>
-                          继续执行（从断点恢复，已完成步骤不重跑）
+                )}
+                {turns.length === 0 && (
+                  <div className="chat-hero" data-testid="chat-empty">
+                    <p className="chat-hero-title">
+                      <Spark size={16} /> 你好，我是 Meridian 科研助手
+                    </p>
+                    <div className="chat-demo-cards">
+                      {demoQuestions.map((q, i) => (
+                        <button key={i} className="chat-demo-card" data-testid={`demo-q-${i}`}
+                          onClick={() => { setQuestion(q); ask(q); }}>
+                          {q}
                         </button>
-                      </div>
-                    )}
-                    {turn.final && <Claims claims={turn.final.claims}
-                      anchors={turn.final.anchors} hits={turn.retrieval?.hits ?? []}
-                      onEvidence={showEvidence} />}
+                      ))}
+                    </div>
+                    <p className="chat-hero-sub">点击即提问 · 全程可溯源 · 右侧 Trace 实时点亮</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="dock-wrap">
-            <div className="dock">
-              <div className="dock-row">
-                {busy && <span className="dock-busy-bar" aria-hidden />}
-                <input
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && ask()}
-                  placeholder={busy ? "Agent 执行中…"
-                    : isGeneral ? "对选中的文档提问，每句回答可溯源到原文…"
-                    : "对选中的论文提问，每句回答可溯源到原文…"}
-                  disabled={busy}
-                />
-                <button className="send-btn" onClick={() => ask()} disabled={busy || !selected.size}
-                  aria-label="发送">↑</button>
+                )}
+                {turns.map((turn, ti) => (
+                  <div key={ti}>
+                    <div className="msg user"><span>{turn.question}</span></div>
+                    <div className="msg bot">
+                      <div className="bot-head">
+                        <span className="bot-avatar" aria-hidden>M</span>
+                        <span className="bot-name">Meridian</span>
+                        {turn.final?.agent && (
+                          <span className="badge ok">{AGENT_LABEL[turn.final.agent] ?? turn.final.agent}</span>
+                        )}
+                      </div>
+                      {turn.trace.length > 0 && <Pipeline cards={turn.trace} done={!!turn.final} />}
+                      {turn.retrieval && turn.retrieval.hits.length > 0 && (
+                        <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
+                          <details>
+                            <summary className="chip" style={{ cursor: "pointer", listStyle: "none" }}>
+                              检索明细（{turn.retrieval.hits.length} 块）
+                            </summary>
+                            <div style={{ marginTop: "var(--space-2)" }}>
+                              {turn.retrieval.hits.slice(0, 5).map((h) => (
+                                <div key={h.chunk_id} className="kv" style={{
+                                  borderBottom: "1px dashed var(--line)", padding: "6px 0" }}>
+                                  <b style={{ color: "var(--accent)" }}>p{h.page} §{secName(h.section_path)}</b>
+                                  {h.rerank ? ` · rerank ${h.rerank}` : h.rrf ? ` · RRF ${h.rrf}` : ` · ${h.score}`}
+                                  <br />{h.text.slice(0, 110)}…
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        </p>
+                      )}
+                      <ThinkingBlock text={turn.thinking} active={turn.thinkingActive}
+                        ms={turn.thinkingMs} />
+                      {turn.answer && (() => {
+                        const { main, tail } = splitUnanswered(turn.answer);
+                        const streaming = !turn.final
+                          || (ti === turns.length - 1 && smoothRef.current.pending.length > 0);
+                        const anchors = turn.final?.anchors;
+                        const nMissing = tail ? (tail.match(/未明确说明/g) || []).length : 0;
+                        return (
+                        <div className="answer-card">
+                          <MarkdownWithCitations
+                            text={main}
+                            anchors={anchors}
+                            onEvidence={showEvidence}
+                            streaming={streaming} />
+                          {tail && (streaming ? (
+                            <MarkdownWithCitations
+                              text={tail}
+                              anchors={anchors}
+                              onEvidence={showEvidence}
+                              streaming />
+                          ) : (
+                            <details style={{ marginTop: "var(--space-2)" }}>
+                              <summary className="chip" style={{ cursor: "pointer", listStyle: "none" }}>
+                                未能回答的部分（{nMissing} 条未明确说明）· 点击展开
+                              </summary>
+                              <div style={{ marginTop: "var(--space-2)" }}>
+                                <MarkdownWithCitations
+                                  text={tail}
+                                  anchors={anchors}
+                                  onEvidence={showEvidence} />
+                              </div>
+                            </details>
+                          ))}
+                          {turn.final?.compare_table && turn.final.compare_table.rows.length > 0 && (
+                            <CompareTableView table={turn.final.compare_table}
+                              anchors={turn.final.anchors} onEvidence={showEvidence} />
+                          )}
+                          {turn.final?.outline && turn.final.outline.sections.length > 0 && (
+                            <OutlineView outline={turn.final.outline} />
+                          )}
+                          {turn.final?.graph_data && (turn.final.graph_data.metrics?.nodes.length ?? 0) > 0 && (
+                            <GraphView graph={turn.final.graph_data} />
+                          )}
+                          {turn.final?.chart_spec && (turn.final.chart_spec.data?.length ?? 0) > 0 && (
+                            <ChartView spec={turn.final.chart_spec} />
+                          )}
+                          {turn.final && <FinalMeta final={turn.final} />}
+                        </div>
+                        );
+                      })()}
+                      {turn.final && (
+                        <div className="msg-actions">
+                          <button className="msg-action" onClick={() => void copyAnswer(turn)}>
+                            ⧉ 复制
+                          </button>
+                          {ti === turns.length - 1 && (
+                            <button className="msg-action" disabled={busy}
+                              onClick={() => regenerate(ti)}>
+                              ↻ 重新生成
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {turn.failed && turn.final?.resumable && turn.threadId && (
+                        <div style={{ marginTop: "var(--space-2)", display: "flex",
+                          gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
+                          <span className="badge warn">⚠ 图执行中断 · 断点已保存</span>
+                          <button className="chip" style={{ cursor: "pointer" }} disabled={busy}
+                            onClick={() => resumeTurn(ti)}>
+                            继续执行（从断点恢复，已完成步骤不重跑）
+                          </button>
+                        </div>
+                      )}
+                      {turn.final && <Claims claims={turn.final.claims}
+                        anchors={turn.final.anchors} hits={turn.retrieval?.hits ?? []}
+                        onEvidence={showEvidence} />}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="dock-tools">
-                <span className="chip">{isGeneral ? `检索范围 ${selected.size} 份` : `检索范围 ${selected.size} 篇`}</span>
-                <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                  {agentOptions.map((o) => (
-                    <button key={o.value} className={`chip ${agent === o.value ? "accent" : ""}`}
-                      style={{ cursor: "pointer" }}
-                      title={o.ready ? `强制使用 ${o.label} Agent`
-                        : `${o.label} Agent 未实装 · 选中后由 Reader 降级执行（trace 如实标注）`}
-                      onClick={() => setAgent(o.value)}>
-                      {o.label}{o.ready ? "" : "·"}
-                    </button>
-                  ))}
-                </span>
-                {lastTurn?.final && (
-                  <span className={`chip ${lastTurn.final.mode === "generative" ? "ok" : "warn"}`}
-                    style={{ marginLeft: "auto" }}>
-                    {lastTurn.final.mode === "generative" ? "生成式 · 引用已后验"
-                      : lastTurn.final.mode === "refusal" ? "范围外拒答"
-                      : lastTurn.final.mode === "none" ? "未找到依据"
-                      : "抽取式证据模式"}
+            </div>
+
+            <div className="dock-wrap">
+              {showJump && (
+                <button className="msg-jump" aria-label="回到底部" title="回到底部"
+                  onClick={() => {
+                    atBottomRef.current = true;
+                    setShowJump(false);
+                    msgsRef.current?.scrollTo({ top: msgsRef.current.scrollHeight, behavior: "smooth" });
+                  }}>↓</button>
+              )}
+              <div className="dock">
+                <div className="dock-row">
+                  {busy && <span className="dock-busy-bar" aria-hidden />}
+                  <textarea ref={taRef} className="dock-input" rows={1}
+                    value={question}
+                    onChange={(e) => {
+                      setQuestion(e.target.value);
+                      e.target.style.height = "auto";
+                      e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        ask();
+                      }
+                    }}
+                    placeholder={busy ? "Agent 执行中…"
+                      : isGeneral ? "对选中的文档提问，每句回答可溯源到原文…"
+                      : "对选中的论文提问，每句回答可溯源到原文…"}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="dock-tools">
+                  <button className={`dock-tool${thinkEnabled ? " on" : ""}`}
+                    data-testid="think-switch" aria-pressed={thinkEnabled}
+                    title="深度思考：回答前先流式展示模型思维链（可随时开关，仅本轮生效）"
+                    onClick={flipThink}>✦</button>
+                  <button className="dock-tool" onClick={() => setShowScope((s) => !s)}
+                    title={`检索范围：${scopeTitle}`}>
+                    <List size={15} />
+                  </button>
+                  <span className="tool-label" title={scopeTitle}>
+                    {selected.size > 0 ? `已选 ${selected.size} 篇` : "全库检索"}
                   </span>
+                  <span style={{ flex: 1 }} />
+                  <AgentDrop value={agent} options={agentOptions} onChange={setAgent} />
+                  {busy ? (
+                    <button className="send-btn stop" data-testid="stop-btn" onClick={stopGeneration}
+                      aria-label="停止生成" title="停止生成">■</button>
+                  ) : (
+                    <button className="send-btn" onClick={() => ask()}
+                      disabled={busy || !selected.size} aria-label="发送">↑</button>
+                  )}
+                </div>
+                {showScope && (
+                  <div className="scope-pop">
+                    <p className="kv" style={{ marginBottom: "var(--space-2)" }}>
+                      {isGeneral ? "选择参与检索的文档" : "选择参与检索的论文"}
+                    </p>
+                    {papers.filter((p) => p.parsed).map((p) => (
+                      <label key={p.id} style={{ display: "flex", gap: "var(--space-2)",
+                        alignItems: "center", padding: "4px 0", fontSize: "var(--text-sm)",
+                        cursor: "pointer" }}>
+                        <input type="checkbox" checked={selected.has(p.id)}
+                          onChange={(e) => setSelected((s) => {
+                            const n = new Set(s);
+                            if (e.target.checked) {
+                              if (n.size >= 8) {           // 前端钳制：选文上限 ≤8（与后端护栏一致）
+                                setCapHint("选文上限 8 篇，已停止勾选（超出部分不参与检索）");
+                                e.target.checked = false;
+                                return n;
+                              }
+                              n.add(p.id);
+                            } else {
+                              n.delete(p.id);
+                            }
+                            setCapHint("");
+                            return n;
+                          })} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis",
+                          whiteSpace: "nowrap" }}>
+                          {p.title.slice(0, 30)}
+                        </span>
+                      </label>
+                    ))}
+                    {papers.filter((p) => p.parsed).length === 0 && (
+                      <p className="kv">{isGeneral ? "文档库为空，先去上传 PDF。" : "文献库为空，先去上传 PDF。"}</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-            <div className="statusbar">
-              {lastTurn?.failed
-                ? "图执行中断 · 断点已保存 · 点击「继续执行」从失败节点恢复（已完成步骤不重跑）"
-                : lastTurn?.final
-                  ? `图执行完成 · 用时 ${lastTurn.final.elapsed ?? "-"}s · 论断 ${lastTurn.final.claims.length} 条`
-                  : busy ? "状态图执行中：Router → Planner → Executor → Verifier → Responder"
-                  : "就绪"}
-            </div>
           </div>
         </div>
-        {showTrace && (
-          <TracePanel tl={lastTurn?.tl ?? []} busy={busy} final={lastTurn?.final ?? null} />
-        )}
+
+        {/* Trace 右侧抽屉（topbar 图标唤出，默认收起；滑入不遮挡消息交互） */}
+        <div className={`trace-drawer${traceOpen ? " open" : ""}`} data-testid="trace-drawer">
+          <div className="trace-drawer-head">
+            <b>Agent Trace</b>
+            <span style={{ flex: 1 }} />
+            <button className="topbar-icon" onClick={flipTrace} title="收起">✕</button>
+          </div>
+          <div className="trace-drawer-body">
+            <TracePanel tl={lastTurn?.tl ?? []} busy={busy} final={lastTurn?.final ?? null} />
+          </div>
+        </div>
       </div>
       {evidence && <EvidenceModal loc={evidence} onClose={() => setEvidence(null)} />}
+    </div>
+  );
+}
+
+/** Agent 选择下拉（ChatGLM「模型选择 ˅」同款位：dock 工具行右端，向上弹菜单）。 */
+function AgentDrop({ value, options, onChange }: {
+  value: string;
+  options: { value: string; label: string; ready: boolean }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const sel = options.find((o) => o.value === value) ?? options[0];
+  return (
+    <div className="agent-drop">
+      {open && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 39 }}
+          onClick={() => setOpen(false)} aria-hidden />
+      )}
+      <button className="agent-drop-btn" onClick={() => setOpen((o) => !o)}
+        aria-expanded={open} title="选择承接本次提问的 Agent">
+        {sel.label}
+        <ChevronRight size={11} style={{ transform: "rotate(90deg)" }} />
+      </button>
+      {open && (
+        <div className="agent-drop-menu" role="menu">
+          {options.map((o) => (
+            <button key={o.value} role="menuitem"
+              className={`agent-drop-item${o.value === value ? " sel" : ""}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}>
+              {o.label}
+              <span className="drop-note">{o.ready ? "" : "降级执行"}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -564,7 +1040,8 @@ function FinalMeta({ final }: { final: FinalEvent }) {
     .map((g) => [g, guardLabel(g)] as const)
     .filter(([, label]) => label);
   const hasMeta = final.mode !== "generative" || guards.length > 0
-    || final.agent || (final.handoffs?.length ?? 0) > 0;
+    || final.agent || (final.handoffs?.length ?? 0) > 0
+    || (final.partial_missing?.length ?? 0) > 0;
   if (!hasMeta) return null;
   return (
     <p style={{ margin: "var(--space-2) 0 0", display: "flex", gap: "var(--space-2)",
@@ -577,12 +1054,17 @@ function FinalMeta({ final }: { final: FinalEvent }) {
         </span>
       )}
       {final.mode === "extractive" && <span className="badge warn">抽取式证据模式（无 LLM）</span>}
+      {(final.partial_missing?.length ?? 0) > 0 && (
+        <span className="badge warn" title={`以下子问题文档未明确说明：\n${final.partial_missing!.join("\n")}`}>
+          ◐ 部分回答 · {final.partial_missing!.length} 个子问题未在文档中找到明确表述
+        </span>
+      )}
       {guards.map(([g, label]) => <span key={g} className="badge warn">⚠ {label}</span>)}
     </p>
   );
 }
 
-/** Writer Agent 写作大纲（artifact 下发，正文按同一大纲生成）。 */
+/** Writer Agent 写作大纲（artifact 下发，正文按同一大纲流式生成）。 */
 function OutlineView({ outline }: { outline: Outline }) {
   return (
     <div style={{ marginTop: "var(--space-3)", border: "1px dashed var(--line)",
@@ -731,39 +1213,6 @@ function CompareTableView({ table, anchors, onEvidence }: {
   );
 }
 
-/** [E#] → 可点击锚点徽章（anchors 提供页码/章节，点击弹原文浮层 + bbox 高亮）。 */
-function AnswerWithAnchors({ text, anchors, onEvidence }: {
-  text: string;
-  anchors?: Record<string, Anchor>;
-  onEvidence?: (eid?: string, anchor?: Anchor, quote?: string) => void;
-}) {
-  const parts = text.split(/(\[E\d+\])/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        /^\[E\d+\]$/.test(part) ? (
-          (() => {
-            const a = anchors?.[part];
-            if (!a) {
-              return <span key={i} className="chip accent anchor-chip num" style={{ opacity: 0.55 }}
-                title="无锚点数据（历史轮次或降级模式）">{part}</span>;
-            }
-            return (
-              <span key={i} className="chip accent anchor-chip clickable num"
-                onClick={() => onEvidence?.(part, a)}
-                title={`点击查看原文 p${a.page} · §${secName(a.section_path)}`}>
-                {part} · p{a.page} · §{secName(a.section_path)}
-              </span>
-            );
-          })()
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </>
-  );
-}
-
 /** 原文溯源浮层：PDF 画布渲染对应页 + bbox 红框高亮；无 PDF 数据时回退引文卡片。 */
 function EvidenceModal({ loc, onClose }: { loc: EvidenceLoc; onClose: () => void }) {
   const { anchor, quote, eid } = loc;
@@ -796,7 +1245,8 @@ function EvidenceModal({ loc, onClose }: { loc: EvidenceLoc; onClose: () => void
   );
 }
 
-/** 逐论断溯源：三态徽章（已验证/需核对/未验证），support 可点击跳原文。 */
+/** 逐论断溯源：三态徽章（已验证/需核对/未验证），support 可点击跳原文。
+ *  整块默认折叠（ChatGLM 式 pill 头 + 校验统计摘要），用户点击展开按条查看。 */
 function Claims({ claims, anchors, hits, onEvidence }: {
   claims: Claim[];
   anchors?: Record<string, Anchor>;
@@ -804,13 +1254,31 @@ function Claims({ claims, anchors, hits, onEvidence }: {
   onEvidence?: (eid?: string, anchor?: Anchor, quote?: string) => void;
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
   if (!claims.length) return null;
+  const supported = claims.filter((c) => c.status === "supported").length;
+  const needs = claims.filter((c) => c.status === "needs_check").length;
+  const absent = claims.filter((c) => c.status === "absent").length;
+  const unverified = claims.length - supported - needs - absent;
   return (
-    <div style={{ marginTop: "var(--space-3)" }}>
-      <p className="kv" style={{ margin: 0 }}>
-        <b>逐论断溯源</b>（L1-L4 校验 · 点击出处查看原文）
-      </p>
-      {claims.map((c, i) => (
+    <div className={`claims-block acc${expanded ? " open" : ""}`}>
+      <button className="think-head claims-head" data-testid="claims-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        title="L1-L4 校验 · 展开逐条查看论断与出处">
+        <Stamp kind="verified" size="xs" />
+        <span>
+          逐论断溯源 · {claims.length} 条
+          {supported > 0 && `（已验证 ${supported}` }
+          {needs > 0 && `${supported > 0 ? " · " : "（"}需核对 ${needs}` }
+          {absent > 0 && `${supported > 0 || needs > 0 ? " · " : "（"}未涉及 ${absent}` }
+          {unverified > 0 && `${supported > 0 || needs > 0 || absent > 0 ? " · " : "（"}未验证 ${unverified}` }
+          {supported > 0 || needs > 0 || absent > 0 || unverified > 0 ? "）" : ""}
+        </span>
+        <span className="acc-caret think-caret" aria-hidden />
+      </button>
+      <div className="acc-body"><div className="acc-inner">
+        <div style={{ paddingTop: "var(--space-2)" }}>
+          {claims.map((c, i) => (
         <div key={i}
           className={`claim ${c.status === "unsupported" ? "unverified"
             : c.status === "absent" ? "absent"
@@ -876,8 +1344,10 @@ function Claims({ claims, anchors, hits, onEvidence }: {
           {open === i && c.status === "unsupported" && (
             <div className="evidence"><i>检索结果中未找到支撑此论断的原文，请人工核对。</i></div>
           )}
+            </div>
+          ))}
         </div>
-      ))}
+      </div></div>
     </div>
   );
 }

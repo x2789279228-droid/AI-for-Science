@@ -19,7 +19,10 @@ interface ShelfBook {
   savedPage?: number;   // 续读页码(1 基,来自 rdpos 存档)
 }
 
-/** 封面渐变三款轮换(全部在品牌蓝阶内)。 */
+/** 封面渐变三款轮换(全部在品牌蓝阶内)。
+ *  ⚠ 仅 classic 生效：riso/majorelle/wuxia 由 globals.css 各自 [data-theme] .book 块
+ *  整体接管封面设计（含 !important 背景覆盖，属各肤艺术指导而非补丁）。新增皮肤必须
+ *  同步补该块，否则书架回落 classic 蓝阶渐变——同步点已在 design-tokens.md 使用规则 7 备案。 */
 const COVER_STYLES = [
   "linear-gradient(165deg, var(--blue-500) 0%, var(--blue-700) 100%)",
   "linear-gradient(165deg, var(--sky-500) 0%, var(--blue-600) 100%)",

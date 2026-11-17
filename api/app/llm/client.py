@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 import httpx
@@ -143,11 +143,18 @@ def chat_json_validated(messages: list[dict], model_cls: Any, *, retries: int = 
 
 def stream_chat(messages: list[dict], model: str = "", temperature: float | None = None,
                 max_tokens: int = 2048, module: str = "", audit_prompt: str = "",
-                prompt_version: str = "") -> Generator[str, None, None]:
+                prompt_version: str = "", thinking: bool = False,
+                on_reasoning: Callable[[str], None] | None = None,
+                should_stop: Callable[[], bool] | None = None) -> Generator[str, None, None]:
     """SSE 流式：逐 token 产出 delta 文本；失败时产出空流（上层降级）。
 
     传入 module 时在流结束（finally）落一条 qa_logs 审计（guardrail=stream），
     让主问答路径的 prompt 版本号也可审计——此前流式路径不落审计，是审计盲区。
+    thinking=True 显式启用深度思考（火山方舟 doubao-seed：payload thinking={"type":"enabled"}），
+    思维链经 delta.reasoning_content 返回、由 on_reasoning 回调逐段交付调用方（不进正文流）；
+    thinking=False 维持既有行为（尊重 llm_thinking_disabled 全局关闭）。content 产出完全不变。
+    should_stop：逐 SSE 行检查的协作取消（用户停止生成）——思维链与正文阶段都即时生效，
+    命中即提前断流（已产出部分保留，finally 审计照常）。
     """
     ep = _endpoint()
     if not ep:
@@ -158,10 +165,13 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                "temperature": settings.llm_temperature if temperature is None else temperature,
                "max_tokens": max_tokens,
                "stream_options": {"include_usage": True}}   # 末块带 usage；不支持的端点忽略
-    if settings.llm_thinking_disabled:
+    if thinking:
+        payload["thinking"] = {"type": "enabled"}
+    elif settings.llm_thinking_disabled:
         payload["thinking"] = {"type": "disabled"}
     t0 = time.time()
     parts: list[str] = []
+    reasoning_chars = 0
     usage: dict = {}
     try:
         with httpx.stream("POST", f"{base_url}/chat/completions",
@@ -169,6 +179,8 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                           json=payload, timeout=180) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
+                if should_stop is not None and should_stop():
+                    break
                 if not line.startswith("data:"):
                     continue
                 body = line[5:].strip()
@@ -179,6 +191,11 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                     if isinstance(parsed.get("usage"), dict):   # usage 块（include_usage 末块）
                         usage = parsed["usage"]
                     delta = parsed["choices"][0].get("delta", {})
+                    if on_reasoning is not None:
+                        rpiece = delta.get("reasoning_content")
+                        if rpiece:
+                            reasoning_chars += len(rpiece)
+                            on_reasoning(rpiece)
                     piece = delta.get("content")
                     if piece:
                         parts.append(piece)
@@ -195,7 +212,8 @@ def stream_chat(messages: list[dict], model: str = "", temperature: float | None
                           prompt_tokens=int(usage.get("prompt_tokens") or 0),
                           completion_tokens=int(usage.get("completion_tokens") or 0),
                           latency_ms=int((time.time() - t0) * 1000),
-                          guardrail="stream", prompt_version=prompt_version)
+                          guardrail=f"stream{f'(+R{reasoning_chars})' if reasoning_chars else ''}",
+                          prompt_version=prompt_version)
             except Exception:  # noqa: BLE001, S110 —— 审计失败不影响已产出的流
                 pass
 

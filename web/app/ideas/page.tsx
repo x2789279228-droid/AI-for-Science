@@ -159,7 +159,7 @@ function GapFlipCard({ x, idx, titleOf }: {
           </div>
         </div>
         <div className="flip-face flip-back kv"
-          style={{ border: "1px solid var(--sky-400)", borderRadius: 8, padding: "var(--space-3)",
+          style={{ border: "1px solid var(--hl-border)", borderRadius: 8, padding: "var(--space-3)",
             background: "var(--accent-soft)" }}>
           <b style={{ fontSize: 12 }}>缝隙判定依据</b>
           <p style={{ fontSize: 11, opacity: 0.85, margin: "6px 0" }}>

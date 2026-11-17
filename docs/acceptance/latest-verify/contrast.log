@@ -1,0 +1,69 @@
+# 皮肤对比度审计（自动生成，请勿手改）
+
+- 生成时间：2026-11-16 14:28 +08
+- 取值源：web/app/tokens.css
+- 门禁：核心文字对 FAIL <3.0（拦截）；弱化文字对 WARN <4.5（记录不拦截）
+
+## classic
+
+| 前景 | 背景 | 对比度 | 结论 | 用途 |
+|---|---|---|---|---|
+| --ink | --bg | 16.70:1 | ✅ PASS | 主文字/主底 |
+| --ink | --surface | 17.75:1 | ✅ PASS | 主文字/卡片 |
+| --ink-2 | --surface | 7.69:1 | ✅ PASS | 次级文字/卡片 |
+| --accent | --accent-contrast | 5.92:1 | ✅ PASS | 主按钮字/accent 底 |
+| --accent | --surface | 5.92:1 | ✅ PASS | 链接与激活文字/卡片 |
+| --ink-3 | --surface | 2.58:1 | ⚠️ WARN | 占位弱化文字/卡片 |
+| --ink-3 | --bg | 2.42:1 | ⚠️ WARN | 占位弱化文字/主底 |
+| --claim-absent | --surface | 5.47:1 | ✅ PASS | absent 中性徽章/卡片 |
+
+小计：FAIL=0 · WARN=2 · PASS=6
+
+## riso
+
+| 前景 | 背景 | 对比度 | 结论 | 用途 |
+|---|---|---|---|---|
+| --ink | --bg | 14.98:1 | ✅ PASS | 主文字/主底 |
+| --ink | --surface | 16.05:1 | ✅ PASS | 主文字/卡片 |
+| --ink-2 | --surface | 6.51:1 | ✅ PASS | 次级文字/卡片 |
+| --accent | --accent-contrast | 8.81:1 | ✅ PASS | 主按钮字/accent 底 |
+| --accent | --surface | 7.85:1 | ✅ PASS | 链接与激活文字/卡片 |
+| --ink-3 | --surface | 2.94:1 | ⚠️ WARN | 占位弱化文字/卡片 |
+| --ink-3 | --bg | 2.75:1 | ⚠️ WARN | 占位弱化文字/主底 |
+| --claim-absent | --surface | 4.87:1 | ✅ PASS | absent 中性徽章/卡片 |
+
+小计：FAIL=0 · WARN=2 · PASS=6
+
+## majorelle
+
+| 前景 | 背景 | 对比度 | 结论 | 用途 |
+|---|---|---|---|---|
+| --ink | --bg | 12.51:1 | ✅ PASS | 主文字/主底 |
+| --ink | --surface | 14.09:1 | ✅ PASS | 主文字/卡片 |
+| --ink-2 | --surface | 5.02:1 | ✅ PASS | 次级文字/卡片 |
+| --accent | --accent-contrast | 6.11:1 | ✅ PASS | 主按钮字/accent 底 |
+| --accent | --surface | 5.88:1 | ✅ PASS | 链接与激活文字/卡片 |
+| --ink-3 | --surface | 2.85:1 | ⚠️ WARN | 占位弱化文字/卡片 |
+| --ink-3 | --bg | 2.53:1 | ⚠️ WARN | 占位弱化文字/主底 |
+| --claim-absent | --surface | 5.26:1 | ✅ PASS | absent 中性徽章/卡片 |
+
+小计：FAIL=0 · WARN=2 · PASS=6
+
+## wuxia
+
+| 前景 | 背景 | 对比度 | 结论 | 用途 |
+|---|---|---|---|---|
+| --ink | --bg | 14.89:1 | ✅ PASS | 主文字/主底 |
+| --ink | --surface | 13.77:1 | ✅ PASS | 主文字/卡片 |
+| --ink-2 | --surface | 6.33:1 | ✅ PASS | 次级文字/卡片 |
+| --accent | --accent-contrast | 5.37:1 | ✅ PASS | 主按钮字/accent 底 |
+| --accent | --surface | 4.96:1 | ✅ PASS | 链接与激活文字/卡片 |
+| --ink-3 | --surface | 3.47:1 | ⚠️ WARN | 占位弱化文字/卡片 |
+| --ink-3 | --bg | 3.75:1 | ⚠️ WARN | 占位弱化文字/主底 |
+| --claim-absent | --surface | 4.34:1 | ⚠️ WARN | absent 中性徽章/卡片 |
+
+小计：FAIL=0 · WARN=3 · PASS=5
+
+== 汇总 ==
+
+FAIL=0 · WARN=9 → ✅ 门禁通过

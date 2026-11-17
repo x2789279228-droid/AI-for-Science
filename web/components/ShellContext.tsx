@@ -9,24 +9,18 @@
  * - introDone 品牌动画结束信号(导航 stagger 入场的触发器)
  * - docMode 双模式:"scholar"(专业模式,学术文献)|"general"(普通模式,任意 PDF 文档),
  *   localStorage 持久化;决定导航项、文献列表/选文数据源与上传归属(见 AppShell)
+ *
+ * v1.6：Theme/THEMES/isTheme 真身收敛至 lib/theme-registry.ts（design-tokens 使用
+ * 规则 7），此处 re-export 维持既有 import 面不变。
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { THEMES, isTheme, type Theme } from "@/lib/theme-registry";
 
-export type Theme = "classic" | "riso" | "majorelle" | "wuxia";
+export { THEMES, isTheme };
+export type { Theme };
 
 /** 双模式：scholar ↔ 后端 doc_type=paper；general ↔ doc_type=general */
 export type DocMode = "scholar" | "general";
-
-/** 皮肤元数据(外观面板唯一取值依据;swatch = 主色/点缀色/底色) */
-export const THEMES: { id: Theme; label: string; en: string; desc: string; swatch: [string, string, string] }[] = [
-  { id: "classic", label: "经典浅蓝", en: "CLASSIC", desc: "默认工作皮肤 · 品牌蓝 × 浅蓝天", swatch: ["#2456e6", "#38bdf8", "#f7f8fa"] },
-  { id: "majorelle", label: "蓝城花园", en: "MAJORELLE", desc: "马拉喀什 · 马约尔蓝 × 藏红花黄", swatch: ["#4a4ae8", "#e8b33c", "#f6ecda"] },
-  { id: "wuxia", label: "玄墨夜行", en: "WUXIA", desc: "水墨江湖 · 玄墨 × 月白 × 鎏金朱砂", swatch: ["#e06448", "#d9a93c", "#16130f"] },
-  { id: "riso", label: "印刷海报", en: "RISO", desc: "品牌层 · Klein 蓝 × 国际橙", swatch: ["#2233c9", "#ff5f3c", "#faf1df"] },
-];
-
-export const isTheme = (v: string | null | undefined): v is Theme =>
-  v === "classic" || v === "riso" || v === "majorelle" || v === "wuxia";
 
 export const isDocMode = (v: string | null | undefined): v is DocMode =>
   v === "scholar" || v === "general";

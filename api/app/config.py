@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     # 火山方舟 doubao-seed 系列默认开思考；QA 场景置 1 关闭（thinking={"type":"disabled"}）
     llm_thinking_disabled: bool = False
+    # ChatGLM 式深度思考：仅 responder 流式调用启用（reasoning_content 经 SSE reasoning_delta
+    # 下发）。置 0 全局熔断——无论前端每请求开关状态如何一律直出（结构化调用始终关闭思考）。
+    llm_qa_thinking: bool = True
 
     # Embedding / Rerank
     embedding_api_key: str = ""
@@ -77,6 +80,9 @@ class Settings(BaseSettings):
     api_port: int = 8000
     # L4 语义支持 judge（verify.py）：批量一次调用判 claim 能否被证据推出；0 关闭
     semantic_judge: bool = True
+    # 检索面可答性 judge（v2.3.0 分级作答）：verifier 规则判缺时 LLM 逐面复核
+    # 「证据能否真正回答该面」（表格命中≠可回答）；关闭则纯标签口径。0 关闭
+    aspect_judge: bool = True
     # Prompt A/B 开关（app/prompts/*.yaml 的 variants 档位）：default | strict，运行时可切
     prompt_variant: str = "default"
     # GitHub 仓库搜索（4.4 复现性分）；无 token 时 GitHub API 限流 10 次/分，如实降级

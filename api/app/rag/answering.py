@@ -25,8 +25,13 @@ SYSTEM_QA = (
     "1. 只允许使用 <context> 中提供的证据片段作答，禁止使用任何外部知识。\n"
     "2. 每个事实性论断后必须紧跟引用标记，格式：[E编号]，编号取自证据片段的方括号标签"
     "（如 [E1]、[E3]），禁止引用 <context> 中不存在的编号。\n"
-    "3. 若 <context> 不足以回答，必须整体回答：「【未找到依据】检索到的片段无法回答该问题。」"
-    "并给出建议（换关键词/指定论文）。\n"
+    "3. 分级作答：问题是复合问题时先看哪些子问题有据可答。能答的子问题照常作答（带引用）；"
+    "答不了的子问题不得脑补，在回答末尾单列一节「未能回答的部分」，逐条写明"
+    "「文档未明确说明：<子问题>」。证据中与子问题直接相关的表述（操作步骤、用量约束、参数等）"
+    "即使零散，也要如实转述并紧跟引用，再注明「文档仅提及该表述，未进一步说明」；"
+    "不得因表述零散而把相关子问题整体拒答。仅当所有子问题都无据可答时，才整体回答："
+    "「【未找到依据】检索到的片段无法回答该问题。」并给出建议（换关键词/指定论文）。"
+    "「未能回答的部分」一节只允许用「未明确说明/未能回答」措辞，禁止出现「未找到依据」字样。\n"
     "4. 不确定的内容宁可不写；禁止编造数字、结论与引用；数值必须逐字来自证据原文。"
 )
 
@@ -61,8 +66,13 @@ SYSTEM_QA_GENERAL = (
     "1. 只允许使用 <context> 中提供的证据片段作答，禁止使用任何外部知识。\n"
     "2. 每个事实性论断后必须紧跟引用标记，格式：[E编号]，编号取自证据片段的方括号标签"
     "（如 [E1]、[E3]），禁止引用 <context> 中不存在的编号。\n"
-    "3. 若 <context> 不足以回答，必须整体回答：「【未找到依据】检索到的片段无法回答该问题。」"
-    "并给出建议（换关键词/指定文档）。\n"
+    "3. 分级作答：问题是复合问题时先看哪些子问题有据可答。能答的子问题照常作答（带引用）；"
+    "答不了的子问题不得脑补，在回答末尾单列一节「未能回答的部分」，逐条写明"
+    "「文档未明确说明：<子问题>」。证据中与子问题直接相关的表述（操作步骤、用量约束、参数等）"
+    "即使零散，也要如实转述并紧跟引用，再注明「文档仅提及该表述，未进一步说明」；"
+    "不得因表述零散而把相关子问题整体拒答。仅当所有子问题都无据可答时，才整体回答："
+    "「【未找到依据】检索到的片段无法回答该问题。」并给出建议（换关键词/指定文档）。"
+    "「未能回答的部分」一节只允许用「未明确说明/未能回答」措辞，禁止出现「未找到依据」字样。\n"
     "4. 不确定的内容宁可不写；禁止编造数字、结论与引用；数值必须逐字来自证据原文。"
 )
 
@@ -248,11 +258,15 @@ def validate_citations(answer: str, eid_map: dict[int, dict]) -> tuple[str, list
     return cleaned, sorted(set(guardrails))
 
 
-def near_evidence_block(hits: list[dict], k: int = 3) -> str:
-    """拒答时附「最接近的 k 条证据」（设计文档拒答策略：供人工判断，而非硬编）。"""
+def near_evidence_block(hits: list[dict], k: int = 3, missing: list[str] | None = None) -> str:
+    """拒答时附「最接近的 k 条证据」（设计文档拒答策略：供人工判断，而非硬编）。
+    missing（v2.3.0）：证据缺失的检索面清单——先如实列出「文档未明确说明」的方面，
+    用户不再看到「明明有相关内容却说没有」的整题拒答。"""
     if not hits:
         return ""
-    lines = ["", "", "> **最接近的证据**（未找到明确表述，以下供人工判断）："]
+    head = "、".join(missing[:4]) if missing else ""
+    title = (f"未在文档中找到明确表述的方面：{head}。" if head else "未找到明确表述。")
+    lines = ["", "", f"> **{title}**最接近的证据（供人工判断）："]
     for i, h in enumerate(hits[:k], 1):
         sec = h.get("section_path") or "前言"
         lines.append(f"> {i}. [E{i}] p{h['page'] + 1} · §{sec} · {h['text'][:140].strip()}…")
@@ -358,21 +372,34 @@ def llm_claims(answer: str, hits: list[dict]) -> tuple[list[dict], dict[int, dic
 
 
 def build_qa_messages(question: str, hits: list[dict], language: str = "",
-                      doc_mode: str = "paper") -> list[dict]:
+                      doc_mode: str = "paper", aspects: list[str] | None = None,
+                      missing: list[str] | None = None) -> list[dict]:
     """QA 消息组装。doc_mode=general 时选用普通模式槽位（system_qa_general）——
-    两套提示词并存：学术槽位文本与版本不受普通模式影响。"""
+    两套提示词并存：学术槽位文本与版本不受普通模式影响。
+    aspects/missing（v2.3.0 分级作答）：复合问题的子问题清单与证据缺失面，
+    供 responder 按「能答的作答 + 缺失面单列」分级输出；均为空时消息与旧版一致。"""
     context, _ = format_context(hits)
     if doc_mode == "general":
         system, _ = _resolve("qa", "system_qa_general", SYSTEM_QA_GENERAL)
     else:
         system, _ = _resolve("qa", "system_qa", SYSTEM_QA)
+    blocks = [f"<context>\n{context}\n</context>"]
+    if aspects:
+        blocks.append("<sub_questions>\n" + "\n".join(f"- {a}" for a in aspects) + "\n</sub_questions>")
+    if missing:
+        blocks.append("<coverage_note>\n"
+                      "以下子问题在检索阶段未获得直接证据（检索面缺失），"
+                      "回答时请在「未能回答的部分」一节如实单列：\n"
+                      + "\n".join(f"- {m}" for m in missing) + "\n</coverage_note>")
+    blocks.append(f"问题：{question}")
     return [{"role": "system", "content": _with_language(system, language)},
-            {"role": "user", "content": f"<context>\n{context}\n</context>\n\n问题：{question}"}]
+            {"role": "user", "content": "\n\n".join(blocks)}]
 
 
 def hit_summary(hits: list[dict], limit: int = 8) -> list[dict]:
     """SSE retrieval 事件的 hits 载荷（页码 1 基；协议与前端兼容）。"""
-    keys = ("chunk_id", "paper_id", "section_path", "score", "rrf", "kind", "aspect", "rerank")
+    keys = ("chunk_id", "paper_id", "section_path", "score", "rrf", "kind", "aspect",
+            "aspects", "rerank")
     out = []
     for h in hits[:limit]:
         item = {k: h.get(k) for k in keys} | {"text": h.get("text", "")[:300]}

@@ -1,10 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Health, Paper, fetchHealth, listPapers } from "@/lib/api";
+import {
+  Health, Paper, convKeyFor, deleteConversation, fetchHealth, listConversations, listPapers,
+  renameConversation,
+} from "@/lib/api";
 import { IslandProvider, useIsland } from "@/lib/island";
 import { RisoFlagGlyph } from "./Illustrations";
 import { MedinaArchGlyph } from "./MedinaIllustrations";
@@ -15,9 +18,14 @@ import { ShellProvider, useShell } from "./ShellContext";
 import AppearancePanel from "./AppearancePanel";
 import BrandIntro from "./BrandIntro";
 import DynamicIsland from "./DynamicIsland";
+import ChatHistoryList, { ConversationItem } from "./chat/ChatHistoryList";
 import {
   Activity, Chat, Compass, Eye, Graph, Judge, Library, LogoMark, Palette, PanelLeft, Pen, Plus, Reader,
 } from "./icons";
+
+/** 跨组件会话协调事件（window CustomEvent，静默无 toast）：
+ *  conv-new（侧栏→chat：新建）/ conv-open（侧栏→chat：打开指定会话）
+ *  conv-refresh（chat↔侧栏：列表已变，双方重拉）/ conv-deleted（侧栏→chat：删除回传） */
 
 interface NavItem {
   href: string;
@@ -69,12 +77,15 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { immersive, setImmersive, collapsed, toggleCollapsed, theme, docMode, setDocMode } = useShell();
   const isGeneral = docMode === "general";
+  const isChat = pathname === "/chat";
   const [papers, setPapers] = useState<Paper[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const island = useIsland();
   const llmPrev = useRef<boolean | null>(null);
   const [refsCount, setRefsCount] = useState<number | null>(null);
   const [skinOpen, setSkinOpen] = useState(false);      // 外观面板开合(v1.3)
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [activeConv, setActiveConv] = useState("");
 
   // 数据规模行 refs 数:C2 首页工作台拉取图谱统计后写入 sessionStorage,侧栏读缓存(零额外请求)
   useEffect(() => {
@@ -98,7 +109,31 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
     load();
     const t = setInterval(load, 6000);
     return () => { alive = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGeneral]);
+
+  // 最近对话：按模式过滤（专业/普通各自的历史）；conv-refresh 事件同步（chat 页广播）
+  const convMode: "paper" | "general" = isGeneral ? "general" : "paper";
+  const refreshConvs = useCallback(() => {
+    listConversations(50, true, convMode).then(setConversations).catch(() => { /* 静默 */ });
+  }, [convMode]);
+
+  useEffect(() => {
+    refreshConvs();
+    setActiveConv(localStorage.getItem(convKeyFor(convMode)) ?? "");
+    const onRefresh = () => {
+      refreshConvs();
+      setActiveConv(localStorage.getItem(convKeyFor(convMode)) ?? "");
+    };
+    window.addEventListener("meridian:conv-refresh", onRefresh);
+    return () => window.removeEventListener("meridian:conv-refresh", onRefresh);
+  }, [refreshConvs, convMode]);
+
+  // 窄屏一次性自动折叠（不监听 resize 防拉扯）
+  useEffect(() => {
+    if (window.innerWidth < 1024 && !collapsed) toggleCollapsed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 切到普通模式时若停在学术专属页 → 回文献库（导航已隐藏，防滞留）。
   // 详情路由（如 /reader/[id]）按前缀匹配，不误伤普通模式内的子页面。
@@ -134,9 +169,45 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCollapsed]);
 
+  // ---- 会话操作（侧栏上下文区块） ----
+
+  const openConv = (id: string) => {
+    localStorage.setItem(convKeyFor(convMode), id);
+    setActiveConv(id);
+    window.dispatchEvent(new CustomEvent("meridian:conv-open", { detail: { id } }));
+    if (!isChat) router.push("/chat");
+  };
+
+  const newChat = () => {
+    localStorage.removeItem(convKeyFor(convMode));
+    setActiveConv("");
+    window.dispatchEvent(new CustomEvent("meridian:conv-new"));
+    if (!isChat) router.push("/chat");
+  };
+
+  const renameConv = (id: string, title: string) => {
+    renameConversation(id, title)
+      .then(() => window.dispatchEvent(new CustomEvent("meridian:conv-refresh")))
+      .catch(() => island.emit({ key: "qa", kind: "error", title: "重命名失败" }));
+  };
+
+  const deleteConv = (id: string) => {
+    deleteConversation(id)
+      .then(() => {
+        window.dispatchEvent(new CustomEvent("meridian:conv-refresh"));
+        window.dispatchEvent(new CustomEvent("meridian:conv-deleted", { detail: { id } }));
+        if (id === activeConv) {
+          localStorage.removeItem(convKeyFor(convMode));
+          setActiveConv("");
+        }
+      })
+      .catch(() => island.emit({ key: "qa", kind: "error", title: "删除会话失败" }));
+  };
+
   return (
     <div className={`app${immersive ? " immersive" : ""}${collapsed ? " nav-collapsed" : ""}`}>
       <aside className="sidebar">
+        {/* 1. 品牌行 */}
         <div className="side-brand">
           <span className="brand-mark">
             {theme === "riso" ? <RisoFlagGlyph size={22} />
@@ -146,12 +217,24 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           </span>
           {!collapsed && <span className="brand-name">Meridian</span>}
           {!collapsed && <span className="brand-badge">{isGeneral ? "DOCS" : "SCHOLAR"}</span>}
+          {!collapsed && <span style={{ flex: 1 }} />}
+          {!collapsed && (
+            <button className="mini-btn" onClick={toggleCollapsed}
+              title="折叠侧边栏（[）"
+              style={{ width: 24, height: 24, padding: 0, display: "inline-flex",
+                alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+              <PanelLeft size={13} />
+            </button>
+          )}
         </div>
 
-        <Link href="/" className="side-cta" title={isGeneral ? "上传普通文档" : "上传论文"}>
-          <Plus size={16} /> {!collapsed && (isGeneral ? "上传文档" : "上传论文")}
+        {/* 2. 新对话（ChatGLM 式整宽主按钮；已在 /chat 时就地新建，否则跳转） */}
+        <Link href="/chat" className="side-cta" title="新对话"
+          onClick={() => newChat()}>
+          <Plus size={16} /> {!collapsed && "新对话"}
         </Link>
 
+        {/* 3. 功能导航（全部模块入口） */}
         {!collapsed && (
           <div className="side-group">
             <span className="side-group-label">模块</span>
@@ -180,6 +263,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           })}
         </div>
 
+        {/* 4. 模式切换 */}
         {!collapsed && (
           <div className="side-group" style={{ marginTop: "auto" }}>
             <span className="side-group-label">模式</span>
@@ -213,7 +297,17 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {!collapsed && (
+        {/* 5. 上下文区块：/chat → 最近对话；其他页 → 文献树 */}
+        {!collapsed && isChat && (
+          <>
+            <span className="side-sec-label">
+              最近对话 <em className="sec-count">{conversations.length}</em>
+            </span>
+            <ChatHistoryList items={conversations} activeId={activeConv}
+              onOpen={openConv} onRename={renameConv} onDelete={deleteConv} />
+          </>
+        )}
+        {!collapsed && !isChat && (
           <div className="side-group side-papers">
             <span className="side-group-label">
               {isGeneral ? "文档库" : "文献库"} <em>{papers.length}</em>
@@ -241,6 +335,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
+        {/* 6. 底部：用户行 + 外观 + （折叠态）展开钮 */}
         <div className="side-footer">
           <span className="avatar">M</span>
           {!collapsed && <span className="side-user">Meridian Demo</span>}
@@ -259,13 +354,15 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
             </button>
             <AppearancePanel open={skinOpen} onClose={() => setSkinOpen(false)} />
           </div>
-          <button className="mini-btn" onClick={toggleCollapsed}
-            title={collapsed ? "展开侧边栏（[）" : "折叠侧边栏（[）"}
-            style={{ marginLeft: collapsed ? 0 : "auto", flex: collapsed ? "none" : "none",
-              width: 24, height: 24, padding: 0, display: "inline-flex",
-              alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
-            <PanelLeft size={13} />
-          </button>
+          {collapsed && (
+            <button className="mini-btn" onClick={toggleCollapsed}
+              title="展开侧边栏（[）"
+              style={{ marginLeft: 0, width: 24, height: 24, padding: 0,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                borderRadius: 8 }}>
+              <PanelLeft size={13} />
+            </button>
+          )}
         </div>
       </aside>
 

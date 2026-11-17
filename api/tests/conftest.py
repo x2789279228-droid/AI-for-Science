@@ -16,7 +16,7 @@ os.environ["SCHOLAR_DATA_DIR"] = str(_SESSION_DIR)
 # 凭据密闭（本机全局 env 泄漏史：MINIMAX_API_KEY 全局存在，必须**直接赋值**清空，
 # setdefault 对已存在的全局 key 无效——test_4_audit_log 曾因此 llm_configured=True）
 for _k in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER", "DEEPSEEK_API_KEY",
-           "MINIMAX_API_KEY", "DASHSCOPE_API_KEY"):
+           "MINIMAX_API_KEY", "DASHSCOPE_API_KEY", "RERANK_API_KEY"):   # v2.3.0 仓库 .env 有 rerank key，须显式清空
     os.environ[_k] = ""
 os.environ.setdefault("MINERU_ENABLED", "off")
 os.environ.setdefault("EMBEDDING_BACKEND", "off")

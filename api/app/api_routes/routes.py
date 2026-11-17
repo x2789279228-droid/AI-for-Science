@@ -562,6 +562,32 @@ class ChatBody(BaseModel):
     conversation_id: str = ""   # 会话标识：断点续跑按会话归属；空则后端生成并经事件返回
     agent: str = "auto"         # Agent 指定：auto/reader/compare/graph/writer/viz（最高优先级）
     doc_mode: str = "paper"     # 双模式：paper（学术文献）| general（普通文档）——决定工具/意图白名单
+    thinking: bool = True       # 深度思考（ChatGLM 模式）：responder 流式 reasoning_delta；全局可熔断
+
+
+def _probe_doc_scope(paper_ids: list[str], question: str,
+                     top_k: int = 24, keep: int = 3) -> list[str] | None:
+    """隐式全库范围收窄（v2.3.0）：原问题一次混合检索探查，按每篇命中数取前 keep 篇。
+
+    背景：未勾选文档时全库（≤8 篇）参与 aspects×papers 笛卡尔规划，无关文档
+    （如"伴碟"）挤占 8 块证据预算稀释相关证据。命中文档 <2 篇或探查失败返回
+    None（保持全库，不阻断——compare 等需要多篇场景不被饿死）。
+    """
+    from ..rag import indexing  # 惰性导入：routes 顶层不依赖 rag
+
+    try:
+        res = indexing.hybrid_search(paper_ids, question, top_k=top_k)
+    except Exception:  # noqa: BLE001 —— 探查失败保持全库
+        return None
+    counts: dict[str, int] = {}
+    for h in res.get("hits", []):
+        pid = h.get("paper_id", "")
+        if pid in set(paper_ids):
+            counts[pid] = counts.get(pid, 0) + 1
+    if len(counts) < 2:
+        return None
+    ranked = sorted(counts, key=lambda p: -counts[p])[:keep]
+    return ranked if 0 < len(ranked) < len(paper_ids) else None
 
 
 @router.post("/chat")
@@ -600,6 +626,14 @@ def chat(body: ChatBody):
     paper_ids = body.paper_ids or paper_ids
     if not paper_ids:
         raise HTTPException(400, "文献库为空，请先上传 PDF")
+    # v2.3.0 隐式全库自动收窄：无关文档挤占证据预算（显式勾选绝不干预）
+    scope_note = ""
+    if not body.paper_ids and len(paper_ids) > 3:
+        pruned = _probe_doc_scope(paper_ids, question)
+        if pruned:
+            scope_note = (f"未指定文档：已按问题相关度自动收窄到 {len(pruned)} 篇"
+                          f"（全库 {len(paper_ids)} 篇参与探查，可在文献库勾选指定文档）")
+            paper_ids = pruned
     paper_cap_note = ""
     if len(paper_ids) > 8:   # 演示护栏：默认选文上限 ≤8 篇（超出截断并如实告知前端）
         paper_cap_note = f"选文超过上限 8 篇，已截断为前 8 篇参与检索（共 {len(paper_ids)} 篇请求）"
@@ -612,10 +646,17 @@ def chat(body: ChatBody):
     q: queue_mod.Queue = queue_mod.Queue()
     if paper_cap_note:                            # 先入队保证顺序：runner 事件之前到达前端
         q.put(("guardrail", {"message": paper_cap_note, "kind": "paper_cap"}))
+    if scope_note:                                # v2.3.0 范围收窄如实告知（可溯源）
+        q.put(("guardrail", {"message": scope_note, "kind": "doc_scope_pruned"}))
+    from ..agents import cancel  # 停止生成注册表：POST /chat/{thread_id}/stop 置位
+    cancel.register(thread_id)
+    # meta 先行下发 thread_id：流式期间前端即可发起停止（无需等 final 才知道线程）
+    q.put(("meta", {"thread_id": thread_id, "conversation_id": conv}))
     threading.Thread(target=runner.run_stream,
                      args=(question, paper_ids, q),
                      kwargs={"thread_id": thread_id, "conversation_id": conv, "turn": turn,
-                             "forced_agent": body.agent, "doc_mode": body.doc_mode},
+                             "forced_agent": body.agent, "doc_mode": body.doc_mode,
+                             "thinking": body.thinking},
                      daemon=True).start()
 
     def sse():
@@ -674,7 +715,7 @@ _HEALTH_WINDOW_DAYS = 7           # 统计窗口（天）
 _HEALTH_MIN_TRACES = 30           # 最小生产样本量；不足时不出总分
 _HEALTH_TEST_PREFIXES = (         # 评测/测试轨迹前缀：不计入生产健康分
     "kappa_", "gold_", "bench_", "e2e_", "test_", "demo_",
-    "smoke_", "dbg_", "fanout_", "probe", "pytest",
+    "smoke_", "dbg_", "fanout_", "probe", "pytest", "rawsse-test-",
 )
 _HEALTH_WEIGHTS = {               # 固定权重：缺失维度按 0 计，不做重归一化
     "reliability": 0.20,
@@ -772,6 +813,8 @@ def health_report():
     modes: dict[str, int] = {}
     verifier_pass = verifier_fail = plans = replans = 0
     failed_traces = failed_user_input = answered = 0
+    last_fail_ts = None        # 最近一次 verifier 失败时刻（连续通过轮数的锚点）
+    v_streak = 0               # 该失败之后的连续通过轮数
     for r in rows:
         if r["status"] == "failed":
             # 失败分类（Round6）：图级异常多为「断点已保存可续跑」的可恢复中断
@@ -806,6 +849,9 @@ def health_report():
             verifier_pass += 1
         elif verdict is not None:
             verifier_fail += 1
+            ts = float(r["updated_at"] or 0)
+            if last_fail_ts is None or ts > last_fail_ts:
+                last_fail_ts = ts
         final = next((e.get("data") or {} for e in reversed(events)
                       if isinstance(e, dict) and e.get("kind") == "final"), {})
         mode = final.get("mode") or ("refusal" if final.get("refusal") else "none")
@@ -928,6 +974,10 @@ def health_report():
     }
 
     # ---- ④ 性能（窗口内问答 LLM 调用：p50/p95 SLO；均值只作明细） ----
+    # 2026-11-17 阈值放宽（深度思考空间）：responder 深度思考（reasoning token，
+    # 实测单条 30~110s）是产品能力而非性能故障——旧阈值（p50 3s/10s，p95 8s/25s）
+    # 让开思考的问答把 p95 打成近零分。新阈值：非思考问答（p50 ~3s、p95 ~12s）
+    # 仍满分；思考问答 30~60s p95 处于满分段；>100s 病态尾部仍显著扣分。
     lat_rows = db.query(
         "SELECT latency_ms FROM qa_logs WHERE CAST(ts AS REAL) >= ? "
         "AND module IN ('qa', 'chat') AND latency_ms > 0 ORDER BY latency_ms", (cutoff,))
@@ -937,8 +987,8 @@ def health_report():
     avg_lat = sum(lat) / len(lat) if lat else 0.0
     performance = None
     if p50 is not None and p95 is not None:
-        performance = _clamp01(0.5 * _slo_score(p50, 3000, 10000)
-                               + 0.5 * _slo_score(p95, 8000, 25000))
+        performance = _clamp01(0.5 * _slo_score(p50, 5000, 20000)
+                               + 0.5 * _slo_score(p95, 25000, 100000))
     # 每模式 SLO（Round6-P1）：专业/普通文档延迟分列（qa_logs.doc_mode，
     # runner 线程内落库）；样本 <10 条的模式不出分位数，如实标注
     perf_by_mode: dict[str, dict] = {}
@@ -1050,13 +1100,27 @@ def health_report():
                       and isinstance(offline.get("recall_at5"), (int, float)) else None)
     rparts = [v for v in (online_verifier, offline_recall) if v is not None]
     retrieval = _clamp01(sum(rparts) / len(rparts)) if rparts else None
+    # 连续通过轮数：自最近一次 verifier 失败以来的全部通过（按时间序）
+    if last_fail_ts is not None:
+        for r in rows:
+            try:
+                events2 = json.loads(r["events_json"] or "[]")
+            except ValueError:
+                continue
+            v2 = next(((e.get("data") or {}).get("verdict") for e in reversed(events2)
+                       if isinstance(e, dict) and e.get("kind") == "verifier"), None)
+            if v2 == "pass" and float(r["updated_at"] or 0) > last_fail_ts:
+                v_streak += 1
     add_score(
         "retrieval", retrieval,
         f"在线 verifier 通过 {verifier_pass}/{verifier_pass + verifier_fail}"
+        + (f" · 自最近一次失败已连续通过 {v_streak} 轮"
+           if v_streak else "")
         + (f" · 离线 recall@5 {offline_recall:.3f}"
            if offline_recall is not None else "")
         + f"（补检索 {replans}/{plans} 轮）",
         {"verifier_pass": verifier_pass, "verifier_fail": verifier_fail,
+         "verifier_streak": v_streak,
          "offline_recall_at5": offline_recall, "plans": plans, "replans": replans},
         n=verifier_pass + verifier_fail)
 
@@ -1076,8 +1140,8 @@ def health_report():
 
     add_score(
         "performance", performance,
-        (f"p50 {int(p50)}ms（SLO 3000→10000ms）· p95 {int(p95)}ms"
-         f"（SLO 8000→25000ms）· n={len(lat)}")
+        (f"p50 {int(p50)}ms（SLO 5000→20000ms）· p95 {int(p95)}ms"
+         f"（SLO 25000→100000ms，含深度思考）· n={len(lat)}")
         if p50 is not None and p95 is not None else "窗口内问答调用样本 <20",
         {"p50_ms": int(p50) if p50 is not None else None,
          "p95_ms": int(p95) if p95 is not None else None,
