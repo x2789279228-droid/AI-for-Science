@@ -16,6 +16,9 @@ ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
 
 # 先装依赖再拷代码（层缓存友好）；uv sync --frozen 需要 uv.lock 在场（P0-4）。
 # --extra sandbox 装 matplotlib（python_sandbox 绘图 / 拓扑 PNG 演示必需）
+# 国内构建可经 compose args 注入镜像源（如清华 TUNA），默认官方 PyPI
+ARG UV_DEFAULT_INDEX=https://pypi.org/simple
+ENV UV_DEFAULT_INDEX=${UV_DEFAULT_INDEX}
 COPY pyproject.toml uv.lock ./
 COPY app ./app
 COPY scripts ./scripts

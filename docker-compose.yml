@@ -4,7 +4,11 @@
 #   浏览器访问 http://localhost:3000；API 健康 http://localhost:8100/api/health
 services:
   api:
-    build: ./api
+    build:
+      context: ./api
+      args:
+        # 构建期 PyPI 源：国内服务器在 .env 设 UV_DEFAULT_INDEX=<镜像站> 加速 uv sync
+        UV_DEFAULT_INDEX: ${UV_DEFAULT_INDEX:-https://pypi.org/simple}
     # 固定镜像名：云上 web 镜像走"本地构建→save/load"通道，compose 需按名识别已有镜像
     image: scholar-agent-api
     ports:
