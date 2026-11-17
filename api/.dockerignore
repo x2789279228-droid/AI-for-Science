@@ -1,6 +1,6 @@
 data/
 tests/
-scripts/
+# scripts/ 不排除：Dockerfile 第 8 步 COPY scripts ./scripts（重建索引等运维脚本随镜像分发）
 .venv/
 .pytest_cache/
 .ruff_cache/
