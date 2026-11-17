@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { EChartsType } from "echarts";
 import {
-  ChartOut, DatasetMeta, DiagramOut, WritingOut, buildChart, datasetApi,
+  ChartOut, DatasetMeta, DiagramOut, WritingOut, buildChart, copyText, datasetApi,
   generateDiagram, listPapers, streamWriting, zh2enTranslate,
 } from "@/lib/api";
 import type { Paper } from "@/lib/api";
@@ -293,7 +293,7 @@ export default function CopilotPage() {
     } catch (e) { setDgNote(`出错：${e}`); }
   };
 
-  const copySrc = (s: string) => { navigator.clipboard?.writeText(s); };
+  const copySrc = (s: string) => { void copyText(s); };   // HTTP 部署下自动降级 execCommand
 
   return (
     <div className="page">

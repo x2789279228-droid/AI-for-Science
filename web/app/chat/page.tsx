@@ -5,7 +5,7 @@ import Link from "next/link";
 import "katex/dist/katex.min.css";
 import {
   Anchor, ChartSpec, Claim, CompareCell, CompareTable, ConversationInfo, FinalEvent, GraphData, Hit,
-  Outline, Paper, TLEvent, TraceCard, TurnRecord, convKeyFor,
+  Outline, Paper, TLEvent, TraceCard, TurnRecord, convKeyFor, copyText, uuid,
   fetchQaTraceOrNull, getConversationTurns, getPaper, listConversations, listPapers,
   resumeChat, stopChat, streamChat,
 } from "@/lib/api";
@@ -425,7 +425,7 @@ export default function ChatPage() {
   /** 会话标识：当前模式的会话，无则生成并持久化（「新对话」首次提问时落库）。 */
   const conversationId = () => {
     if (activeConvId) return activeConvId;
-    const id = crypto.randomUUID();
+    const id = uuid();   // 非 secure 上下文（HTTP 部署）下 crypto.randomUUID 不存在
     setActiveConvId(id);
     localStorage.setItem(convKeyFor(docModeParam), id);
     return id;
@@ -669,12 +669,10 @@ export default function ChatPage() {
 
   const copyAnswer = async (turn: Turn) => {
     const text = turn.final?.answer ?? turn.answer;
-    try {
-      await navigator.clipboard.writeText(text);
-      island.emit({ key: "qa", kind: "success", title: "已复制到剪贴板" });
-    } catch {
-      island.emit({ key: "qa", kind: "error", title: "复制失败", detail: "剪贴板不可用" });
-    }
+    const ok = await copyText(text);   // HTTP 部署下自动降级 execCommand
+    island.emit(ok
+      ? { key: "qa", kind: "success", title: "已复制到剪贴板" }
+      : { key: "qa", kind: "error", title: "复制失败", detail: "剪贴板不可用" });
   };
 
   const lastTurn = turns[turns.length - 1];

@@ -1,5 +1,43 @@
 export const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8100";
 
+/** UUID v4：crypto.randomUUID 仅在安全上下文（HTTPS/localhost）存在；
+ *  HTTP 部署（云服务器 IP 直连）下回退到 getRandomValues 手工拼装（同样密码学安全）。 */
+export function uuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;   // version 4
+  b[8] = (b[8] & 0x3f) | 0x80;   // variant 10xx
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** 剪贴板复制：navigator.clipboard 仅安全上下文可用；
+ *  非安全上下文（HTTP 部署）降级为隐藏 textarea + execCommand('copy')。 */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* 安全上下文受限或权限拒绝 → 降级 */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 import { cachedJSON, invalidate as _invalidate } from "@/lib/data-cache";
 
 /** 写操作后失效数据缓存（上传/删除/改名等成功路径调用；prefix 见 data-cache.ts）。 */

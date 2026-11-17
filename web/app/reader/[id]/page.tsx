@@ -21,7 +21,7 @@ import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState }
 import { useParams, useSearchParams } from "next/navigation";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import { API, Paper, getPaper } from "@/lib/api";
+import { API, Paper, copyText, getPaper } from "@/lib/api";
 import { fetchDocirOutline, fetchDocirPage, listPapers } from "@/lib/api";
 import {
   TranslationEntry, fetchTranslation, streamTranslate, translateSelection, addTerm,
@@ -144,7 +144,7 @@ function FormulaBlock({ latex, onLocate }: { latex: string; onLocate?: () => voi
       <div style={{ display: "flex", gap: 8 }}>
         <button className="chip" style={{ cursor: "pointer", fontSize: 11 }}
           onClick={() => {
-            navigator.clipboard.writeText(latex).then(() => {
+            copyText(latex).then(() => {
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             });
@@ -346,7 +346,7 @@ function SelectionPopup({ sel, targetLang, onClose }: {
             </button>
             <button className="chip" style={{ cursor: "pointer", fontSize: 11 }}
               onClick={() => {
-                navigator.clipboard.writeText(sel.text).then(() => {
+                copyText(sel.text).then(() => {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1500);
                 });
