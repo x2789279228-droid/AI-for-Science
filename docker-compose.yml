@@ -4,6 +4,7 @@
 #   浏览器访问 http://localhost:3000；API 健康 http://localhost:8100/api/health
 services:
   api:
+    restart: unless-stopped        # 云上 7×24：宿主机重启后自动拉起
     build:
       context: ./api
       args:
@@ -43,6 +44,7 @@ services:
         # 构建期注入浏览器侧 API 地址（本机默认 localhost；云上在 .env 覆盖为 http://<公网IP>:8100）
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8100}
     # 云部署：宿主端口经 WEB_HOST_PORT 覆盖（阿里云服务器 3000 已被现有业务占用）
+    restart: unless-stopped
     image: scholar-agent-web
     depends_on:
       api:
