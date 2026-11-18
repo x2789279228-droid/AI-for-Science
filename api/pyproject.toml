@@ -24,7 +24,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 密集向量可选后端：安装后设 EMBEDDING_BACKEND=chroma 启用
+# 注意：chroma 组为历史预留，当前代码未实装 chroma 后端（稠密向量直接落库
+# SQLite；本地后端为 fastembed，无需本组），安装本组不改变行为。
 chroma = ["chromadb>=0.5"]
 # python_sandbox 绘图后端（评分表沙箱出图演示）：uv pip install matplotlib
 sandbox = ["matplotlib>=3.8"]
