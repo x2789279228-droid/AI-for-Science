@@ -177,3 +177,19 @@ make test             # 全量门禁：api ruff+pytest · web tsc+lint+build
 - **容器口径**：api 镜像不含 MinerU（torch 过重）——`MINERU_ENABLED=off` 时解析路由自动走
   PyMuPDF 兜底 + 扫描件 VLM 通道，闭环不中断；MinerU 为宿主机增强通道（`MINERU_CMD` 指向
   宿主机 venv）。
+
+## 团队信息
+
+**谢仁帆**（个人参赛 · B 组 · 参赛编号 2131172）
+
+- 所属院校：湖南科技大学 · 信息安全专业 · 本科 2024 级
+- 联系电话：13026852707
+- 联系邮箱：2789279228@qq.com
+- 指导老师：文吉刚（初赛 / 省赛 / 国赛）
+
+## License 与致谢
+
+- 本项目基于 [MIT License](LICENSE) 开源。
+- 感谢以下开源项目与云服务生态：MinerU（PDF 解析）、fastembed / BGE-M3（本地向量）、
+  networkx（图谱算法）、AntV G6 / ECharts（可视化）、FastAPI、Next.js，
+  以及火山方舟（doubao 系列模型与 Embedding 服务）。
