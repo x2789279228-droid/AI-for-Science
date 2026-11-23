@@ -43,6 +43,7 @@ from ..rag.answering import (
     near_evidence_block,
     refine_support_blocks,
     validate_citations,
+    validate_memory_citations,
 )
 from ..rag.verify import verify_claims
 from . import cancel as cancel_mod
@@ -857,6 +858,14 @@ def responder_node(state: AgentState, config=None) -> dict:
     no_evidence = NO_EVIDENCE_GENERAL if is_general else NO_EVIDENCE
     # 分级作答（v2.3.0）：子问题清单 + 证据缺失面（qa 路径消费；compare/writer/graph 自有覆盖机制）
     plan_aspects, missing_aspects = _aspect_coverage(state)
+    # 模块七：记忆时间线注入（qa 路径消费；提前占位保证 finish 闭包在任何早退路径可用）
+    memory_block, m_anchors = "", {}
+    if state.get("use_memory", True):
+        from ..memory.retrieve import build_memory_block
+        memory_block, m_anchors, m_gate = build_memory_block(
+            question, doc_mode=state.get("doc_mode", "paper"))
+    else:
+        m_gate = {"trigger": False}
 
     def finish(answer: str, claims: list[dict], mode: str, summary: str,
                partial_missing: list[str] | None = None) -> dict:
@@ -868,6 +877,8 @@ def responder_node(state: AgentState, config=None) -> dict:
                      "guardrails": guardrails, "trace": [card], "retry_prompt": "",
                      "anchors": build_anchors({i: h for i, h in
                                                enumerate(state.get("evidence", []), 1)})}
+        if m_anchors:
+            out["memory_anchors"] = m_anchors   # M# → 会话轮次回放锚点（final 下发前端）
         if partial_missing:
             out["partial_missing"] = partial_missing
         if is_compare:
@@ -908,6 +919,31 @@ def responder_node(state: AgentState, config=None) -> dict:
                 pass
         return finish(answer, [], "generative" if llm.available() else "extractive",
                       f"出图 · {spec.get('type')} · {n_points} 点 · 来源已标注")
+
+    # 模块七 r9：记忆问答分流——用户历史研究问题由记忆时间线直接作答（[M#] 引用），
+    # 不走论文证据环（文献问答角色框会把记忆问题错答成「论文未提及」，A/B 三轮实测）
+    if m_gate.get("trigger") and m_anchors and agent == "reader":
+        from ..memory import store as mem_store
+        from ..memory.memory_qa import answer_from_memory
+        # 盘点/历史类问题需要覆盖全部假设：检索 top-k 只带回 recency 优势的近期记忆，
+        # 库内其余 hypothesis 事件并入时间线锚点（去重、统一编号），否则合成必漏报
+        merged = dict(m_anchors)
+        seen = {a["memory_id"] for a in merged.values()}
+        nxt = len(merged) + 1
+        for h in mem_store.list_events(kind="hypothesis", limit=50):
+            if h["user_id"] != "local" or h["id"] in seen:
+                continue
+            seen.add(h["id"])
+            merged[f"M{nxt}"] = {
+                "memory_id": h["id"], "kind": h["kind"], "status": h["status"],
+                "conversation_id": h["conversation_id"], "turn": h["turn"],
+                "thread_id": h["thread_id"], "content": h["content"], "ts": h["ts"]}
+            nxt += 1
+        qa = answer_from_memory(question, merged)
+        guardrails.append("memory_qa_path")
+        return finish(qa["answer"], [],
+                      "generative" if qa["mode"] == "llm" else "extractive",
+                      f"记忆问答 · 时间线 {len(m_anchors)} 条（[M#] 引用）")
 
     hits = state.get("evidence", [])
     if not hits and agent != "graph":
@@ -985,7 +1021,8 @@ def responder_node(state: AgentState, config=None) -> dict:
         messages = build_qa_messages(question, hits, language=language,
                                      doc_mode=state.get("doc_mode", "paper"),
                                      aspects=plan_aspects or None,
-                                     missing=missing_aspects or None)
+                                     missing=missing_aspects or None,
+                                     memory_block=memory_block)
     if retry_prompt and prev_answer:
         # recover 注入的纠错反馈：上一轮答案 + 具体违规点，定向修复而非盲重试
         messages += [{"role": "assistant", "content": prev_answer},
@@ -1048,6 +1085,10 @@ def responder_node(state: AgentState, config=None) -> dict:
 
     answer, cited_guards = validate_citations(answer, eid_map)
     guardrails += cited_guards
+    # 模块七：[M#] 独立编号校验（L1 存在性 + 无效剔除；不参与 L2/重生成，清单 §2.9）
+    if m_anchors:
+        answer, m_guards = validate_memory_citations(answer, len(m_anchors))
+        guardrails += m_guards
 
     # 拒答语义（Round6 修复「自相矛盾输出」）：LLM 偶发在**已带 [E#] 引用的主体**
     # 末尾追加「未找到依据」模板句（对未覆盖子问题的诚实说明被误拼接）。旧逻辑

@@ -23,6 +23,7 @@ from .api_routes.copilot_routes import router as copilot_router
 from .api_routes.discover_routes import router as discover_router
 from .api_routes.export_routes import router as export_router
 from .api_routes.graph_routes import router as graph_router
+from .api_routes.memory_routes import router as memory_router
 from .api_routes.recommend_routes import router as recommend_router
 from .api_routes.routes import router
 from .api_routes.threads_routes import router as threads_router
@@ -65,8 +66,13 @@ async def lifespan(_app: FastAPI):
     if tracker_worker.start_tracking_worker():  # 模块四 P0-3：arXiv 定时追踪
         logger.info(f"arXiv 追踪 worker 已启动（间隔 {tracker_worker.settings.tracking_interval_s}s）",
                     module="tracking")
+    from .memory import worker as memory_worker
+    if memory_worker.start_memory_worker():     # 模块七 P1：巩固 worker（强度/FSM 复核/简报预热）
+        logger.info(f"记忆巩固 worker 已启动（间隔 {settings.memory_worker_interval_s}s）",
+                    module="memory")
     yield
     tracker_worker.stop_tracking_worker()
+    memory_worker.stop_memory_worker()
 
 
 app = FastAPI(title="科研助手 Agent API", version="0.1.0", lifespan=lifespan)
@@ -156,4 +162,5 @@ app.include_router(graph_router)
 app.include_router(export_router)
 app.include_router(tracking_router)
 app.include_router(recommend_router)
+app.include_router(memory_router)
 app.include_router(copilot_router)

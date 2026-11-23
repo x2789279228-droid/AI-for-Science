@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     github_token: str = ""
     # arXiv 动态追踪（模块四 P0-3）：后台刷新间隔秒（默认 6h；演示可调小）；0 = 关闭定时
     tracking_interval_s: int = 21600
+    # 模块七巩固 worker（P1）：强度重算/FSM 复核/简报预热周期秒；0 = 关闭（仿 tracking_interval_s）
+    memory_worker_interval_s: int = 600
+    # FadeMem 参数（清单 §2.3，env 可覆盖供 P2 网格消融——踩坑 #2：不照搬论文参数）
+    fade_mu: float = 0.5                # 重要性衰减系数：λ = λ_base · e^(−μI)
+    fade_beta_lml: float = 0.8          # 长期层指数 β（亚线性慢衰减）
+    fade_beta_sml: float = 1.2          # 短期层指数 β（超线性快衰减）
+    fade_theta_promote: float = 0.7     # 滞回：v ≥ 0.7 迁入 LML
+    fade_theta_demote: float = 0.3      # 滞回：v ≤ 0.3 迁入 SML（中间保持原层防抖）
     # 单次订阅刷新的条目上限（OAI/Atom 全量拉回后再截断，防止巨类目刷库）
     tracking_max_items: int = 30
     # Round4 横切：匿名用户限流（重端点 POST 每分钟次数；0 = 关闭）。单机单进程

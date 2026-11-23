@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import json
 import queue as queue_mod
+import re
+import threading
 import time
 import uuid
 
 from .. import db, threads_store, trace_store
 from ..config import settings
+from ..memory.extract import extract_turn
 from ..rag.answering import hit_summary
 from . import cancel as cancel_mod
 from .checkpointer import get_graph
@@ -78,10 +81,42 @@ def _resume_doc_mode(paper_ids_json: str) -> None:
     set_doc_mode("paper")
 
 
+def _spawn_memory_extraction(final: dict, question: str, thread_id: str,
+                             conversation_id: str | None, turn: int | None,
+                             use_memory: bool = True) -> None:
+    """模块七 R2：done 之后起 daemon 线程跑轮末记忆抽取（清单 §2.8）。
+    挂在收尾时序 finish_thread → _push_success → _save_trace → done 之后，
+    问答主链路延迟零增加；抽取失败仅落 qa_logs 审计，绝不影响闭环。
+    use_memory=False（无记忆口径）→ 整条记忆链关闭：不注入也不写入（r9 A/B 公平性）。"""
+    if not use_memory:
+        return
+    anchors = final.get("anchors") or {}
+    e_refs = sorted({str(k) for k in anchors},
+                    key=lambda s: int(re.sub(r"\D", "", s) or 0))
+
+    def _run() -> None:
+        try:
+            out = extract_turn(question, final.get("answer", ""),
+                               conversation_id=conversation_id or "",
+                               turn=turn or 0, thread_id=thread_id, e_refs=e_refs)
+            if out.get("error"):
+                db.log_qa(module="memory", question=question[:200],
+                          guardrail=f"memory_extract_error:{out['error'][:120]}")
+        except Exception as e:  # noqa: BLE001 —— 钩子级兜底：抽取器自身的异常也在这里拦住
+            try:
+                db.log_qa(module="memory", question=question[:200],
+                          guardrail=f"memory_extract_error:{type(e).__name__}")
+            except Exception:  # noqa: BLE001, S110
+                pass
+
+    threading.Thread(target=_run, daemon=True, name="memory-extract").start()
+
+
 def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
                thread_id: str | None = None, conversation_id: str | None = None,
                turn: int | None = None, forced_agent: str = "auto",
-               doc_mode: str = "paper", thinking: bool = True) -> None:
+               doc_mode: str = "paper", thinking: bool = True,
+               use_memory: bool = True) -> None:
     """阻塞执行完整状态图，事件逐条入队；最后一条必为 done。
 
     thread_id/conversation_id/turn 缺省时自动生成（conversation_id → next_turn 推导），
@@ -101,6 +136,9 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
     set_doc_mode(doc_mode)
     # 每模式 SLO 数据源：本线程内所有 log_qa 落库带上 doc_mode（qa_logs.doc_mode）
     db.qa_doc_mode.set(doc_mode)
+    # 模块七：记忆轮次上下文（memory_save 工具读取以落会话/轮次溯源）
+    from ..memory.extract import turn_ctx
+    turn_ctx.set((conversation_id or "", turn or 0, thread_id))
 
     tee = _TeeQueue(q)
     graph = get_graph()
@@ -109,7 +147,8 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
     try:
         final = graph.invoke(
             {"question": question, "paper_ids": paper_ids, "retries": 0,
-             "forced_agent": forced_agent, "doc_mode": doc_mode, "thinking": thinking},
+             "forced_agent": forced_agent, "doc_mode": doc_mode, "thinking": thinking,
+             "use_memory": use_memory},
             config)
     except Exception as e:  # noqa: BLE001 —— 图级故障也必须以 done 收尾；断点已落盘可恢复
         threads_store.finish_thread(thread_id, "failed", error=f"{type(e).__name__}: {e}")
@@ -129,6 +168,8 @@ def run_stream(question: str, paper_ids: list[str], q: queue_mod.Queue, *,
     _push_success(tee, final, question, t0, thread_id, conversation_id, defer_done=True)
     _save_trace(tee, thread_id, conversation_id, turn, question, "done")
     tee.put(("done", {"temperature": settings.llm_temperature}))
+    _spawn_memory_extraction(final, question, thread_id, conversation_id, turn,
+                             use_memory=use_memory)
 
 
 def resume_stream(thread_id: str, q: queue_mod.Queue) -> None:
@@ -241,6 +282,8 @@ def _push_success(q, final: dict, question: str, t0: float,
                         if final.get("outline") else {}),
                      **({"chart_spec": final["chart_spec"]}
                         if final.get("chart_spec") else {}),
+                     **({"memory_anchors": final["memory_anchors"]}
+                        if final.get("memory_anchors") else {}),   # 模块七：M# → 会话回放
                      "thread_id": thread_id, "conversation_id": conversation_id}))
     done_evt = ("done", {"temperature": settings.llm_temperature})
     if defer_done:

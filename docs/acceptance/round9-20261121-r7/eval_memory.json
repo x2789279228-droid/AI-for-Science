@@ -1,0 +1,210 @@
+{
+  "meta": {
+    "data_dir": "data/seed_mem",
+    "gold": "../docs/acceptance/round9-20261121-r7/seed_gold.json",
+    "generated_at": "2026-11-21T13:48:35.511480+00:00",
+    "n_events": 37,
+    "top_k": 5,
+    "honest": "模拟语料 + 半人工金标（清单 §七.4）"
+  },
+  "primary": {
+    "hypothesis_recall": 1.0,
+    "hypotheses": [
+      {
+        "role": "A",
+        "expect": "refuted",
+        "got": "refuted",
+        "hit": true
+      },
+      {
+        "role": "B",
+        "expect": "supported",
+        "got": "supported",
+        "hit": true
+      },
+      {
+        "role": "C",
+        "expect": "unverified",
+        "got": "unverified",
+        "hit": true
+      },
+      {
+        "role": "D",
+        "expect": "superseded(past)",
+        "got": "superseded",
+        "hit": true
+      },
+      {
+        "role": "D2",
+        "expect": "any",
+        "got": "unverified",
+        "hit": true
+      }
+    ],
+    "contradiction": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "precision_defined": true,
+      "recall_defined": true
+    },
+    "staleness": [
+      {
+        "query": "现在长文本显存优化该用什么方案？",
+        "hit_at_k": 1.0,
+        "avoid_leak": 0.0
+      },
+      {
+        "query": "数据接入管道的当前结论是什么？",
+        "hit_at_k": 1.0,
+        "avoid_leak": 0.0
+      },
+      {
+        "query": "最近两周长文本显存优化的实验结论",
+        "hit_at_k": 1.0,
+        "avoid_leak": 0.0
+      }
+    ]
+  },
+  "baselines": {
+    "no_memory": {
+      "hypothesis_recall": 0.0,
+      "contradiction_recall": 0.0,
+      "staleness_hit_at_k": 0.0,
+      "note": "无记忆口径：全部为 0（模块七缺失时的真实下界）"
+    },
+    "naive_topk": {
+      "hypothesis_recall": 0.8,
+      "contradiction": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "precision_defined": false,
+        "recall_defined": true
+      },
+      "staleness": [
+        {
+          "query": "现在长文本显存优化该用什么方案？",
+          "hit_at_k": 1.0,
+          "avoid_leak": 0.5
+        },
+        {
+          "query": "数据接入管道的当前结论是什么？",
+          "hit_at_k": 1.0,
+          "avoid_leak": 1.0
+        },
+        {
+          "query": "最近两周长文本显存优化的实验结论",
+          "hit_at_k": 1.0,
+          "avoid_leak": 1.0
+        }
+      ],
+      "note": "词面启发口径：无三信号/时间窗/强度/图谱，召回=内容存在"
+    },
+    "full_history": {
+      "hypothesis_recall": 1.0,
+      "contradiction": {
+        "note": "无判定机制，不适用"
+      },
+      "staleness": [
+        {
+          "query": "现在长文本显存优化该用什么方案？",
+          "hit_at_k": 1.0,
+          "avoid_leak": 1.0
+        },
+        {
+          "query": "数据接入管道的当前结论是什么？",
+          "hit_at_k": 1.0,
+          "avoid_leak": 1.0
+        },
+        {
+          "query": "最近两周长文本显存优化的实验结论",
+          "hit_at_k": 1.0,
+          "avoid_leak": 1.0
+        }
+      ],
+      "note": "全量注入口径：hit 无意义（必然命中），avoid=全量上下文必然全泄漏"
+    }
+  },
+  "fade_grid": [
+    {
+      "beta_lml": 0.6,
+      "mu": 0.2,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.2918
+    },
+    {
+      "beta_lml": 0.6,
+      "mu": 0.5,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3101
+    },
+    {
+      "beta_lml": 0.6,
+      "mu": 0.8,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3258
+    },
+    {
+      "beta_lml": 0.8,
+      "mu": 0.2,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3025
+    },
+    {
+      "beta_lml": 0.8,
+      "mu": 0.5,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3195
+    },
+    {
+      "beta_lml": 0.8,
+      "mu": 0.8,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.334
+    },
+    {
+      "beta_lml": 1.0,
+      "mu": 0.2,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3104
+    },
+    {
+      "beta_lml": 1.0,
+      "mu": 0.5,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3263
+    },
+    {
+      "beta_lml": 1.0,
+      "mu": 0.8,
+      "staleness_hit_at_k": 1.0,
+      "avoid_leak": 0.0,
+      "mean_top5_strength": 0.3399
+    }
+  ],
+  "judge_consistency": {
+    "evaluated": false,
+    "note": "离线环境 judge 一致性未评测（--judge + LLM 环境重跑）"
+  },
+  "brief_check_turn30": {
+    "pass": true,
+    "detail": "假设 A 判定结果=refuted（期望 refuted）；位置=past_hypotheses；engine=rule"
+  },
+  "conclusion": {
+    "contradiction_beats_naive": true,
+    "verdict": "矛盾检出优于朴素 top-k 基线"
+  }
+}

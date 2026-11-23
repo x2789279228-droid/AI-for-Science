@@ -1953,3 +1953,10 @@ body:not([data-theme]) .page {
   transition: background .15s, color .15s; }
 .topbar-icon:hover { background: var(--surface-2); color: var(--ink); }
 .topbar-icon.on { color: var(--accent); background: var(--accent-soft); }
+
+/* 模块七：[M#] 记忆引用 chip（与 E# 论文证据 chip 视觉区分：accent 描边） */
+.md-body .anchor-chip.md-cite.m-cite {
+  color: var(--accent);
+  border: 1px solid var(--accent-border, var(--accent));
+  background: var(--accent-soft);
+}

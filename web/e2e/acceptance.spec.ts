@@ -409,7 +409,8 @@ test("⑫ Chat 空态演示卡：点击即提问（拦截后端，仅断言请�
   await expect(first).toBeVisible({ timeout: 20_000 });
   await first.click();
   // 断言请求已发出(fetch 已走):输入框被清空(问题被发送)
-  const input = page.locator(".dock input");
+  // HEAD 起 dock 提问框已是 <textarea class="dock-input">（.dock input 匹配 0 元素——存量过时选择器修复）
+  const input = page.locator(".dock textarea");
   await expect(async () => {
     expect(chatRequested).toBeTruthy();
     expect(await input.inputValue()).toBe("");
@@ -553,4 +554,83 @@ test("⑲ PDF TextLayer：容器提供 --scale-factor（取词框对齐）", asy
   const layer = page.locator(".textLayer").first();
   await expect(layer).toBeVisible({ timeout: 60_000 });
   await expect(layer).toHaveAttribute("style", /--scale-factor/);
+});
+
+// ---------- 模块七：记忆与状态（Round9-R5） ----------
+
+import { spawnSync } from "child_process";
+import { resolve as resolvePath } from "path";
+
+/** 后端工程目录（webServer 的 api 进程 cwd）——种子脚本直写同一 SQLite（WAL 并发安全），
+ *  确定性：记忆内容不依赖 LLM 抽取输出。 */
+const MEM_API_DIR = resolvePath(__dirname, "../../api");
+
+function seedMemoryEvents(): { conv: string } {
+  const script = `
+import json, time, uuid
+from app import db
+db.init_db()
+from app.memory import store, graph
+conv = "e2e_mem_" + uuid.uuid4().hex[:6]
+now = time.time()
+# 每次调用先清旧种子再插全新一对：自包含、与用例顺序无关（判定的 FSM 推进会让
+# 旧假设进入终态、退出活跃简报——复用旧数据会导致后续用例无 items）
+with db.tx() as c:
+    ids = [r["id"] for r in c.execute(
+        "SELECT id FROM memory_events WHERE content LIKE '%端到端种子假设 H%'")]
+    for i in ids:
+        c.execute("DELETE FROM memory_edges WHERE src=? OR dst=?", (i, i))
+    c.execute("DELETE FROM memory_events WHERE content LIKE '%端到端种子假设 H%'")
+    c.execute("DELETE FROM memory_events WHERE content LIKE '%端到端心跳%'")
+h = store.add_event("hypothesis", "我假设端到端种子假设 H 将被推翻", user_id="local",
+                    conversation_id=conv, turn=1, thread_id=conv + ":1",
+                    ts=now - 3 * 86400, source="rule")
+ev = store.add_event("experiment_result", "新实验推翻了端到端种子假设 H 的结论",
+                     user_id="local", conversation_id=conv, turn=2,
+                     thread_id=conv + ":2", ts=now - 86400, source="rule")
+graph.link_event(ev["id"], user_id="local")
+print(json.dumps({"conv": conv}))
+`;
+  const out = spawnSync(resolvePath(MEM_API_DIR, ".venv/Scripts/python.exe"),
+    ["-c", script], { cwd: MEM_API_DIR, encoding: "utf8", timeout: 60_000 });
+  const line = (out.stdout || "").trim().split("\n").pop() || "{}";
+  const parsed = JSON.parse(line) as { conv: string };
+  if (!parsed.conv) throw new Error(`seed 失败：${out.stderr?.slice(0, 300)}`);
+  return parsed;
+}
+
+test("⑳ 记忆页：时间线事件流 + FSM 状态板 + G6 因果图渲染", async ({ page }) => {
+  seedMemoryEvents();
+  await page.goto("/memory");
+  await expect(page.getByTestId("memory-page")).toBeVisible();
+  await expect(page.getByTestId("memory-event-item").first()).toBeVisible({ timeout: 20_000 });
+  const our = page.getByTestId("memory-hypothesis-item")
+    .filter({ hasText: "端到端种子假设 H" }).first();
+  await expect(our).toBeVisible({ timeout: 20_000 });
+  await expect(our.getByTestId("memory-hyp-status"))
+    .toHaveText(/提出|验证中|已支持|已推翻|已被取代/);
+  // G6 画布（懒加载 ~500kB；失败有 fallback testid，两者其一必须出现）
+  await expect(page.getByTestId("memory-graph").locator("canvas").first())
+    .toBeVisible({ timeout: 30_000 });
+});
+
+test("㉑ chat 开场研究简报卡：被推翻假设如实指出 + 判定徽章", async ({ page }) => {
+  seedMemoryEvents();
+  await page.goto("/chat");
+  const card = page.getByTestId("memory-brief-card");
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toContainText("端到端种子假设 H");
+  await expect(card.getByTestId("memory-brief-verdict").filter({ hasText: "已推翻" }).first())
+    .toBeVisible();
+});
+
+test("㉒ [M#] 会话轮次回放：简报证据 chip 点击 → 回放浮层", async ({ page }) => {
+  seedMemoryEvents();
+  await page.goto("/chat");
+  const card = page.getByTestId("memory-brief-card");
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await card.getByTestId("memory-evidence-chip").filter({ hasText: "推翻" }).first().click();
+  await expect(page.getByTestId("memory-loc-content")).toBeVisible();
+  await expect(page.getByTestId("memory-loc-content")).toContainText("推翻");
+  await expect(page.getByTestId("memory-open-conv")).toBeVisible();
 });

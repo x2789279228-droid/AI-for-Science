@@ -4,7 +4,7 @@
 
 SHELL := /bin/bash
 
-.PHONY: install api web dev demo test lint cases smoke corpus contrast clean
+.PHONY: install api web dev demo test lint cases smoke corpus contrast clean verify e2e
 
 install:            ## 安装后端 + 前端依赖
 	cd api && uv sync
@@ -24,6 +24,9 @@ demo:               ## 演示环境：恢复 data-real 快照（对比语料 v7/
 
 corpus:             ## 对比语料收录：BERT/PreLN/GPT-2 下载→入库→解析 + data-real 快照固化
 	cd api && uv run python scripts/fetch_corpus.py --snapshot
+
+verify:             ## 一键验证门禁：后端 ruff+pytest + 前端 tsc（-Full 加 build，见 scripts/verify.ps1）
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 test:               ## 全量门禁：后端 ruff+pytest、前端 tsc+build
 	cd api && uv run ruff check app/ tests/ && uv run pytest -q

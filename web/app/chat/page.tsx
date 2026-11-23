@@ -5,9 +5,10 @@ import Link from "next/link";
 import "katex/dist/katex.min.css";
 import {
   Anchor, ChartSpec, Claim, CompareCell, CompareTable, ConversationInfo, FinalEvent, GraphData, Hit,
-  Outline, Paper, TLEvent, TraceCard, TurnRecord, convKeyFor, copyText, uuid,
+  MemoryAnchor, MemoryBriefEvent, Outline, Paper, TLEvent, TraceCard, TurnRecord,
+  convKeyFor, copyText, uuid,
   fetchQaTraceOrNull, getConversationTurns, getPaper, listConversations, listPapers,
-  resumeChat, stopChat, streamChat,
+  postMemoryBrief, resumeChat, stopChat, streamChat,
 } from "@/lib/api";
 import { Activity, ChevronRight, List, Spark } from "@/components/icons";
 import { useShell } from "@/components/ShellContext";
@@ -150,6 +151,9 @@ export default function ChatPage() {
   const [traceOpen, setTraceOpen] = useState(false);   // Trace 右侧抽屉（localStorage 持久化，默认收起）
   const [agent, setAgent] = useState("auto");          // UI 强制指定 Agent（auto=自动路由）
   const [evidence, setEvidence] = useState<EvidenceLoc | null>(null);  // 引用点击 → 原文浮层
+  // 模块七：开场研究简报卡 + [M#] 会话回放浮层（编号空间与 E# 独立）
+  const [memBrief, setMemBrief] = useState<MemoryBriefEvent | null>(null);
+  const [memLoc, setMemLoc] = useState<{ mid: string; a: MemoryAnchor } | null>(null);
   // ChatGLM 模式：会话侧栏 + per-request 深度思考开关
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [activeConvId, setActiveConvId] = useState("");
@@ -201,6 +205,13 @@ export default function ChatPage() {
     setEvidence({ eid, anchor, quote });
   };
 
+  /** 模块七：[M#] 点击 → 会话轮次回放浮层（"你当时说了什么"）。 */
+  const showMemory = (mid?: string, anchors?: Record<string, MemoryAnchor>) => {
+    if (!mid || !anchors) return;
+    const a = anchors[mid];
+    if (a) setMemLoc({ mid, a });
+  };
+
   const refreshConversations = () => {
     listConversations(50, true, docModeParam).then(setConversations)
       .catch(() => { /* 后端未起时静默 */ });
@@ -225,6 +236,12 @@ export default function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 模块七：开场研究简报（挂载取用户级；切换会话取会话级。SSE memoryBrief 为实时主通道，
+  // 此处为直开 /chat 不发问时的静态通道；失败静默——简报是增强不是依赖）
+  useEffect(() => {
+    postMemoryBrief(activeConvId).then(setMemBrief).catch(() => { /* 后端未起时静默 */ });
+  }, [activeConvId]);
 
   // 模式切换 → 切换到该模式的活跃会话（无则清空为新对话）；busy 中不切防打断流式
   const modeInitRef = useRef(false);
@@ -462,6 +479,7 @@ export default function ChatPage() {
           if (c[i]) c[i] = { ...c[i], threadId: d.thread_id };
           return c;
         }),
+        memoryBrief: (d) => setMemBrief(d),   // 模块七：开场简报实时刷新（meta 后直发）
         trace: (card) => setTurns((t) => {
           const c = [...t];
           const i = c.length - 1;
@@ -713,6 +731,9 @@ export default function ChatPage() {
                     <span className="chip warn" title="选文/截断提示">{capHint}</span>
                   </div>
                 )}
+                {/* 模块七：开场研究简报卡（memory_brief SSE / 挂载取数；空态不渲染） */}
+                <MemoryBriefCard brief={memBrief}
+                  onReplay={(mid, a) => setMemLoc({ mid, a })} />
                 {turns.length === 0 && (
                   <div className="chat-hero" data-testid="chat-empty">
                     <p className="chat-hero-title">
@@ -774,12 +795,14 @@ export default function ChatPage() {
                             text={main}
                             anchors={anchors}
                             onEvidence={showEvidence}
+                            onMemory={(mid) => showMemory(mid, turn.final?.memory_anchors)}
                             streaming={streaming} />
                           {tail && (streaming ? (
                             <MarkdownWithCitations
                               text={tail}
                               anchors={anchors}
                               onEvidence={showEvidence}
+                              onMemory={(mid) => showMemory(mid, turn.final?.memory_anchors)}
                               streaming />
                           ) : (
                             <details style={{ marginTop: "var(--space-2)" }}>
@@ -790,7 +813,8 @@ export default function ChatPage() {
                                 <MarkdownWithCitations
                                   text={tail}
                                   anchors={anchors}
-                                  onEvidence={showEvidence} />
+                                  onEvidence={showEvidence}
+                                  onMemory={(mid) => showMemory(mid, turn.final?.memory_anchors)} />
                               </div>
                             </details>
                           ))}
@@ -950,6 +974,11 @@ export default function ChatPage() {
         </div>
       </div>
       {evidence && <EvidenceModal loc={evidence} onClose={() => setEvidence(null)} />}
+      {memLoc && (
+        <MemoryLocModal loc={memLoc}
+          onOpenConv={(id) => { openConversation(id); setMemLoc(null); }}
+          onClose={() => setMemLoc(null)} />
+      )}
     </div>
   );
 }
@@ -1346,6 +1375,119 @@ function Claims({ claims, anchors, hits, onEvidence }: {
           ))}
         </div>
       </div></div>
+    </div>
+  );
+}
+
+/** 模块七：开场研究简报卡（memory_brief SSE / 挂载取数；{empty:true} 不渲染）。
+ *  verdict 徽章如实区分判定源；证据 chip 点击 → M# 会话轮次回放浮层。 */
+function MemoryBriefCard({ brief, onReplay }: {
+  brief: MemoryBriefEvent | null;
+  onReplay: (mid: string, a: MemoryAnchor) => void;
+}) {
+  if (!brief || brief.empty) return null;
+  const items = brief.items ?? [];
+  const VERDICT: Record<string, { label: string; color: string }> = {
+    refuted: { label: "已推翻", color: "var(--danger)" },
+    supported: { label: "已支持", color: "var(--ok)" },
+    neutral: { label: "待复核", color: "var(--warn)" },
+    unverified: { label: "未验证", color: "var(--ink-3)" },
+  };
+  return (
+    <div className="card-in" data-testid="memory-brief-card"
+      style={{ padding: "var(--space-3)", marginBottom: "var(--space-3)",
+        borderLeft: "3px solid var(--accent)" }}>
+      <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center",
+        flexWrap: "wrap", marginBottom: "var(--space-2)" }}>
+        <b>研究简报</b>
+        <span className="chip accent">开场 · 假设 vs 新证据</span>
+        <span className="chip" title="判定引擎：judge=LLM 复核 / rule=规则与图谱边（诚实标注）">
+          {brief.engine === "judge" ? "judge 复核" : "规则判定"}
+        </span>
+      </div>
+      {brief.drift_hint && (
+        <div className="kv" data-testid="memory-drift-hint"
+          style={{ marginBottom: "var(--space-2)", color: "var(--warn)" }}
+          title="ATLAS 漂移指标降级口径：文字提示（借思想，非隐层干预）">
+          {brief.drift_hint}
+        </div>
+      )}
+      {items.map((it) => {
+        const v = VERDICT[it.verdict] ?? { label: it.verdict, color: "var(--ink-3)" };
+        return (
+          <div key={it.hypothesis.id} style={{ marginBottom: "var(--space-2)" }}>
+            <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline",
+              flexWrap: "wrap" }}>
+              <span className="badge" style={{ color: v.color, borderColor: v.color }}
+                data-testid="memory-brief-verdict">{v.label}</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.6 }}>{it.hypothesis.content}</span>
+            </div>
+            {it.reasoning && (
+              <div className="kv muted" style={{ marginTop: 2 }}>{it.reasoning}</div>
+            )}
+            {it.evidence.length > 0 && (
+              <div style={{ display: "flex", gap: "var(--space-2)", marginTop: 4,
+                flexWrap: "wrap" }}>
+                {it.evidence.slice(0, 4).map((e, i) => (
+                  <span key={i} className="chip anchor-chip clickable" data-testid="memory-evidence-chip"
+                    style={{ cursor: e.thread_id ? "pointer" : "default" }}
+                    title={e.thread_id ? "点击回放该轮问答（M# 会话回放）" : "图谱边证据（无会话上下文）"}
+                    onClick={() => {
+                      if (!e.thread_id) return;
+                      onReplay(e.memory_id || `M${i + 1}`, {
+                        memory_id: e.memory_id, kind: e.kind, conversation_id: e.conversation_id,
+                        turn: e.turn, thread_id: e.thread_id, content: e.content,
+                        ts: e.ts_iso ? Date.parse(e.ts_iso) / 1000 : 0,
+                      });
+                    }}>
+                    {e.relation ? `${e.relation} · ` : ""}{e.content.slice(0, 26)}…
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 模块七：[M#] 会话轮次回放浮层——"你当时说了什么"（与 E# 原文溯源并列的第二条溯源链）。 */
+function MemoryLocModal({ loc, onOpenConv, onClose }: {
+  loc: { mid: string; a: MemoryAnchor };
+  onOpenConv: (id: string) => void;
+  onClose: () => void;
+}) {
+  const { mid, a } = loc;
+  const when = a.ts ? new Date(a.ts * 1000).toLocaleString() : "";
+  return (
+    <div className="ev-overlay" onClick={onClose}>
+      <div className="ev-modal" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)",
+          marginBottom: "var(--space-2)", flexWrap: "wrap" }}>
+          <b>{mid} · 会话轮次回放</b>
+          <span className="chip accent">{a.kind}</span>
+          {a.conversation_id && <span className="chip">会话 {a.conversation_id.slice(0, 8)} · 第 {a.turn} 轮</span>}
+          {when && <span className="chip">{when}</span>}
+          <span style={{ flex: 1 }} />
+          <button className="btn ghost" style={{ padding: "2px 10px" }} onClick={onClose}>关闭 ✕</button>
+        </div>
+        <div className="evidence" data-testid="memory-loc-content">
+          <i>当时记录</i>
+          <br />{a.content}
+        </div>
+        <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)",
+          alignItems: "center", flexWrap: "wrap" }}>
+          <span className="kv muted num">{a.thread_id}</span>
+          <span style={{ flex: 1 }} />
+          {a.conversation_id && (
+            <button className="btn" style={{ padding: "4px 12px" }} data-testid="memory-open-conv"
+              onClick={() => onOpenConv(a.conversation_id)}>
+              打开该会话回放 →
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

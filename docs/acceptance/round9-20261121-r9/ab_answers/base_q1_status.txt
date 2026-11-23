@@ -1,0 +1,16 @@
+【未找到依据】检索到的片段无法回答该问题。
+未能回答的部分：
+- 文档未明确说明：显存优化相关假设的验证结论
+- 文档未明确说明：显存优化的最终实验结果
+建议：请补充提供与显存优化实验、假设验证相关的原文段落，或指定对应章节后再进行检索。
+
+> **未找到明确表述。**最接近的证据（供人工判断）：
+> 1. [E1] p6 · §Preface · 9
+Regularization
+138…
+> 2. [E2] p13 · §Acknowledgements · orav, Ma-
+soud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor
+S.C.
+Lui, Sumit Bhatia, Julian Asilis, Hengc…
+> 3. [E3] p6 · §Preface · 8.3
+Reducing error . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 124…

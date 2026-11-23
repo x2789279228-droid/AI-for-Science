@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "purpose": "模块七 r9：有记忆感知 vs 无记忆感知 纵向长程对话 A/B 对比探针集",
+    "corpus": "30 会话记忆故事线（seed_memory_demo 四条线）+ 1 篇真实论文（检索底座）",
+    "scoring": {
+      "anchor_rate": "金标锚点词在回答中的命中比例（客观规则分）",
+      "stale_leak": "陈旧陷阱出现=1（把已被推翻/取代的旧结论当作当前有效结论复述）",
+      "judge_score": "LLM judge 0-3：0=与金标矛盾或编造 / 1=未命中要点且泛泛 / 2=命中部分要点 / 3=命中全部要点且方向正确",
+      "m_citations": "回答中 [M#] 记忆引用次数（新系统特有能力）"
+    },
+    "honest": "模拟语料 + 单 judge（doubao）+ n=4 探针，样本小，结果如实标注不外推"
+  },
+  "questions": [
+    {
+      "id": "q1_status",
+      "type": "current_status",
+      "turn": 1,
+      "question": "我之前关于显存优化的假设，现在的结论是什么？",
+      "gold_points": [
+        "复现实验推翻了「稀疏注意力降低 40% 显存」的假设",
+        "实测仅约 12%，且长序列下反而升高"
+      ],
+      "anchors": ["推翻", "12"],
+      "stale_traps": ["降低 40%"],
+      "stale_note": "把旧目标「降低 40%」当作已实现的现状 = 陈旧复述（时间感知失败）"
+    },
+    {
+      "id": "q2_decision",
+      "type": "current_status",
+      "turn": 1,
+      "question": "数据接入管道现在应该采用什么方案？",
+      "gold_points": [
+        "已修正转向流式管道",
+        "批处理方案已被取代，不再是最优解"
+      ],
+      "anchors": ["流式"],
+      "stale_traps": ["批处理是最优"],
+      "stale_note": "仍推荐批处理为最优 = 未感知取代事件"
+    },
+    {
+      "id": "q3_open",
+      "type": "inventory",
+      "turn": 1,
+      "question": "我还有哪些假设是没有被验证过的？",
+      "gold_points": [
+        "「课程学习能加速小模型收敛」的假设尚未验证（无相关实验证据）"
+      ],
+      "anchors": ["课程学习"],
+      "stale_traps": [],
+      "stale_note": ""
+    },
+    {
+      "id": "q4_history",
+      "type": "history",
+      "turn": 1,
+      "question": "当初混合检索提升召回率的假设，后来验证得怎么样？",
+      "gold_points": [
+        "实验证实召回率提升 16 个百分点",
+        "该假设被支持成立"
+      ],
+      "anchors": ["16"],
+      "stale_traps": [],
+      "stale_note": ""
+    },
+    {
+      "id": "q5_followup",
+      "type": "followup",
+      "turn": 2,
+      "depends_on": "q1_status",
+      "question": "那当初为什么提出这个显存优化的假设？",
+      "gold_points": [
+        "基于上下文回答提出动机（长文本推理的显存压力）",
+        "与第 1 轮口径一致，不出现自相矛盾"
+      ],
+      "anchors": ["显存"],
+      "stale_traps": [],
+      "stale_note": "追问链一致性：依赖第 1 轮上下文，考察多轮对话连贯性"
+    }
+  ]
+}

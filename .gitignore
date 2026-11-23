@@ -56,3 +56,4 @@ api/_tmp_dbg*
 api/tests/_[a-z]*_[0-9a-f]*/
 api/fgv_*/
 api/pytest-of-*/
+api/tmp_*/

@@ -173,6 +173,49 @@ export interface FinalEvent {
   graph_data?: GraphData;
   outline?: Outline;
   chart_spec?: ChartSpec;
+  // 模块七：M# → 会话轮次回放锚点（点击跳"你当时说了什么"）
+  memory_anchors?: Record<string, MemoryAnchor>;
+}
+
+/** 模块七：记忆锚点（M# 回放数据源；memory_events 行的溯源投影）。 */
+export interface MemoryAnchor {
+  memory_id: string;
+  kind: string;
+  conversation_id: string;
+  turn: number;
+  thread_id: string;
+  content: string;
+  ts: number;
+}
+
+/** 模块七：开场研究简报（memory_brief SSE 事件 / POST /api/memory/brief 共用形状）。 */
+export interface MemoryBriefEvent {
+  empty?: boolean;
+  generated_at?: string;
+  engine?: string;
+  items?: BriefItem[];
+  past_hypotheses?: { id: string; content: string; status: string; ts_iso: string }[];
+  /** ATLAS 漂移降级口径：文字提示（借思想，非隐层干预）。 */
+  drift_hint?: string;
+}
+
+export interface BriefItem {
+  hypothesis: {
+    id: string; content: string; subject?: string; status: string;
+    ts_iso: string; conversation_id: string; turn: number; thread_id: string;
+  };
+  verdict: "supported" | "refuted" | "neutral" | "unverified";
+  verdict_source: string;
+  reasoning: string;
+  confidence: number;
+  evidence: BriefEvidence[];
+  transitions_applied?: string[];
+}
+
+export interface BriefEvidence {
+  source: string; kind: string; content: string;
+  memory_id: string; conversation_id: string; turn: number; thread_id: string;
+  e_refs: string[]; ts_iso?: string; relation?: string;
 }
 
 export interface GraphNode {
@@ -536,6 +579,8 @@ export interface SSEHandlers {
   // reasoning_delta 为思维链增量（reasoning_content），先于 delta 到达
   meta?: (d: { thread_id: string; conversation_id?: string }) => void;
   reasoningDelta?: (t: string) => void;
+  // 模块七：开场研究简报（meta 后直发；{empty:true} 前端不渲染卡片）
+  memoryBrief?: (d: MemoryBriefEvent) => void;
 }
 
 /** SSE 帧解析（EventSource 不支持 POST，手写 fetch 流解析；streamChat/resumeChat 共用）。 */
@@ -569,6 +614,7 @@ async function consumeSSE(resp: Response, on: SSEHandlers): Promise<void> {
           else if (event === "evidence") on.evidence?.(data);
           else if (event === "verifier") on.verifier?.(data);
           else if (event === "artifact") on.artifact?.(data);
+          else if (event === "memory_brief") on.memoryBrief?.(data);
           else if (event === "done") on.done?.(data);
         }
       }
@@ -819,6 +865,17 @@ export interface HealthReport {
     note: string;
     healthy: boolean;
   };
+  /** 模块七：记忆子系统只读披露（不入 7 子分权重，模块明细区展示）。 */
+  memory_health?: {
+    events: number;
+    hypotheses: number;
+    hypotheses_active: number;
+    active_edges: number;
+    stale_events: number;
+    llm_extract_share: number | null;
+    note: string;
+    healthy: boolean;
+  } | null;
 }
 
 /** 系统健康报告(健康中心页;只读聚合,公式随返回值下发)。 */
@@ -1483,5 +1540,88 @@ export async function zh2enTranslate(text: string): Promise<{ translation: strin
     body: JSON.stringify({ text }),
   });
   if (!r.ok) throw new Error((await r.json()).detail ?? `HTTP ${r.status}`);
+  return r.json();
+}
+
+// ---------- 模块七：记忆与状态（/memory 页数据源） ----------
+
+/** memory_events 行的公开形态（时间已转 ISO 8601，见后端 _dump_public）。 */
+export interface MemoryEvent {
+  id: string;
+  kind: string;            // hypothesis | experiment_result | finding | decision | preference | topic
+  content: string;
+  subject: string;
+  conversation_id: string;
+  turn: number;
+  thread_id: string;
+  ts_iso: string;
+  status: string;          // proposed | active | supported | refuted | superseded（hypothesis FSM）
+  importance: number;
+  strength: number;
+  layer: string;           // LML | SML（FadeMem 双层，P1 起迁移）
+  source: string;          // llm | rule | manual | agent
+  entities: string[];
+  meta: Record<string, unknown>;
+  t_valid_from_iso: string | null;
+  t_valid_to_iso: string | null;
+}
+
+/** 因果/时序边（UPSERT confirm_count 为确认次数）。 */
+export interface MemoryEdge {
+  id: string;
+  src: string;
+  dst: string;
+  relation: string;        // refutes | supersedes | supports | elaborates | same_topic | cause
+  kind: string;            // rule（P0）| llm（P1 升级）
+  confirm_count: number;
+  status: string;
+}
+
+export interface TimelineResp {
+  events: MemoryEvent[];
+  edges: MemoryEdge[];
+  meta: {
+    n_events: number;
+    n_edges: number;
+    time_range?: { expr: string; start_iso: string; end_iso: string } | null;
+  };
+}
+
+export interface HypothesisItem extends MemoryEvent {
+  transitions: { from: string; to: string; at: number; why: string; verdict_source: string }[];
+  legal_next: string[];
+}
+
+/** 研究时间线：自然语言时间表达式（expr）或 kind/会话过滤。 */
+export async function fetchMemoryTimeline(
+  params: { expr?: string; kind?: string; conversation_id?: string; limit?: number } = {}
+): Promise<TimelineResp> {
+  const q = new URLSearchParams();
+  if (params.expr) q.set("expr", params.expr);
+  if (params.kind) q.set("kind", params.kind);
+  if (params.conversation_id) q.set("conversation_id", params.conversation_id);
+  if (params.limit) q.set("limit", String(params.limit));
+  const r = await fetch(`${API}/api/memory/timeline?${q.toString()}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/** 假设 FSM 状态板数据。 */
+export async function fetchMemoryHypotheses(): Promise<{ hypotheses: HypothesisItem[] }> {
+  const r = await fetch(`${API}/api/memory/hypotheses`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/** 按需构建开场研究简报（/chat 简报卡的挂载取数通道；SSE 为主通道）。 */
+export async function postMemoryBrief(
+  conversationId = "", useJudge = false
+): Promise<MemoryBriefEvent> {
+  const r = await fetch(`${API}/api/memory/brief`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversation_id: conversationId, use_judge: useJudge }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }

@@ -290,6 +290,28 @@ export default function HealthPage() {
                   )}
                 </div>
 
+                <div className="h-detail-block" data-testid="memory-health-block">
+                  <b>记忆 · 记忆子系统（模块七，只读披露）</b>
+                  {report.memory_health ? (
+                    <p className="kv num" title={report.memory_health.note}>
+                      事件 {report.memory_health.events} · 假设 {report.memory_health.hypotheses}
+                      （活跃 {report.memory_health.hypotheses_active}）·
+                      因果边 {report.memory_health.active_edges} ·
+                      终态 {report.memory_health.stale_events} ·
+                      抽取 LLM 占比{" "}
+                      <b style={{
+                        color: report.memory_health.healthy ? "var(--ok)" : "var(--ink-3)",
+                      }}>
+                        {report.memory_health.llm_extract_share != null
+                          ? `${Math.round(report.memory_health.llm_extract_share * 100)}%`
+                          : "—"}
+                      </b>
+                    </p>
+                  ) : (
+                    <p className="kv muted">暂无记忆事件（模块七尚未产生数据）</p>
+                  )}
+                </div>
+
                 <div className="h-detail-block">
                   <b>性能 · 问答 LLM 延迟（窗口内）</b>
                   <p className="kv num">

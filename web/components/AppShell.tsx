@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
   { href: "/judge", label: "评审导览", Icon: Judge },
   { href: "/audit", label: "透明度中心", Icon: Eye },
   { href: "/health", label: "健康中心", Icon: Activity },
+  { href: "/memory", label: "记忆", Icon: Graph },   // 模块七：研究时间线/假设状态板（第 11 页，学术专属）
 ];
 
 /** 普通模式可见的导航集合（学术专属页全部隐藏） */

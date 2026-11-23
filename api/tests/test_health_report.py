@@ -74,7 +74,7 @@ def test_failed_trace_penalizes_reliability_and_coverage():
 
 def test_fixed_weights_no_renormalize_when_metric_missing(monkeypatch):
     """缺失维度按 0 计：runtime_total = Σ(value×weight)，权重不被重新归一化。"""
-    from app.api_routes import routes
+    from app.api_routes import health_report, routes
     orig_query = routes.db.query
 
     def fake_query(sql, *args, **kwargs):
@@ -83,7 +83,7 @@ def test_fixed_weights_no_renormalize_when_metric_missing(monkeypatch):
         return orig_query(sql, *args, **kwargs)
 
     monkeypatch.setattr(routes.db, "query", fake_query)
-    monkeypatch.setattr(routes, "_HEALTH_MIN_TRACES", 1)
+    monkeypatch.setattr(health_report, "_HEALTH_MIN_TRACES", 1)
     d = _get()
     assert "performance" in d["missing"]
     assert "performance" not in d["scores"]
@@ -128,10 +128,10 @@ def test_performance_uses_qa_module_and_window():
 
 
 def test_external_eval_gate_cap(monkeypatch):
-    from app.api_routes import routes
+    from app.api_routes import health_report
 
-    monkeypatch.setattr(routes, "_HEALTH_MIN_TRACES", 1)
-    monkeypatch.setattr(routes, "_latest_eval_gold", lambda: (
+    monkeypatch.setattr(health_report, "_HEALTH_MIN_TRACES", 1)
+    monkeypatch.setattr(health_report, "_latest_eval_gold", lambda: (
         "test-round",
         {"time": "2026-11-15 12:00:00",
          "gates": {"recall": True, "compare_ok": False},
@@ -151,8 +151,8 @@ def test_external_eval_gate_cap(monkeypatch):
 
 
 def test_insufficient_sample_no_total(monkeypatch):
-    from app.api_routes import routes
-    monkeypatch.setattr(routes, "_HEALTH_MIN_TRACES", 10_000)
+    from app.api_routes import health_report
+    monkeypatch.setattr(health_report, "_HEALTH_MIN_TRACES", 10_000)
     d = _get()
     assert d["insufficient"] is True
     assert d["total"] is None

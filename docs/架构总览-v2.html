@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Meridian 科研助手 Agent · 架构总览 v2（时间感知记忆升级版）</title>
+<style>
+  :root{
+    --paper:#f5f1e8; --card:#fffdf9; --line:#d9d2c0; --ink:#3f3a2e; --dim:#8a8272;
+    --accent:#b5493a; --new-bg:#e7f3ec; --new-bd:#79b892; --new-ink:#1d5c40;
+    --mod-bg:#fdf0df; --mod-bd:#d9a55e; --mod-ink:#8a5a1a;
+    --mem-bd:#2e7d5b; --mem-bg:#f2faf5;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--paper); color:var(--ink);
+       font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;}
+  .page{width:1440px; padding:22px 26px 18px; margin:0 auto;}
+  /* ---------- header ---------- */
+  header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;}
+  h1{font-size:21px; color:var(--accent); letter-spacing:.5px;}
+  h1 small{font-size:13px; color:var(--dim); font-weight:normal; margin-left:8px;}
+  .subtitle{font-size:11px; color:var(--dim); margin-top:4px;}
+  .legend{font-size:11px; text-align:right; line-height:1.7; color:var(--dim);}
+  .legend b{color:var(--ink);}
+  .pill{display:inline-block; padding:1px 8px; border-radius:10px; border:1px solid; margin-left:4px;}
+  .pill.g{border-color:var(--new-bd); color:var(--new-ink); background:var(--new-bg);}
+  .pill.o{border-color:var(--mod-bd); color:var(--mod-ink); background:var(--mod-bg);}
+  .pill.n{border-color:var(--line); color:var(--dim); background:#f2ede1;}
+  /* ---------- columns ---------- */
+  .cols{display:grid; grid-template-columns:1fr 322px; gap:12px; align-items:start;}
+  .layer{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px 11px; margin-bottom:10px;}
+  .layer h3{font-size:13.5px;}
+  .layer h3 .en{font-size:10px; color:var(--dim); font-weight:normal; margin-left:6px;}
+  .layer .note{font-size:10px; color:var(--dim); margin:1px 0 8px;}
+  .chips{display:flex; flex-wrap:wrap; gap:5px;}
+  .chip{font-size:11px; padding:3px 9px; background:#f2ede1; border:1px solid #ddd5c2;
+        border-radius:6px; color:#4a4436; line-height:1.55;}
+  .chip b{color:#2e2a20;}
+  .chip.new{background:var(--new-bg); border-color:var(--new-bd); color:var(--new-ink);}
+  .chip.new b{color:#14432e;}
+  .chip.mod{background:var(--mod-bg); border-color:var(--mod-bd); color:var(--mod-ink);}
+  .chip.mod b{color:#6e4512;}
+  /* memory layer highlight */
+  .layer.mem{border:2px solid var(--mem-bd); background:var(--mem-bg); position:relative;}
+  .layer.mem h3{color:#14432e;}
+  .badge{position:absolute; top:-11px; right:14px; background:var(--mem-bd); color:#fff;
+         font-size:10.5px; padding:2px 10px; border-radius:10px; letter-spacing:1px;}
+  /* side cards */
+  .side .layer{margin-bottom:10px;}
+  .side h3{font-size:12.5px; color:#7a5a2e;}
+  /* modules */
+  .mods{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:2px;}
+  .mod{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 11px;}
+  .mod h4{font-size:12px; color:var(--accent);}
+  .mod h4 span{float:right; font-size:9.5px; color:var(--dim); font-family:Consolas,monospace; font-weight:normal;}
+  .mod ul{list-style:none; margin-top:5px;}
+  .mod li{font-size:10.5px; line-height:1.6; color:#57503f; padding-left:12px; position:relative;}
+  .mod li::before{content:"▪"; position:absolute; left:0; color:#b0a685; font-size:9px;}
+  .mod.wide{grid-column:1 / -1; border:2px solid var(--mem-bd); background:var(--mem-bg);}
+  .mod.wide h4{color:#14432e;}
+  .mod.wide li::before{color:#79b892;}
+  /* footer */
+  footer{margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:10px;
+         padding:8px 14px; display:flex; justify-content:space-between; align-items:center;}
+  footer .q{font-size:12px; font-weight:bold;}
+  footer .q i{font-style:normal; font-size:11px; color:var(--dim); font-weight:normal; margin:0 3px;}
+  footer .sig{font-size:10px; color:var(--dim); white-space:nowrap;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <h1>Meridian 科研助手 Agent · 功能 × 技术栈 架构总览<small>v2 · 时间感知记忆升级版</small></h1>
+      <div class="subtitle">自上而下：前端交互 → 首页六模块应用 → <b style="color:#1d5c40">记忆与状态（v2 新增层）</b> → Agent 编排 → 证据与校验 → 解析与数据 ｜ 右侧为外部服务与模型</div>
+    </div>
+    <div class="legend">
+      <b>图例</b>：<span class="pill g">🆕 v2 新增</span><span class="pill o">🔧 策略级替换 / 内部修改</span><span class="pill n">🟢 保持不变</span><br>
+      变更统计：新增 <b>1 层 · 后端 +8 新文件/8 修改 · 3 表 · 4 prompt · 1 页 · 1 SSE 事件 · 1 工具</b> ｜ 删除模块 <b>0</b> ｜ 外部依赖新增 <b>0</b>
+    </div>
+  </header>
+
+  <div class="cols">
+    <!-- ============ 主列 ============ -->
+    <div class="main">
+
+      <div class="layer">
+        <h3>前端交互层<span class="en">WEB 前端 · 10 页 → 11 页 · 双模式</span></h3>
+        <div class="note">Next.js 14.2 (App Router) + React 18 + TypeScript · SSE 流式 · 四主题皮肤</div>
+        <div class="chips">
+          <span class="chip">🟢 Next.js（App Router）+ React + TypeScript——页面框架与状态</span>
+          <span class="chip">🟢 SSE 流式——回答 token 流 + Agent 节点卡片流</span>
+          <span class="chip">🟢 pdfjs-dist 4.x——画布渲染 canvas + text layer（bbox 红框回跳）</span>
+          <span class="chip">🟢 AntV G6——引用图谱力导图</span>
+          <span class="chip">🟢 Apache ECharts + echarts-gl——CSV 图表（radar3d / scatter3d）</span>
+          <span class="chip">🟢 四主题系统——classic / riso / majorelle / 玄墨夜行（wuxia）皮肤</span>
+          <span class="chip new"><b>🆕 /memory 研究时间线页</b>——记忆事件流 + 因果边图（G6）+ 假设状态板 + 漂移面板（第 11 页）</span>
+          <span class="chip mod"><b>🔧 /chat 增强</b>——开场「研究简报」卡 + 回答内 [M#] 徽章（M#→会话回放）</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <h3>应用层<span class="en">官方命题六模块 + 健康中心 +（模块七）· 全部保留，零删除</span></h3>
+        <div class="chips">
+          <span class="chip">🟢 ① 文献管理：上传 / 批量 / 语义去重 / 版本轴 + DiffLens</span>
+          <span class="chip">🟢 ② 溯源问答：单篇精读 · 多篇对比（维度对齐表）</span>
+          <span class="chip">🟢 ③ 阅读：原版/双栏混读 · 双栏联动 · 双语联动</span>
+          <span class="chip">🟢 ④ 检索发现：多源检索 · arXiv 追踪 · 推荐 · 引用含金量</span>
+          <span class="chip">🟢 ⑤ 图谱综述：引用图谱 · 社区发现 · 领域综述 · 研究跟踪</span>
+          <span class="chip">🟢 ⑥ 写作 Copilot：论文框架 · 拓扑 · CSV 出图 · 学术翻译</span>
+          <span class="chip">🟢 ⑦ 健康中心：7 个子分运行时健康分（n / 95%CI 全披露）</span>
+          <span class="chip new"><b>🆕 ⑧ 记忆与状态（模块七）</b>：研究时间线 · 假设状态板 · 研究简报 · 纵向记忆金标</span>
+        </div>
+      </div>
+
+      <div class="layer mem">
+        <div class="badge">🆕 v2 新增层</div>
+        <h3>记忆与状态层<span class="en">Time-Aware Memory · 事件流 / 时间图谱 / 状态机 三层分离</span></h3>
+        <div class="note">理论依据：THEANINE（NAACL 2025）时间线记忆图谱 · Generative Agents（UIST 2023）三信号检索 · FadeMem（arXiv 预印本）遗忘曲线 · Memory-T1 精筛思想 · MemGPT self-editing · 假设状态机与记忆分离（记忆=发生过什么，状态=现在处于什么）</div>
+        <div class="chips">
+          <span class="chip new"><b>🆕 记忆事件流</b>——memory_events（append-only 只增不删 · t_valid 时间有效期 · (event, time) 二元组）</span>
+          <span class="chip new"><b>🆕 时间知识图谱</b>——entities 实体消解 + memory_edges 因果/时序边（refutes / supersedes / supports / cause…；P0 规则建边 → P1 LLM 升级，规则边保留；过期标 superseded 不删除）</span>
+          <span class="chip new"><b>🆕 假设生命周期 FSM</b>——proposed→active→supported/refuted/superseded（合法转移表强制；与记忆层、LangGraph 任务层三态分清）</span>
+          <span class="chip new"><b>🆕 记忆检索器</b>——三信号 recency+importance+relevance（min-max 归一化等权相加）× FadeMem 强度 × 时间窗（timeparse：自然语言→区间）→ 多跳 BFS≤2 → 线性时间线路径</span>
+          <span class="chip new"><b>🆕 研究简报</b>——假设 vs 新证据 judge → memory_brief SSE 开场下发；无证据标 unverified 不冒充</span>
+          <span class="chip new"><b>🆕 巩固 worker</b>——FadeMem 双层软衰减（LML β=0.8 / SML β=1.2 · 滞回 0.7/0.3 · 只降排序不物理删除）+ 周期假设复核（仿 tracker 水位线）</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <h3>Agent 编排层<span class="en">层次状态机 · 可视化 · 可审计</span></h3>
+        <div class="chips">
+          <span class="chip">🟢 LangGraph 状态机——Router → Planner → Executor → Verifier → Responder（+ Recover 回环 · checkpoint 续跑）</span>
+          <span class="chip">🟢 五专家路由——Reader 单篇 / Compare 跨文 / Graph 图谱 / Writer 写作 / Viz 出图（意图表 + UI 强制指定 + TTFT 规则快路径省 4.1s）</span>
+          <span class="chip">🟢 LLM 包豆 doubao-seed-2.1-lite（火山方舟 · OpenAI 兼容 /chat/completions）</span>
+          <span class="chip">🟢 Guardrails——工具白名单 · 批评传令 · 双模式意图/工具裁剪 · Prompt 版本审计</span>
+          <span class="chip mod"><b>🔧 +2 钩子</b>——runner 轮末异步记忆抽取（问答延迟零增加）；responder 注入「记忆时间线」块 + [M#] 校验</span>
+          <span class="chip mod"><b>🔧 +1 工具（P1）</b>——memory_save：agent 白名单内主动写入记忆（MemGPT self-editing 落地；只写事件，消解/建边 worker 异步补）</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <h3>证据与校验层<span class="en">Evidence-First · 抗幻觉核心 · 本层不动</span></h3>
+        <div class="chips">
+          <span class="chip">🟢 切块——section-aware（约 900 字 / 100 重叠 · 表格独立成块 · 带 block_ids / page / bbox）</span>
+          <span class="chip">🟢 混合检索——BM25（SQLite FTS5 + CJK bigram）× Dense（BGE-M3 / fastembed 本地兜底）</span>
+          <span class="chip">🟢 融合重排——RRF k=60 + bge-reranker-v2-m3（标识符/数值/图表块加权）</span>
+          <span class="chip">🟢 Evidence Pack [E1..En]——动态编号（8 块证据预算）· 强制编号引用 · 无效编号剔除 + 定向重生成</span>
+          <span class="chip">🟢 后验校验——L1 编号存在 · L2 引文覆盖 ≥0.85 · L3 数值逐字 · L4 批量语义判定</span>
+          <span class="chip">🟢 ClaimTrace 四态——supported / needs check / unsupported / absent + bbox 回跳</span>
+          <span class="chip mod"><b>🔧 并列新编号 [M#]</b>——记忆引用：M#→会话轮次回放（你当时说了什么），E#→PDF bbox（论文原文），两空间独立校验互不干扰</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <h3>解析与数据层<span class="en">DocIR · 可检索 · 可回指 · 数据基座</span></h3>
+        <div class="chips">
+          <span class="chip">🟢 解析路由——probe（采样 10 页）→ native: PyMuPDF / scanned: MinerU 2.5.4 OCR / VLM 逐页识读 / 异常兜底 PyMuPDF</span>
+          <span class="chip">🟢 PyMuPDF（fitz）双档阅读引擎 · find_tables→GFM 图表 · References 多通道正则切分</span>
+          <span class="chip">🟢 DocIR——带 bbox 的结构块 JSON（标题/段落/表格/公式/参考文献）· 可检索 · 可回指</span>
+          <span class="chip">🟢 任务——FastAPI + uvicorn 进程内 ThreadPoolExecutor 异步解析 · SSE 推送进度</span>
+          <span class="chip mod"><b>🔧 SQLite 新增 3 表</b>——memory_events / entities / memory_edges（<b>不换 Neo4j</b>：千条量级邻接表足够，量级边界如实标注）</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ 右侧服务列 ============ -->
+    <div class="side">
+      <div class="layer">
+        <h3>模型服务 · LLM</h3>
+        <div class="chips">
+          <span class="chip">🟢 豆包 doubao-seed-2.1-lite 火山方舟 · OpenAI 兼容（兼容 DeepSeek/MiniMax 可换无关）</span>
+          <span class="chip new"><b>🆕 记忆小调用</b>——抽取 / 关系判定 / 时间线精炼 / 简报（轮末异步 · 约 3–5 次小调用/轮，失败规则兜底）</span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>模型服务 · VLM 视觉模型</h3>
+        <div class="chips">
+          <span class="chip">🟢 doubao-vision / qwen-vl-max——扫描件整页识读</span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>模型服务 · 向量与重排</h3>
+        <div class="chips">
+          <span class="chip">🟢 BAAI/bge-m3 SiliconFlow embeddings——dense 检索</span>
+          <span class="chip">🟢 bge-reranker-v2-m3 硅基重排</span>
+          <span class="chip">🟢 fastembed 本地兜底（断网可用）</span>
+          <span class="chip mod"><b>🔧 记忆向量复用同一管线</b>（索引时算 · 批 8 + 退避 · vec 缺失如实披露）</span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>学术数据源</h3>
+        <div class="chips">
+          <span class="chip">🟢 arXiv Atom API + sickle OAI-PMH（追踪订阅）</span>
+          <span class="chip">🟢 Semantic Scholar / OpenAlex——多源检索 · 元数据补全 · 被引统计</span>
+          <span class="chip">🟢 GitHub API——复现探测（tool_cache 缓存）</span>
+          <span class="chip new"><b>🆕 简报新证据源</b>——tracked_items 新条目进入假设周期复核</span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>本机部件</h3>
+        <div class="chips">
+          <span class="chip">🟢 MinerU 2.5.4 独立 venv（subprocess 调用；Docker 内显式关闭走 PyMuPDF）</span>
+          <span class="chip">🟢 SQLite 3 + FTS5 单文件库——全部结构化数据</span>
+          <span class="chip new"><b>🆕 零新增外部依赖</b>——无 Neo4j / Redis / 独立向量库服务，2 容器 compose 口径不变</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 模块卡 ============ -->
+  <div class="mods">
+    <div class="mod">
+      <h4>模块一 · 文献管理与解析<span>upload / docir</span></h4>
+      <ul>
+        <li>上传校验：SHA-256 秒传 · MinHash/LSH 语义去重 + DiffLens 版本轴</li>
+        <li>三档解析路由：native / scanned-OCR / VLM 逐页 · PyMuPDF 兜底</li>
+        <li>DocIR：结构块 JSON + GFM 公式 + References 多通道切分 🟢</li>
+      </ul>
+    </div>
+    <div class="mod">
+      <h4>模块二 · 抗幻觉问答<span>chat / verify</span></h4>
+      <ul>
+        <li>融合检索：FTS5 M2 + dense + RRF · 生成 doubao [E#] 强制引用</li>
+        <li>校验：L1-L4 + ClaimTrace 四态 · bbox 红框回跳 · 拒答兜底</li>
+        <li>🔧 开场「研究简报」卡 + 回答并列 [M#] 记忆引用（→会话回放）</li>
+      </ul>
+    </div>
+    <div class="mod">
+      <h4>模块三 · 阅读与翻译<span>reader</span></h4>
+      <ul>
+        <li>高亮交互：pdfjs canvas + text layer bbox · 结构视图 DocIR→HTML</li>
+        <li>双向跳转：[n] ↔ References（正反查证）· 双语 1:1 对齐滚动</li>
+        <li>翻译：占位符保护（公式/代码）· 术语表 · 缓存续译 🟢</li>
+      </ul>
+    </div>
+    <div class="mod">
+      <h4>模块四 · 检索追踪推荐<span>discover / tracker</span></h4>
+      <ul>
+        <li>多源检索：arXiv / S2 / OpenAlex 三源并行去重 · 引用含金量过滤</li>
+        <li>订阅：sickle OAI-PMH 水位线续跑 · last_run 断点补拉</li>
+        <li>推荐：五分量评分（含 recency）· 👍👎 反馈重加权 🟢</li>
+      </ul>
+    </div>
+    <div class="mod">
+      <h4>模块五 · 图谱与综述<span>graph / ideas</span></h4>
+      <ul>
+        <li>构图：references 表 → networkx · Louvain + PageRank + 介数</li>
+        <li>可视化：AntV G6 力导图（导出 PNG/JSON）· 基石/边缘标记</li>
+        <li>综述：五节三段线 LLM 生成 · 每句持证据 · Future Work 三源核查 🟢</li>
+      </ul>
+    </div>
+    <div class="mod">
+      <h4>模块六 · 写作 Copilot<span>copilot</span></h4>
+      <ul>
+        <li>论文框架：章节导航 · [R#] References 白名单（0 幻觉）</li>
+        <li>拓扑图：DiagramSpec → Mermaid / Graphviz / TikZ · 规则降级</li>
+        <li>CSV：ECharts line/bar/radar3d/scatter3d · 图注数字可回溯 🟢</li>
+      </ul>
+    </div>
+    <div class="mod wide">
+      <h4>🆕 模块七 · 记忆与状态（Time-Aware Memory）<span>chat / memory</span></h4>
+      <ul>
+        <li><b>记忆事件流</b>：append-only 只增不删 · t_valid 时间有效期 · 轮末异步抽取（hypothesis / experiment_result / finding / decision / preference / topic）+ memory_save 工具自写（P1，白名单管控）</li>
+        <li><b>时间知识图谱</b>：实体消解（entities）+ 因果/时序边（memory_edges：refutes / supersedes / supports / elaborates / cause / same_topic）· 过期标 superseded 保留演化史</li>
+        <li><b>假设生命周期 FSM</b>：proposed → active → supported / refuted / superseded（合法转移表强制，与记忆层分清边界）</li>
+        <li><b>时间感知检索</b>：三信号（recency 0.995^h / importance / relevance 等权）× FadeMem 强度 × 时间窗（自然语言→区间）→ 多跳 → 线性时间线路径注入 responder</li>
+        <li><b>研究简报</b>：memory_brief SSE 开场下发——"你在 X 日提出的假设 H，已被这两周的实验/新文献推翻"[M#]+[E#] 双链溯源 · 无证据标 unverified</li>
+        <li><b>评测</b>：30 会话仿真种子生成器（答辩演示，如实标注模拟语料）+ 纵向金标（假设召回 / 矛盾检出 P-R / 陈旧判断 · 脚本自产 + 20% 人工抽检）+ FadeMem 参数消融 + 基线消融（无记忆 / 朴素 top-k / 全历史）</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <div class="q">工程质量<i>｜</i>🔧 342 → ~390 pytest 单测<i>｜</i>19 → 22 e2e<i>｜</i>CI 4 jobs<i>｜</i>金标 17/17 gates + 🆕 纵向记忆金标<i>｜</i>Prompt 审计台账 +4 记忆 prompt<i>｜</i>2 容器 compose（零新增外部服务）</div>
+    <div class="sig">Meridian v2 · 模块七「时间感知记忆」升级对照版 · 2026-11</div>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -98,6 +98,23 @@ def is_boilerplate_hit(text: str) -> bool:
     return bool(_BOILERPLATE_RE.search(text or ""))
 
 
+def _memory_save(content: str, kind: str = "finding", subject: str = "",
+                 importance: int = 6) -> dict:
+    """模块七 P1（MemGPT self-editing 落地）：agent 判断「这条值得跨会话记住」时主动写入。
+
+    只写事件（append-only，source=agent 如实标注）；实体消解/建边/衰减由巩固 worker
+    异步补——工具内零 LLM 调用，不阻塞问答主链路。会话/轮次溯源由 runner 置入
+    memory.turn_ctx（ContextVar，与 set_doc_mode 同机制）。与轮末抽取按同轮同内容去重。"""
+    from ..memory import store
+    from ..memory.extract import turn_ctx
+    conv, turn, thread_id = turn_ctx.get(("", 0, ""))
+    ev = store.add_event(kind, content, conversation_id=conv, turn=turn,
+                         thread_id=thread_id, subject=subject[:60],
+                         importance=int(importance), source="agent")
+    return {"ok": True, "memory_id": ev["id"], "kind": ev["kind"],
+            "note": "已写入记忆流（消解/建边由巩固 worker 异步补）"}
+
+
 def _align_dimension(evidence: list[dict], paper_ids: list[str]) -> dict:
     """维度对齐：按 (aspect, paper) 分组，每格取 RRF 最优命中 → 对比表结构。
 
@@ -676,6 +693,14 @@ TOOLS: dict[str, ToolSpec] = {spec.name: spec for spec in [
         params={"paper_id": "str", "block_id": "str", "lang": "str"},
         allowed_agents={"reader", "writer"}, fn=_translate_block,
         returns='{"ok","translation":{text,format_ok},"stats"}'),
+    # ---- 模块七 P1：agent 受控自写记忆（MemGPT self-editing；写记忆不是证据源，
+    #      不进 GENERAL_DISABLED_TOOLS——双模式下普通文档同样可用）----
+    ToolSpec(
+        name="memory_save", desc="把值得跨会话记住的研究事实写入记忆流"
+                                "（用户假设/实验结果/决定/偏好；只写事实与决定，勿记流水账）",
+        params={"content": "str", "kind": "str", "subject": "str", "importance": "int"},
+        allowed_agents={"reader", "compare", "writer", "graph"}, fn=_memory_save,
+        returns='{"ok","memory_id","kind","note"}'),
 ]}
 
 

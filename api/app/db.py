@@ -251,6 +251,64 @@ CREATE TABLE IF NOT EXISTS version_diffs (
   created_at   REAL NOT NULL,
   UNIQUE(base_id, target_id)
 );
+
+-- 模块七 R1：时间感知记忆——事件流（append-only 只增不删，(event, time) 二元组）
+CREATE TABLE IF NOT EXISTS memory_events (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT DEFAULT 'local',
+  conversation_id TEXT DEFAULT '',
+  turn           INTEGER DEFAULT 0,
+  thread_id      TEXT DEFAULT '',
+  ts             REAL NOT NULL,           -- 事件发生时间（UTC epoch；API 层输出 ISO 8601）
+  kind           TEXT NOT NULL,           -- hypothesis | experiment_result | finding | decision | preference | topic
+  content        TEXT NOT NULL,
+  subject        TEXT DEFAULT '',
+  entities_json  TEXT DEFAULT '[]',
+  t_valid_from   REAL,                    -- 事实有效窗（NULL=开区间）
+  t_valid_to     REAL,
+  status         TEXT NOT NULL DEFAULT 'active',  -- hypothesis 走 FSM（store.HYPOTHESIS_TRANSITIONS）；其余 active|superseded
+  confidence     REAL DEFAULT 0.0,
+  verdict_source TEXT DEFAULT '',         -- judge | evidence | manual | ''（未判定）
+  importance     INTEGER DEFAULT 5,       -- LLM 1-10 分
+  access_count   INTEGER DEFAULT 0,
+  last_access    REAL DEFAULT 0,
+  strength       REAL DEFAULT 0.5,        -- FadeMem v(t)，初值=importance/10（清单 §2.3）
+  layer          TEXT DEFAULT 'LML',      -- LML（β=0.8 慢衰减）| SML（β=1.2 快衰减），P1 worker 迁移
+  vec            BLOB,                    -- float32 LE（复用 indexing 管线，R3 起写入）
+  source         TEXT NOT NULL DEFAULT 'rule',  -- llm | rule | manual | agent
+  meta_json      TEXT DEFAULT '{}'        -- FSM 转移历史 transitions[] / E# 映射 / corrected_from
+);
+CREATE INDEX IF NOT EXISTS idx_mem_ev_conv ON memory_events(conversation_id, turn);
+CREATE INDEX IF NOT EXISTS idx_mem_ev_kind ON memory_events(kind, status, ts);
+
+-- 模块七 R1：实体消解（规则归一；P1 升级 LLM 别名判定）
+CREATE TABLE IF NOT EXISTS entities (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT DEFAULT 'local',
+  canonical_name TEXT NOT NULL,
+  aliases_json   TEXT DEFAULT '[]',       -- 小写别名集（含 canonical 的小写形式）
+  type           TEXT DEFAULT '',
+  created_at     REAL NOT NULL,
+  UNIQUE(user_id, canonical_name)
+);
+
+-- 模块七 R1：因果/时序边（UNIQUE 三元组 + UPSERT 确认计数，清单 §2.5；关系翻转标 superseded 保留演化史）
+CREATE TABLE IF NOT EXISTS memory_edges (
+  id             TEXT PRIMARY KEY,
+  src            TEXT NOT NULL,           -- memory_events.id
+  dst            TEXT NOT NULL,
+  relation       TEXT NOT NULL,           -- refutes | supersedes | supports | elaborates | same_topic | cause
+  kind           TEXT DEFAULT 'rule',     -- rule（P0）| llm（P1 升级）
+  confirm_count  INTEGER DEFAULT 1,       -- 同三元组再次确认次数（证据强度信号）
+  evidence_json  TEXT DEFAULT '{}',       -- {evidence: [...], superseded_by_relation: ...}
+  verdict_source TEXT DEFAULT '',
+  ts             REAL NOT NULL,
+  t_valid_from   REAL,
+  t_valid_to     REAL,
+  status         TEXT DEFAULT 'active',   -- active | superseded
+  UNIQUE(src, dst, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_mem_edges_dst ON memory_edges(dst, status);
 """
 
 

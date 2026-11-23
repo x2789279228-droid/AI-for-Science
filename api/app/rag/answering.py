@@ -19,6 +19,7 @@ from ..llm.prompts import resolve as _resolve
 from ..llm.schemas import ClaimList
 
 CIT = re.compile(r"\[E(\d+)\]")
+CIT_M = re.compile(r"\[M(\d+)\]")   # 模块七：记忆引用独立编号空间（与 E# 互不干扰）
 
 SYSTEM_QA = (
     "你是一名严谨的科研文献问答助手。回答规则：\n"
@@ -258,6 +259,30 @@ def validate_citations(answer: str, eid_map: dict[int, dict]) -> tuple[str, list
     return cleaned, sorted(set(guardrails))
 
 
+def validate_memory_citations(answer: str, n_memory: int) -> tuple[str, list[str]]:
+    """[M#] 独立编号校验（模块七，清单 §2.9）：只做 L1 存在性——编号必须落在本次注入的
+    M1..Mn 内，无效剔除 + guardrail。与 E# 校验互不干扰；M# 是可选回指，不参与
+    no_citation_found / L2 覆盖率 / 定向重生成（记忆不是论文证据）。"""
+    guardrails: list[str] = []
+
+    def check(m: re.Match) -> str:
+        n = int(m.group(1))
+        if 1 <= n <= n_memory:
+            return m.group(0)
+        guardrails.append(f"invalid_memory_citation:M{n}")
+        return ""
+
+    if n_memory <= 0:
+        # 未注入任何记忆时出现 [M#] 一律视为幻觉引用，剔除
+        def strip_all(mm: re.Match) -> str:
+            guardrails.append(f"invalid_memory_citation:M{mm.group(1)}")
+            return ""
+        cleaned = CIT_M.sub(strip_all, answer)
+    else:
+        cleaned = CIT_M.sub(check, answer)
+    return cleaned, sorted(set(guardrails))
+
+
 def near_evidence_block(hits: list[dict], k: int = 3, missing: list[str] | None = None) -> str:
     """拒答时附「最接近的 k 条证据」（设计文档拒答策略：供人工判断，而非硬编）。
     missing（v2.3.0）：证据缺失的检索面清单——先如实列出「文档未明确说明」的方面，
@@ -373,17 +398,32 @@ def llm_claims(answer: str, hits: list[dict]) -> tuple[list[dict], dict[int, dic
 
 def build_qa_messages(question: str, hits: list[dict], language: str = "",
                       doc_mode: str = "paper", aspects: list[str] | None = None,
-                      missing: list[str] | None = None) -> list[dict]:
+                      missing: list[str] | None = None,
+                      memory_block: str = "") -> list[dict]:
     """QA 消息组装。doc_mode=general 时选用普通模式槽位（system_qa_general）——
     两套提示词并存：学术槽位文本与版本不受普通模式影响。
     aspects/missing（v2.3.0 分级作答）：复合问题的子问题清单与证据缺失面，
-    供 responder 按「能答的作答 + 缺失面单列」分级输出；均为空时消息与旧版一致。"""
+    供 responder 按「能答的作答 + 缺失面单列」分级输出；均为空时消息与旧版一致。
+    memory_block（模块七）：注入记忆时间线 <memory_timeline> 块（[M#] 编号空间独立）。"""
     context, _ = format_context(hits)
     if doc_mode == "general":
         system, _ = _resolve("qa", "system_qa_general", SYSTEM_QA_GENERAL)
     else:
         system, _ = _resolve("qa", "system_qa", SYSTEM_QA)
+    if memory_block:
+        # 记忆时间线合法例外（r9 A/B 评测驱动）：与规则 1 同层级声明，否则
+        # 「禁止外部知识」会把用户本人的历史记忆压制成分级拒答（实测复现）
+        system += (
+            "\n【记忆时间线例外】用户消息中 <memory_timeline> 的 [M#] 记忆，"
+            "是本系统为该用户记录的历史研究事实（假设/实验/决定/偏好及其演化），"
+            "不属于外部知识。当用户问题涉及其历史研究（如「我之前的假设现在怎么样」）时，"
+            "**必须依据时间线内容回答，并在相应论断后紧跟 [M编号] 引用**"
+            "（引用格式同 [E#] 规则；M# 不适用于「未找到依据」的判定）——"
+            "这优先于本提示词中「仅使用 <context> 证据」的限制。"
+            "论文内容相关论断仍只以 [E#] 为准，M# 与 E# 不得互相冒用。")
     blocks = [f"<context>\n{context}\n</context>"]
+    if memory_block:
+        blocks.append(f"<memory_timeline>\n{memory_block}\n</memory_timeline>")
     if aspects:
         blocks.append("<sub_questions>\n" + "\n".join(f"- {a}" for a in aspects) + "\n</sub_questions>")
     if missing:

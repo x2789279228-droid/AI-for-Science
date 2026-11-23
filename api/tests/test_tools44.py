@@ -21,7 +21,7 @@ os.environ["MINERU_ENABLED"] = "off"
 os.environ["EMBEDDING_BACKEND"] = "off"
 
 from app.agents import tools
-from app.agents.state import AGENT_LABEL
+from app.agents.state import AGENT_LABEL, GENERAL_DISABLED_TOOLS
 from app.config import settings
 
 DATA = Path(os.environ["SCHOLAR_DATA_DIR"])
@@ -57,12 +57,17 @@ def no_network(monkeypatch):
 # ---------- 白名单矩阵 ----------
 
 def test_tool_registry_13_tools_and_whitelist():
+    # 模块七 P1：+memory_save（agent 受控自写记忆）→ 14 工具
     assert set(tools.TOOLS) == {
         "kb_search", "get_meta", "align_dimension", "citation_graph", "graph_metrics",
         "extract_table", "chart_spec_builder",
         "arxiv_search", "paper_download", "pdf_parse", "github_repro",
         "python_sandbox", "translate_block",
+        "memory_save",
     }
+    # 双模式边界：写记忆不是证据源，普通模式可用（清单 §三#13）
+    assert "memory_save" not in GENERAL_DISABLED_TOOLS
+    tools.assert_allowed("graph", "memory_save")
     # 评分表 8 工具全部在编
     for t in ("arxiv_search", "paper_download", "pdf_parse", "kb_search",
               "github_repro", "python_sandbox", "citation_graph", "translate_block"):

@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "sessions": 30,
+    "n_events": 37,
+    "generated_at": "2026-11-21T21:43:27.428820+08:00",
+    "honest": "模拟语料 + 脚本自产金标 + 20% 人工抽检（半人工，清单 §七.4）",
+    "human_review": {
+      "ratio": 0.2,
+      "sampled": 9,
+      "status": "pending",
+      "note": "抽检清单见 seed_review_sample.md；人工核对后置 passed"
+    },
+    "edges": {
+      "refutes": "规则建边路（推翻标记）",
+      "supports": "直写 upsert（模拟 LLM 建边产物，离线环境如实标注）"
+    },
+    "acceptance_brief_check": {
+      "pass": true,
+      "detail": "假设 A 判定结果=refuted（期望 refuted）；位置=past_hypotheses；engine=rule"
+    }
+  },
+  "hypotheses": [
+    {
+      "role": "A",
+      "expect_id": "me_d432713b58fd",
+      "expect_verdict": "refuted",
+      "content": "我假设稀疏注意力能把长文本推理的显存占用降低 40%"
+    },
+    {
+      "role": "B",
+      "expect_id": "me_293932b4347d",
+      "expect_verdict": "supported",
+      "content": "我假设混合检索能把召回率提升 15 个百分点"
+    },
+    {
+      "role": "C",
+      "expect_id": "me_1f8dfbf07363",
+      "expect_verdict": "unverified",
+      "content": "我假设课程学习能加速小模型收敛"
+    },
+    {
+      "role": "D",
+      "expect_id": "me_c1cdb53a751c",
+      "expect_verdict": null,
+      "expect_past": true,
+      "content": "我假设批处理管道是数据接入的最优解"
+    },
+    {
+      "role": "D2",
+      "expect_id": "me_714b211efc02",
+      "expect_verdict": "any",
+      "expect_past": false,
+      "content": "我修正假设：流式管道取代批处理管道成为数据接入最优解",
+      "note": "只要求保持活跃（新方向无证据 → unverified 合法），不锁具体 verdict"
+    }
+  ],
+  "contradiction_pairs": [
+    {
+      "hyp": "me_d432713b58fd",
+      "evidence": "me_ebb98f1f9c47",
+      "expect_relation": "refutes"
+    }
+  ],
+  "staleness": [
+    {
+      "query": "现在长文本显存优化该用什么方案？",
+      "expect_ids": [
+        "me_ebb98f1f9c47"
+      ],
+      "avoid_ids": [
+        "me_8ad44512ba5c",
+        "me_b7e06fa584d3"
+      ]
+    },
+    {
+      "query": "数据接入管道的当前结论是什么？",
+      "expect_ids": [
+        "me_714b211efc02"
+      ],
+      "avoid_ids": [
+        "me_c1cdb53a751c"
+      ]
+    },
+    {
+      "query": "最近两周长文本显存优化的实验结论",
+      "expect_ids": [
+        "me_ebb98f1f9c47"
+      ],
+      "avoid_ids": [
+        "me_8ad44512ba5c",
+        "me_b7e06fa584d3"
+      ],
+      "note": "时间窗口径：timeparse 解析「最近两周」→ 窗外旧支持实验被滤除"
+    }
+  ],
+  "brief_check_turn30": {
+    "expect": "refuted",
+    "expect_id": "me_d432713b58fd",
+    "note": "§七.1：第 30 会话开场简报为用户级研究简报（含全部活跃假设）"
+  }
+}

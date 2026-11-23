@@ -1,8 +1,335 @@
-  ok 14 e2e\acceptance.spec.ts:434:1 › ⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章 (2.3s)
-  ok 15 e2e\acceptance.spec.ts:444:1 › ⑮ 健康中心：运行时 7 子分+工程快照+样本/外部校准明细 (1.6s)
-  ok 16 e2e\acceptance.spec.ts:477:1 › ⑯ 标题树跨页定位：点跨页 TOC → 页码切换 + 目标块闪高亮 (1.3s)
-  ok 17 e2e\acceptance.spec.ts:497:1 › ⑰ [n, m] 分组引用：逐号 chip + 双向跳转 (1.5s)
-  ok 18 e2e\acceptance.spec.ts:528:1 › ⑱ 大纲加载失败：错误态 + 重试恢复 (1.4s)
-  ok 19 e2e\acceptance.spec.ts:548:1 › ⑲ PDF TextLayer：容器提供 --scale-factor（取词框对齐） (1.2s)
+$ playwright test
+[WebServer] D:\传智杯\scholar-agent\api\.venv\Lib\site-packages\fitz\__init__.py:17: FutureWarning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+[WebServer]   warnings.warn(
+[WebServer] INFO:     Started server process [37300]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] 22:01:11 | INFO    | tracking | arXiv 追踪 worker 已启动（间隔 21600s）
+[WebServer] 22:01:11 | INFO    | memory | 记忆巩固 worker 已启动（间隔 600s）
+[WebServer] 22:01:11 | INFO    | uvicorn.error | Application startup complete.
+[WebServer] 22:01:11 | INFO    | uvicorn.error | Uvicorn running on http://127.0.0.1:8100 (Press CTRL+C to quit)
+[WebServer] 22:01:13 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:13 | INFO    | uvicorn.access | 127.0.0.1:61108 - "GET /api/health HTTP/1.1" 200
+[WebServer] $ next dev -p 3005
 
-  19 passed (1.9m)
+Running 22 tests using 1 worker
+
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14747 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14749 - "GET /api/papers/p_1264458b503d/docir?page=9 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14747 - "GET /api/papers/p_1264458b503d/docir?page=19 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14749 - "GET /api/papers/p_1264458b503d/docir?page=39 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14747 - "GET /api/papers/p_1264458b503d/docir?page=59 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14749 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14747 - "GET /api/papers/p_1264458b503d/docir?page=99 HTTP/1.1" 200
+[WebServer] 22:01:28 | INFO    | uvicorn.access | 127.0.0.1:14749 - "GET /api/papers/p_1264458b503d/docir?page=129 HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10510 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10512 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10514 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10512 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10517 - "GET /api/papers/p_1264458b503d/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10510 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10519 - "GET /api/papers/p_1264458b503d/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10514 - "GET /api/papers/p_1264458b503d HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10514 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10514 - "GET /api/papers/p_1264458b503d/docir?page=80 HTTP/1.1" 200
+[WebServer] 22:01:39 | INFO    | uvicorn.access | 127.0.0.1:10514 - "GET /api/papers/p_1264458b503d/pdf HTTP/1.1" 200
+  ok  1 e2e\acceptance.spec.ts:46:1 › ① 双语对照：左栏滚动 → 右栏跟随 (12.8s)
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10523 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10531 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10533 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10535 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10533 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10535 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10531 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10538 - "GET /api/papers/p_94db928f9476/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10533 - "GET /api/papers/p_94db928f9476 HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10533 - "GET /api/papers/p_94db928f9476/docir?page=0 HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10533 - "GET /api/papers/p_94db928f9476/docir?page=1 HTTP/1.1" 200
+[WebServer] 22:01:41 | INFO    | uvicorn.access | 127.0.0.1:10538 - "GET /api/papers/p_94db928f9476/pdf HTTP/1.1" 200
+  ok  2 e2e\acceptance.spec.ts:97:1 › ② [n] 引用标记 → References 跳转高亮 (1.1s)
+[WebServer] 22:01:44 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:45 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:49 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:50 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21563 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21564 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21568 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "GET /api/copilot/datasets HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "POST /api/copilot/datasets HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "GET /api/copilot/datasets HTTP/1.1" 200
+[WebServer] 22:01:51 | INFO    | uvicorn.access | 127.0.0.1:21566 - "OPTIONS /api/copilot/chart HTTP/1.1" 200
+[WebServer] 22:01:53 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:53 | INFO    | uvicorn.access | 127.0.0.1:21568 - "POST /api/copilot/chart HTTP/1.1" 200
+  ok  3 e2e\acceptance.spec.ts:114:1 › ③ Copilot：CSV → 柱状图 canvas + 图注 (12.0s)
+[WebServer] 22:01:54 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:55 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10548 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10550 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10553 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10555 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10553 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10553 - "OPTIONS /api/discover/search HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | uvicorn.access | 127.0.0.1:10555 - "POST /api/discover/search HTTP/1.1" 200
+[WebServer] 22:01:56 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=transformer+attention&limit=8&fields=title%2Cauthors%2Cyear%2Cvenue%2CcitationCount%2CexternalIds%2Cabstract%2CopenAccessPdf "HTTP/1.1 429 "
+[WebServer] 22:01:56 | INFO    | httpx | HTTP Request: GET https://api.openalex.org/works?search=transformer+attention&per-page=8&mailto=scholar-agent%40example.org "HTTP/1.1 503 Service Unavailable"
+[WebServer] 22:01:56 | INFO    | httpx | HTTP Request: GET http://export.arxiv.org/api/query?search_query=all%3Atransformer+attention&start=0&max_results=8&sortBy=submittedDate&sortOrder=descending "HTTP/1.1 301 Moved Permanently"
+[WebServer] 22:01:59 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=transformer+attention&limit=8&fields=title%2Cauthors%2Cyear%2Cvenue%2CcitationCount%2CexternalIds%2Cabstract%2CopenAccessPdf "HTTP/1.1 429 "
+[WebServer] 22:01:59 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:00 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:02 | INFO    | uvicorn.access | 127.0.0.1:34468 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:02 | INFO    | uvicorn.access | 127.0.0.1:34469 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:02 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:04 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:07 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:08 | INFO    | uvicorn.access | 127.0.0.1:42356 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:08 | INFO    | uvicorn.access | 127.0.0.1:42354 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:09 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:14 | INFO    | uvicorn.access | 127.0.0.1:21675 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:14 | INFO    | uvicorn.access | 127.0.0.1:21673 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:20 | INFO    | uvicorn.access | 127.0.0.1:14542 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:20 | INFO    | uvicorn.access | 127.0.0.1:14544 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:26 | INFO    | uvicorn.access | 127.0.0.1:48709 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:26 | INFO    | uvicorn.access | 127.0.0.1:48711 - "GET /api/health HTTP/1.1" 200
+  ok  4 e2e\acceptance.spec.ts:129:1 › ④ Discover：多源搜索完成（结果或错误如实） (33.3s)
+[WebServer] 22:02:29 | INFO    | uvicorn.access | 127.0.0.1:48726 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:02:29 | INFO    | uvicorn.access | 127.0.0.1:48721 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:02:29 | INFO    | uvicorn.access | 127.0.0.1:48727 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:29 | INFO    | uvicorn.access | 127.0.0.1:48729 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:02:29 | INFO    | uvicorn.access | 127.0.0.1:48727 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:02:30 | INFO    | httpx | HTTP Request: POST https://api.semanticscholar.org/graph/v1/paper/batch?fields=externalIds%2CcitationCount "HTTP/1.1 400 Bad Request"
+[WebServer] 22:02:30 | WARNING | insights | S2 外部被引查询失败 → 纯库内信号: HTTPStatusError: Client error '400 Bad Request' for url 'https://api.semanticscholar.org/graph/v1/paper/batch?fields=externalIds%2CcitationCount'
+[WebServer] For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+[WebServer] 22:02:35 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:35 | INFO    | uvicorn.access | 127.0.0.1:21924 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:35 | INFO    | uvicorn.access | 127.0.0.1:21922 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:40 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:41 | INFO    | uvicorn.access | 127.0.0.1:17486 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:41 | INFO    | uvicorn.access | 127.0.0.1:17485 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:45 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:47 | INFO    | uvicorn.access | 127.0.0.1:51030 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:47 | INFO    | uvicorn.access | 127.0.0.1:51028 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:49 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:53 | INFO    | uvicorn.access | 127.0.0.1:15154 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:53 | INFO    | uvicorn.access | 127.0.0.1:15152 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:02:55 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:02:59 | INFO    | uvicorn.access | 127.0.0.1:61445 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:02:59 | INFO    | uvicorn.access | 127.0.0.1:61443 - "GET /api/papers?doc_type=paper HTTP/1.1" 304
+[WebServer] 22:03:00 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:03:00 | INFO    | uvicorn.access | 127.0.0.1:48723 - "GET /api/graph HTTP/1.1" 200
+  ok  5 e2e\acceptance.spec.ts:145:1 › ⑤ Graph：G6 渲染节点 > 0 + 20 篇全量性能 (33.7s)
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=9 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=19 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=39 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=59 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=99 HTTP/1.1" 200
+[WebServer] 22:03:01 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=129 HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45797 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45795 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45800 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45795 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45797 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45802 - "GET /api/papers/p_1264458b503d/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45795 - "GET /api/papers/p_1264458b503d/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45800 - "GET /api/papers/p_1264458b503d HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45800 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45800 - "GET /api/papers/p_1264458b503d/docir?page=80 HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45800 - "GET /api/papers/p_1264458b503d/pdf HTTP/1.1" 200
+[WebServer] 22:03:02 | INFO    | uvicorn.access | 127.0.0.1:45795 - "GET /api/papers/p_1264458b503d/ref-quality HTTP/1.1" 200
+  ok  6 e2e\acceptance.spec.ts:160:1 › ⑥ PDF↔译文联动：点译文块 → PDF bbox 红框锚定 (2.3s)
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=9 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=19 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=39 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=59 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=99 HTTP/1.1" 200
+[WebServer] 22:03:03 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=129 HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45811 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45812 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45814 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45811 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45811 - "GET /api/papers/p_1264458b503d HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45814 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45817 - "GET /api/papers/p_1264458b503d/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45812 - "GET /api/papers/p_1264458b503d/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45812 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45812 - "GET /api/papers/p_1264458b503d/docir?page=80 HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45812 - "GET /api/papers/p_1264458b503d/pdf HTTP/1.1" 200
+[WebServer] 22:03:04 | INFO    | uvicorn.access | 127.0.0.1:45817 - "GET /api/papers/p_1264458b503d/ref-quality HTTP/1.1" 200
+  ok  7 e2e\acceptance.spec.ts:238:1 › ⑦ PDF↔译文反向联动：点 PDF 块热点 → 译文定位闪高亮 (2.4s)
+[WebServer] 22:03:05 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45825 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45830 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45827 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45831 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45827 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45827 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:06 | INFO    | uvicorn.access | 127.0.0.1:45831 - "GET /api/papers/p_94db928f9476/ref-quality HTTP/1.1" 200
+  ok  8 e2e\acceptance.spec.ts:271:1 › ⑧ Discover：从库内导入参考文献 + 含金量可逆过滤 (1.2s)
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=9 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=19 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=39 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=59 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61448 - "GET /api/papers/p_1264458b503d/docir?page=99 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:61450 - "GET /api/papers/p_1264458b503d/docir?page=129 HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:07 | INFO    | uvicorn.access | 127.0.0.1:16763 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16766 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16763 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16766 - "GET /api/papers/p_1264458b503d HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16763 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16768 - "GET /api/papers/p_1264458b503d/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers/p_1264458b503d/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers/p_1264458b503d/docir?page=79 HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers/p_1264458b503d/docir?page=80 HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers/p_1264458b503d/ref-quality HTTP/1.1" 200
+[WebServer] 22:03:08 | INFO    | uvicorn.access | 127.0.0.1:16762 - "GET /api/papers/p_1264458b503d/pdf HTTP/1.1" 200
+  ok  9 e2e\acceptance.spec.ts:307:1 › ⑨ 双语滚动同步量化：中线块锚定一致 (2.4s)
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16780 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16778 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16783 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16784 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16783 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:10 | INFO    | uvicorn.access | 127.0.0.1:16783 - "OPTIONS /api/copilot/diagram HTTP/1.1" 200
+[WebServer] 22:03:12 | INFO    | httpx | HTTP Request: POST https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions "HTTP/1.1 200 OK"
+[WebServer] 22:03:14 | INFO    | uvicorn.access | 127.0.0.1:16784 - "POST /api/copilot/diagram HTTP/1.1" 200
+[WebServer] 22:03:14 | INFO    | uvicorn.access | 127.0.0.1:62765 - "GET /api/sandbox/figure/a0c31b408233.png HTTP/1.1" 200
+  ok 10 e2e\acceptance.spec.ts:362:1 › ⑩ Copilot 拓扑图：四格式真渲染（Mermaid svg + DOT/TikZ 源码 + PNG） (6.0s)
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62773 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62773 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62775 - "GET /api/graph HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62781 - "GET /api/papers?include_archived=1&doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62783 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62782 - "GET /api/families HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62781 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62777 - "GET /api/qa/recent?limit=3 HTTP/1.1" 200
+[WebServer] 22:03:16 | INFO    | uvicorn.access | 127.0.0.1:62773 - "GET /api/qa/recent?limit=3 HTTP/1.1" 200
+  ok 11 e2e\acceptance.spec.ts:382:1 › ⑪ 首页工作台渲染：数据带+最近问答卡+图谱速览 canvas (1.6s)
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19615 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19610 - "POST /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19616 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19608 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19612 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19615 - "POST /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19610 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19618 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19618 - "POST /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19615 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19610 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:22 | INFO    | uvicorn.access | 127.0.0.1:19618 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+  ok 12 e2e\acceptance.spec.ts:401:1 › ⑫ Chat 空态演示卡：点击即提问（拦截后端，仅断言请求发出） (5.8s)
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19628 - "GET /api/graph HTTP/1.1" 200
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19630 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19633 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19627 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19634 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:23 | INFO    | uvicorn.access | 127.0.0.1:19627 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+  ok 13 e2e\acceptance.spec.ts:420:1 › ⑬ 图谱舞台：画布高度 ≥560px + 统计 popover 可见 + 无渲染失败 (2.0s)
+  ok 14 e2e\acceptance.spec.ts:435:1 › ⑭ 评审导览：8 步路线 + 全页无 D11/排期徽章 (2.1s)
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14807 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14808 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14804 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14807 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14811 - "GET /api/health-report HTTP/1.1" 200
+[WebServer] 22:03:29 | INFO    | uvicorn.access | 127.0.0.1:14802 - "GET /api/health-report HTTP/1.1" 200
+  ok 15 e2e\acceptance.spec.ts:445:1 › ⑮ 健康中心：运行时 7 子分+工程快照+样本/外部校准明细 (3.0s)
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14813 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14815 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14823 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14827 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14827 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14823 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14830 - "GET /api/papers/p_94db928f9476/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:30 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476 HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/docir?page=0 HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/docir?page=1 HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/pdf HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/ref-quality HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/docir?page=2 HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14825 - "GET /api/papers/p_94db928f9476/docir?page=3 HTTP/1.1" 200
+  ok 16 e2e\acceptance.spec.ts:478:1 › ⑯ 标题树跨页定位：点跨页 TOC → 页码切换 + 目标块闪高亮 (1.3s)
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14813 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:31 | INFO    | uvicorn.access | 127.0.0.1:14815 - "GET /api/papers/p_94db928f9476/docir HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29435 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29432 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29436 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29432 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29432 - "GET /api/papers/p_94db928f9476 HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29436 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29435 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29439 - "GET /api/papers/p_94db928f9476/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29439 - "GET /api/papers/p_94db928f9476/docir?page=0 HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29439 - "GET /api/papers/p_94db928f9476/docir?page=1 HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29439 - "GET /api/papers/p_94db928f9476/ref-quality HTTP/1.1" 200
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:29439 - "GET /api/papers/p_94db928f9476/pdf HTTP/1.1" 200
+  ok 17 e2e\acceptance.spec.ts:498:1 › ⑰ [n, m] 分组引用：逐号 chip + 双向跳转 (1.3s)
+[WebServer] 22:03:32 | INFO    | uvicorn.access | 127.0.0.1:14813 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29448 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29450 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29453 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29454 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29453 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29454 - "GET /api/papers/p_94db928f9476 HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29450 - "GET /api/papers/p_94db928f9476/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29450 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:33 | INFO    | uvicorn.access | 127.0.0.1:29450 - "GET /api/papers/p_94db928f9476/docir?page=0 HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29450 - "GET /api/papers/p_94db928f9476/docir?page=1 HTTP/1.1" 200
+  ok 18 e2e\acceptance.spec.ts:529:1 › ⑱ 大纲加载失败：错误态 + 重试恢复 (1.3s)
+[WebServer] 22:03:34 | ERROR   | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+[WebServer] handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+[WebServer] Traceback (most recent call last):
+[WebServer]   File "C:\Users\Admin\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\events.py", line 88, in _run
+[WebServer]     self._context.run(self._callback, *self._args)
+[WebServer]   File "C:\Users\Admin\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+[WebServer]     self._sock.shutdown(socket.SHUT_RDWR)
+[WebServer] ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:14813 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29466 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29464 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29468 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29464 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29464 - "GET /api/papers/p_94db928f9476 HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29468 - "GET /api/papers HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29466 - "GET /api/papers/p_94db928f9476/docir?outline=1 HTTP/1.1" 200
+[WebServer] 22:03:34 | INFO    | uvicorn.access | 127.0.0.1:29471 - "GET /api/papers/p_94db928f9476/translation?lang=zh HTTP/1.1" 200
+[WebServer] 22:03:35 | INFO    | uvicorn.access | 127.0.0.1:29471 - "GET /api/papers/p_94db928f9476/docir?page=0 HTTP/1.1" 200
+[WebServer] 22:03:35 | INFO    | uvicorn.access | 127.0.0.1:29471 - "GET /api/papers/p_94db928f9476/docir?page=1 HTTP/1.1" 200
+  ok 19 e2e\acceptance.spec.ts:549:1 › ⑲ PDF TextLayer：容器提供 --scale-factor（取词框对齐） (966ms)
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53488 - "GET /api/memory/timeline?limit=200 HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53490 - "GET /api/memory/hypotheses HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53494 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53495 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53488 - "GET /api/memory/hypotheses HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53499 - "GET /api/memory/timeline?limit=200 HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53496 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:38 | INFO    | uvicorn.access | 127.0.0.1:53499 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+  ok 20 e2e\acceptance.spec.ts:602:1 › ⑳ 记忆页：时间线事件流 + FSM 状态板 + G6 因果图渲染 (4.5s)
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53508 - "OPTIONS /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53510 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53506 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53508 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53510 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53508 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53512 - "POST /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53510 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:41 | INFO    | uvicorn.access | 127.0.0.1:53514 - "POST /api/memory/brief HTTP/1.1" 200
+  ok 21 e2e\acceptance.spec.ts:617:1 › ㉑ chat 开场研究简报卡：被推翻假设如实指出 + 判定徽章 (1.9s)
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53526 - "OPTIONS /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53529 - "GET /api/papers?doc_type=paper HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53524 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53530 - "GET /api/health HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53529 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53530 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53526 - "POST /api/memory/brief HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53529 - "GET /api/conversations?limit=50&doc_mode=paper HTTP/1.1" 200
+[WebServer] 22:03:43 | INFO    | uvicorn.access | 127.0.0.1:53532 - "POST /api/memory/brief HTTP/1.1" 200
+  ok 22 e2e\acceptance.spec.ts:627:1 › ㉒ [M#] 会话轮次回放：简报证据 chip 点击 → 回放浮层 (2.3s)
+
+  22 passed (2.6m)
