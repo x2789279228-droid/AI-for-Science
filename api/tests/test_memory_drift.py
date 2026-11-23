@@ -56,7 +56,7 @@ def test_sml_decays_faster_than_lml():
     t = T0 + 60 * DAY
     v_lml = drift.strength_at(importance=5, ts=T0, layer="LML", now=t)
     v_sml = drift.strength_at(importance=5, ts=T0, layer="SML", now=t)
-    assert v_sml < v_lml, "SML β=1.2 必须比 LML β=0.8 衰减快"
+    assert v_sml <= v_lml, "SML β=1.2 必须不慢于 LML（触底下限后相等也是正确语义）"
 
 
 def test_strength_bounded_and_monotonic():
@@ -64,8 +64,22 @@ def test_strength_bounded_and_monotonic():
     for days in (1, 10, 50, 200, 800):
         v = drift.strength_at(importance=7, ts=T0, layer="LML", now=T0 + days * DAY)
         assert 0.0 <= v <= 1.0
-        assert v < prev, "时间越远强度必须单调不增"
+        assert v <= prev, "时间越远强度必须单调不增"
         prev = v
+
+
+def test_floor_prevents_numerical_extinction():
+    """r10 数值稳定性修复的锁定测试：β>1 超线性衰减在长跨度 dt 上不得把强度
+    指数归零（= 软删除）——必须触底于 v0·V_FLOOR_RATIO。"""
+    v_800d = drift.strength_at(importance=5, ts=T0, layer="SML", now=T0 + 800 * DAY)
+    floor = (5 / 10) * drift.V_FLOOR_RATIO  # = 0.125
+    assert v_800d == pytest.approx(floor), "长跨度必须钳制在下限而非归零"
+    # 30 天 SML（r9 漏报场景）不再归零：仍保有可检索的区分度
+    v_30d = drift.strength_at(importance=6, ts=T0, layer="SML", now=T0 + 30 * DAY)
+    assert v_30d > 0.1, f"30 天 SML 强度 {v_30d} 不得数值归零"
+    # 下限钳制后触底 = v0 的 25%（衰减最低保留出厂电量 1/4，永不删除原则的量化表达）
+    v_3000d = drift.strength_at(importance=10, ts=T0, layer="SML", now=T0 + 3000 * DAY)
+    assert v_3000d == pytest.approx(1.0 * drift.V_FLOOR_RATIO)
 
 
 def test_hysteresis_migration():

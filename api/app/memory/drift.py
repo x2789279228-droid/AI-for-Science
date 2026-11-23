@@ -26,20 +26,32 @@ def _beta(layer: str) -> float:
 
 
 def _lambda_base() -> float:
-    """λ_base = ln2 / (11.25d)^β_LML —— I=0 时 LML 在 11.25 天处精确半衰。
+    """λ_base = ln2 / (11.25)^β_LML（单位：天^β）—— I=0 时 LML 在 11.25 天处精确半衰。
     运行时读取 settings（P2 网格消融需 env/monkeypatch 动态调 β）。"""
-    return math.log(2) / ((11.25 * DAY) ** settings.fade_beta_lml)
+    return math.log(2) / ((11.25) ** settings.fade_beta_lml)
+
+
+# 强度下限（占 v0 的 25%）：β>1 的超线性衰减在长跨度（周级以上）dt 上会使 v 指数归零
+# ——数值上等价于「软删除」，违反本模块「永不删除」原则（r10 实测：SML 层 30 天事件
+# v≈e^-274≈0，导致该记忆永久不可检索）。修复 = dt 以「天」为单位代入（论文原式秒单位
+# 在长程场景数值不稳定）+ 下限钳制「衰减最低保留出厂电量 1/4」。见 r10 验收报告。
+V_FLOOR_RATIO = 0.25
 
 
 def strength_at(*, importance: int, ts: float, layer: str, now: float) -> float:
-    """记忆当前强度 v(t) ∈ [0,1]。v(0) = importance/10（清单 §2.3 初值映射）。"""
+    """记忆当前强度 v(t) ∈ [v_floor, 1]。v(0) = importance/10（清单 §2.3 初值映射）。
+
+    r10 数值稳定性修复：dt 以**天**为单位代入 β 指数律（论文原式秒单位在长程 dt 上
+    使 β>1 的 SML 层指数爆炸归零）；并施加 v ≥ v_floor 的下限钳制——衰减可以
+    把记忆压到排序底部，但数值上不得等价于删除。"""
     v0 = max(0.1, min(1.0, importance / 10.0))
     imp = max(0.0, min(1.0, importance / 10.0))
     lam = _lambda_base() * math.exp(-settings.fade_mu * imp)
     beta = _beta(layer)
-    dt = max(0.0, now - ts)
-    v = v0 * math.exp(-lam * (dt ** beta))
-    return max(0.0, min(1.0, v))
+    dt_days = max(0.0, (now - ts)) / DAY
+    v = v0 * math.exp(-lam * (dt_days ** beta))
+    floor = v0 * V_FLOOR_RATIO
+    return max(floor, min(1.0, v))
 
 
 def migrate_layer(v: float, layer: str) -> tuple[str, str]:

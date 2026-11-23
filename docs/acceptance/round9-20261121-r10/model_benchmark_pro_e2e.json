@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "base_url": "http://localhost:8101",
+    "paper_id": "p_1264458b503d",
+    "generated_at": "2026-11-23T06:27:40.621097+00:00",
+    "honest": "模拟语料 + 单 judge + 小样本（n=4 探针×2 口径），结果不外推",
+    "judge_model": "doubao-seed-2.1-lite"
+  },
+  "summary": {
+    "mem": {
+      "n": 5,
+      "anchor_rate_avg": 0.5,
+      "judge_score_avg": 1.2,
+      "stale_leak_count": 1,
+      "judge_stale_repeated_count": 1,
+      "m_citations_total": 6,
+      "avg_elapsed_s": 13.4
+    },
+    "base": {
+      "n": 5,
+      "anchor_rate_avg": 0.2,
+      "judge_score_avg": 1.0,
+      "stale_leak_count": 0,
+      "judge_stale_repeated_count": 0,
+      "m_citations_total": 0,
+      "avg_elapsed_s": 12.0
+    }
+  },
+  "results": [
+    {
+      "qid": "q1_status",
+      "mode": "mem",
+      "question": "我之前关于显存优化的假设，现在的结论是什么？",
+      "conversation_id": "ab_mem_cdbc0b67",
+      "elapsed_s": 12.8,
+      "gen_elapsed_s": 12.8,
+      "t_start": 1795415116.0,
+      "anchor_rate": 0.5,
+      "anchors": {
+        "推翻": true,
+        "12": false
+      },
+      "stale_leak": true,
+      "stale_terms": [
+        "降低 40%"
+      ],
+      "judge_score": 2,
+      "judge_stale_repeated": false,
+      "judge_reason": "命中假设被推翻的核心结论，但未提及实测仅约12%、长序列下显存反而升高的关键细节。",
+      "m_citations": 1,
+      "answer_chars": 58
+    },
+    {
+      "qid": "q1_status",
+      "mode": "base",
+      "question": "我之前关于显存优化的假设，现在的结论是什么？",
+      "conversation_id": "ab_base_f11ff808",
+      "elapsed_s": 10.1,
+      "gen_elapsed_s": 10.1,
+      "t_start": 1795415130.9,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "推翻": false,
+        "12": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "回答未命中任何显存优化相关要点，仅说明未检索到对应依据，无有效结论输出。",
+      "m_citations": 0,
+      "answer_chars": 465
+    },
+    {
+      "qid": "q2_decision",
+      "mode": "mem",
+      "question": "数据接入管道现在应该采用什么方案？",
+      "conversation_id": "ab_mem_059756f6",
+      "elapsed_s": 14.8,
+      "gen_elapsed_s": 14.8,
+      "t_start": 1795415142.5,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "流式": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中流式管道、批处理被取代的要点，仅说明未检索到相关依据，未给出有效方案。",
+      "m_citations": 0,
+      "answer_chars": 425
+    },
+    {
+      "qid": "q2_decision",
+      "mode": "base",
+      "question": "数据接入管道现在应该采用什么方案？",
+      "conversation_id": "ab_base_079baad5",
+      "elapsed_s": 14.7,
+      "gen_elapsed_s": 14.7,
+      "t_start": 1795415158.9,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "流式": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中流式管道、批处理被取代的核心要点，未给出有效方案，泛泛说明无相关依据。",
+      "m_citations": 0,
+      "answer_chars": 468
+    },
+    {
+      "qid": "q3_open",
+      "mode": "mem",
+      "question": "我还有哪些假设是没有被验证过的？",
+      "conversation_id": "ab_mem_75b6d5da",
+      "elapsed_s": 13.8,
+      "gen_elapsed_s": 13.8,
+      "t_start": 1795415176.7,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "课程学习": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 0,
+      "judge_stale_repeated": true,
+      "judge_reason": "错误将未验证的课程学习加速小模型收敛假设归为已被取代的历史结论，与事实矛盾",
+      "m_citations": 1,
+      "answer_chars": 243
+    },
+    {
+      "qid": "q3_open",
+      "mode": "base",
+      "question": "我还有哪些假设是没有被验证过的？",
+      "conversation_id": "ab_base_62d35e23",
+      "elapsed_s": 14.6,
+      "gen_elapsed_s": 14.6,
+      "t_start": 1795415192.1,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "课程学习": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中「课程学习加速小模型收敛假设未验证」要点，未给出有效未验证假设",
+      "m_citations": 0,
+      "answer_chars": 44
+    },
+    {
+      "qid": "q4_history",
+      "mode": "mem",
+      "question": "当初混合检索提升召回率的假设，后来验证得怎么样？",
+      "conversation_id": "ab_mem_79e12967",
+      "elapsed_s": 14.0,
+      "gen_elapsed_s": 14.0,
+      "t_start": 1795415208.2,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "16": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 2,
+      "judge_stale_repeated": false,
+      "judge_reason": "命中假设被支持成立的要点，但召回率提升数值为15个百分点，与标准的16个百分点不符。",
+      "m_citations": 2,
+      "answer_chars": 80
+    },
+    {
+      "qid": "q4_history",
+      "mode": "base",
+      "question": "当初混合检索提升召回率的假设，后来验证得怎么样？",
+      "conversation_id": "ab_base_2db07508",
+      "elapsed_s": 10.3,
+      "gen_elapsed_s": 10.3,
+      "t_start": 1795415224.0,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "16": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中召回率提升16个百分点、假设成立的要点，未检索到相关依据，泛泛说明无法回答。",
+      "m_citations": 0,
+      "answer_chars": 653
+    },
+    {
+      "qid": "q5_followup",
+      "mode": "mem",
+      "question": "那当初为什么提出这个显存优化的假设？",
+      "conversation_id": "ab_mem_cdbc0b67",
+      "elapsed_s": 11.4,
+      "gen_elapsed_s": 11.4,
+      "t_start": 1795415235.7,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "显存": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未回答提出假设的动机，未命中长文本推理显存压力要点，仅说明无相关记录",
+      "m_citations": 2,
+      "answer_chars": 82
+    },
+    {
+      "qid": "q5_followup",
+      "mode": "base",
+      "question": "那当初为什么提出这个显存优化的假设？",
+      "conversation_id": "ab_base_f11ff808",
+      "elapsed_s": 10.5,
+      "gen_elapsed_s": 10.5,
+      "t_start": 1795415248.5,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "显存": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中提出动机相关要点，仅称未找到依据，未结合上下文说明长文本推理显存压力的动机。",
+      "m_citations": 0,
+      "answer_chars": 518
+    }
+  ]
+}

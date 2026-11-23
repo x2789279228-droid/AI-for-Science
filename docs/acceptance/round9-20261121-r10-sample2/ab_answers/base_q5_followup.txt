@@ -1,0 +1,13 @@
+【未找到依据】检索到的片段无法回答该问题。现有证据仅包含目录条目、致谢名单、优化算法相关介绍内容，未提及显存优化假设的提出背景、提出动机、要解决的核心问题相关信息。建议补充检索包含「显存优化假设」关键词的对应章节内容，或指定相关论文后再进行查询。
+
+> **未找到明确表述。**最接近的证据（供人工判断）：
+> 1. [E1] p6 · §Preface · 9.3
+Heuristics to improve performance . . . . . . . . . . . . . . . . . . . . . . 143…
+> 2. [E2] p13 · §Acknowledgements · orav, Ma-
+soud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor
+S.C.
+Lui, Sumit Bhatia, Julian Asilis, Hengc…
+> 3. [E3] p51 · §Summary · momentum was first
+applied in the context of stochastic gradient descent by Sutskever et al. (2013).
+Adaptive training algorithms:
+AdaGrad (…

@@ -1,0 +1,13 @@
+【未找到依据】检索到的片段无法回答该问题。
+建议：换关键词（如「显存优化」「假设提出背景」「动机」）重新检索，或指定具体论文/章节后再查询。
+
+> **未找到明确表述。**最接近的证据（供人工判断）：
+> 1. [E1] p6 · §Preface · 9.3
+Heuristics to improve performance . . . . . . . . . . . . . . . . . . . . . . 143…
+> 2. [E2] p13 · §Acknowledgements · orav, Ma-
+soud Mokhtari, Xavier Gabaix, Marco Garosi, Vincent Schönbach, Avishek Mondal, Victor
+S.C.
+Lui, Sumit Bhatia, Julian Asilis, Hengc…
+> 3. [E3] p5 · §_front · 1
+Introduction
+1…

@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     fade_beta_sml: float = 1.2          # 短期层指数 β（超线性快衰减）
     fade_theta_promote: float = 0.7     # 滞回：v ≥ 0.7 迁入 LML
     fade_theta_demote: float = 0.3      # 滞回：v ≤ 0.3 迁入 SML（中间保持原层防抖）
+    # 检索三信号权重（r10 网格扫参 42 组实测最优：recency 降权 + relevance 强化，
+    # 平均得分 0.92 vs 等权 0.845——recency 主导会压制跨会话的历史记忆；env 可消融）
+    ret_w_recency: float = 0.3
+    ret_w_importance: float = 1.0
+    ret_w_relevance: float = 1.2
+    ret_stale_penalty: float = 0.1      # 「当前不为真」降权乘子（0.6/0.3/0.1 网格实测 0.1 最优）
+    ret_hop_penalty: float = 0.5        # 多跳邻居衰减基数
     # 单次订阅刷新的条目上限（OAI/Atom 全量拉回后再截断，防止巨类目刷库）
     tracking_max_items: int = 30
     # Round4 横切：匿名用户限流（重端点 POST 每分钟次数；0 = 关闭）。单机单进程

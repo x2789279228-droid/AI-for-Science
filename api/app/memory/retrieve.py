@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+from ..config import settings
 from ..rag.cjk import cjk_bigram
 from ..rag.indexing import _pack, _query_vector, _unpack
 from . import memory_qa, store, timeparse
@@ -22,11 +23,6 @@ INF = float("inf")
 
 # Generative Agents recency 指数衰减基数（每小时 ×0.995）
 RECENCY_DECAY = 0.995
-# 多跳得分惩罚：hop1 ×0.5、hop2 ×0.25
-HOP_PENALTY = 0.5
-# 「当前不为真」降权（superseded/refuted）：历史不删除，但"现在"类查询不再推前——
-# 陈旧判断的排序语义（r7 评测驱动新增；时间窗查询不受此限，历史可按窗召回）
-STALE_PENALTY = 0.3
 
 
 def _bigrams(text: str) -> set[str]:
@@ -169,15 +165,18 @@ def retrieve_memories(query: str, *, user_id: str = "local", top_k: int = 5,
     # relevance 特例：所有候选原始相关度全零（词面/向量均无命中）时归一化置零而非抬成 1.0
     # ——否则「无相关记忆」与「完全相关」在排序上不可分，注入层也无法设命中门槛
     s_rel = _min_max(rel_raw) if max(rel_raw, default=0.0) > 1e-9 else [0.0] * len(rel_raw)
+    # 三信号权重（r10：默认等权 = Generative Agents 口径；意图自适应按问题类型覆盖）
+    w_sum = (settings.ret_w_recency + settings.ret_w_importance + settings.ret_w_relevance)
     scored: list[dict] = []
     for i, e in enumerate(cands):
-        base = (s_rec[i] + s_imp[i] + s_rel[i]) / 3.0   # 等权相加（清单 §三#6）
+        base = (settings.ret_w_recency * s_rec[i] + settings.ret_w_importance * s_imp[i]
+                + settings.ret_w_relevance * s_rel[i]) / w_sum
         final = base * float(e["strength"])             # FadeMem 强度乘子（只影响排序）
         # 「是否仍为真」一等公民（清单 §三#6 / 陈述模块三）：superseded/refuted 的记忆
         # 当前不为真 → 无时间窗查询时降权；历史不删除，按时间窗查询仍可召回
         stale = e["status"] in ("superseded", "refuted")
         if stale:
-            final *= STALE_PENALTY
+            final *= settings.ret_stale_penalty
         item = {k: v for k, v in e.items() if k != "vec"}
         item["scores"] = {"recency": round(s_rec[i], 4), "importance": round(s_imp[i], 4),
                           "relevance": round(s_rel[i], 4),
@@ -211,7 +210,7 @@ def retrieve_memories(query: str, *, user_id: str = "local", top_k: int = 5,
                 if not nb:
                     continue
                 item = {k: v for k, v in nb.items() if k != "vec"}
-                factor = HOP_PENALTY ** (hop + 1)
+                factor = settings.ret_hop_penalty ** (hop + 1)
                 item["scores"] = {"base": node["scores"]["base"], "recency": 0.0,
                                   "importance": 0.0, "relevance": 0.0,
                                   "strength": round(float(nb["strength"]), 4),
@@ -261,13 +260,14 @@ PAPER_MODE_KINDS = frozenset({"hypothesis", "finding", "decision"})
 
 
 def build_memory_block(query: str, *, doc_mode: str = "paper", user_id: str = "local",
-                       top_k: int = 3, max_events: int = 6,
-                       now_ts: float | None = None) -> tuple[str, dict]:
+                       top_k: int = 5, max_events: int = 8,
+                       now_ts: float | None = None) -> tuple[str, dict, dict]:
     """检索 + 时间线路径 → responder 注入块（[M#] 动态编号）与回放锚点映射。
 
-    返回 ("", {}) 当无相关记忆或任何内部失败——**注入绝不阻断问答主链路**。
-    M# 编号空间与 Evidence Pack 的 E# 完全独立（清单 §2.9），锚点携带
-    conversation_id/turn/thread_id 供前端点击回放（GET /api/qa/{trace_id}）。"""
+    r10 扫参最优默认：top_k=5 / max_events=8（注入时间线 3 条不够盘点与历史覆盖，
+    42 组网格实测 avg 0.92 vs 3 条 0.845）。返回 ("", {}) 当无相关记忆或任何内部
+    失败——**注入绝不阻断问答主链路**。M# 编号空间与 Evidence Pack 的 E# 完全独立
+    （清单 §2.9），锚点携带 conversation_id/turn/thread_id 供前端点击回放。"""
     try:
         res = retrieve_memories(query or "", user_id=user_id, top_k=top_k,
                                 now_ts=now_ts, touch=True)

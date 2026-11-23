@@ -1,0 +1,522 @@
+{
+  "meta": {
+    "reps": 3,
+    "questions": 4,
+    "task": "记忆问答合成（memory_refine 生产提示词 + 真实时间线）",
+    "generated_at": "2026-11-23 14:30 +0800"
+  },
+  "summary": {
+    "doubao-seed-2.1-lite": {
+      "anchor_avg_overall": 1.0,
+      "per_question": {
+        "q1_status": 1.0,
+        "q2_decision": 1.0,
+        "q3_open": 1.0,
+        "q4_history": 1.0
+      },
+      "full_hit_questions": 4,
+      "questions_total": 4,
+      "total_errs": 0,
+      "avg_latency_s": 2.0
+    },
+    "doubao-seed-2.1-pro": {
+      "anchor_avg_overall": 1.0,
+      "per_question": {
+        "q1_status": 1.0,
+        "q2_decision": 1.0,
+        "q3_open": 1.0,
+        "q4_history": 1.0
+      },
+      "full_hit_questions": 4,
+      "questions_total": 4,
+      "total_errs": 0,
+      "avg_latency_s": 2.1
+    },
+    "deepseek-v4.1-flash": {
+      "anchor_avg_overall": 1.0,
+      "per_question": {
+        "q1_status": 1.0,
+        "q2_decision": 1.0,
+        "q3_open": 1.0,
+        "q4_history": 1.0
+      },
+      "full_hit_questions": 4,
+      "questions_total": 4,
+      "total_errs": 0,
+      "avg_latency_s": 3.2
+    }
+  },
+  "results": [
+    {
+      "model": "doubao-seed-2.1-lite",
+      "qid": "q1_status",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 2.1,
+          "answer_head": "你之前关于显存优化的假设是[M1]：假设稀疏注意力能将长文本推理的显存占用降低40%。\n1. 该假设当前状态为**已推翻**[M1]\n2. 复现实验结果为：实测显存仅降低12%，且在长序列场景下显存占用反而升高，不符合原假设预期[M2]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 1.9,
+          "answer_head": "关于你之前提出的稀疏注意力降低长文本推理显存占用 40% 的假设，当前已被推翻：[M1]\n- 复现实验实测显存仅降低约 12%，远低于预期的 40%。[M2]\n- 当序列长度较长时，显存占用反而出现升高，未达到优化目标。[M2]"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 1.9,
+          "answer_head": "你关于显存优化的假设当前已被推翻[M1]：\n- 原假设：稀疏注意力可将长文本推理显存占用降低 40%[M1]\n- 复现实验实测：显存仅降低 12%，且在长序列场景下显存占用反而升高，原假设不成立[M2]"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-lite",
+      "qid": "q2_decision",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.5,
+          "answer_head": "根据你的研究记忆，当前关于数据接入管道的结论如下：\n- 最新有效假设：你已修正认为**流式管道是数据接入的最优解**，该假设处于提出阶段，尚未经实验验证。[M6]\n- 历史结论已失效：你此前曾假设**批处理管道是数据接入的最优解**，该假设"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 1.8,
+          "answer_head": "根据你最新的研究记录：\n- 原假设“批处理管道是数据接入最优解”已被取代，不再是当前有效方案 [M7]。\n- 你已修正为：**采用流式管道取代批处理管道**作为数据接入最优解，该假设目前处于提出阶段 [M6]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.0,
+          "answer_head": "数据接入管道当前应采用的方案如下：\n- 当前有效假设为流式管道方案，于[M6]提出，替代了此前的旧判断[M7]。\n- 旧判断[M7]（批处理管道为最优解）已被修正，不再作为推荐方案。"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-lite",
+      "qid": "q3_open",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 1.5,
+          "answer_head": "未被验证的假设如下：\n1. 假设课程学习能加速小模型收敛：当前状态为「提出」，尚无实验验证记录 [M5]。\n2. 修正后的假设「流式管道取代批处理管道成为数据接入最优解」：当前状态为「提出」，尚无实验验证记录 [M6]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 3.0,
+          "answer_head": "- 稀疏注意力降低长文本推理显存 40% 的假设：已被复现实验推翻，未达成预期结果 [M1][M2]\n- 混合检索召回率提升 15 个百分点的假设：已被实验验证支持，不属于未验证假设 [M3][M4]\n- 课程学习加速小模型收敛的假设：当前"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 1.8,
+          "answer_head": "根据记忆时间线，以下假设尚未被实验证实，处于待验证状态：\n1. 课程学习能加速小模型收敛的假设，当前状态为「提出」，暂无对应的验证实验记录 [M5]。\n2. 流式管道取代批处理管道成为数据接入最优解的修正假设，当前状态为「提出」，暂无对应的"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-lite",
+      "qid": "q4_history",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 1.8,
+          "answer_head": "根据记忆记录，该假设已得到实验支持：\n- 原假设为：混合检索能把召回率提升15个百分点 [M3]。\n- 后续实验实测召回率提升16个百分点，结果支持该假设 [M4]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 1.7,
+          "answer_head": "混合检索的假设已得到实验支持：[M3]\n1. 原假设：混合检索能把召回率提升15个百分点，[M3]；\n2. 实验结果：实测召回率提升16个百分点，达成预期，假设被支持，[M4]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 2.3,
+          "answer_head": "- 该假设为：混合检索可将召回率提升 15 个百分点 [M3]。\n- 后续实验结果为：召回率实际提升 16 个百分点，假设成立、被实验支持 [M4]。\n- 当前该假设的状态为「已支持」[M3]。"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-pro",
+      "qid": "q1_status",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 2.7,
+          "answer_head": "- 你最初假设稀疏注意力能把长文本推理的显存占用降低 40%，该假设现已被推翻，不再成立 [M1]。\n- 复现实验实测显存仅降低 12%，且在长序列下反而升高，因此推翻了原假设 [M2]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 2.1,
+          "answer_head": "- 你最初假设稀疏注意力能把长文本推理的显存占用降低 40%，该假设**现已被推翻**[M1]。\n- 复现实验显示实际仅降低 12%，且在长序列下显存反而升高[M2]。\n- 因此，\"降低 40%\"这一结论当前不成立[M1][M2]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 1.7,
+          "answer_head": "- 你最初假设稀疏注意力能把长文本推理的显存占用降低 40%，该假设现已被推翻 [M1]。\n- 复现实验实测仅降低 12%，且在长序列下显存占用反而升高，因此否定了原假设 [M2]。"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-pro",
+      "qid": "q2_decision",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.0,
+          "answer_head": "- 现在应采用**流式管道**作为数据接入方案：你已修正假设，认为流式管道取代批处理管道成为数据接入最优解，该假设当前状态为“提出”（尚未被实验验证）[M6]。\n- 此前“批处理管道是数据接入最优解”的假设已被取代，不再作为当前结论 [M7"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 1.8,
+          "answer_head": "- 现在应采用**流式管道**作为数据接入方案：你已修正假设，认为流式管道将取代批处理管道成为数据接入最优解（该假设目前处于「提出」状态，尚未经实验验证）[M6]。\n- 此前「批处理管道是数据接入最优解」的假设已被取代，不再成立 [M7]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.4,
+          "answer_head": "- 当前应采用**流式管道**作为数据接入方案；这是你修正后的假设，目前状态为“提出”[M6]。\n- 此前“批处理管道是数据接入最优解”的看法已被取代，不再成立[M7]。\n- 提醒：流式方案目前仍是假设阶段，记忆中没有其已被实验验证的记录["
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-pro",
+      "qid": "q3_open",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.8,
+          "answer_head": "- 课程学习能加速小模型收敛，状态为\"提出\"，尚未验证 [M5]。\n- 流式管道取代批处理管道成为数据接入最优解，状态为\"提出\"，尚未验证 [M6]。\n\n注：稀疏注意力降显存 40% 已被推翻 [M1][M2]，混合检索提升召回率已获支持 "
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.7,
+          "answer_head": "- 课程学习能加速小模型收敛，状态为\"提出\"，尚未验证 [M5]。\n- 流式管道取代批处理管道成为数据接入最优解，状态为\"提出\"，尚未验证 [M6]。\n\n其余假设均已有实验结论：稀疏注意力降显存 40% 已被推翻 [M1][M2]，混合检索"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 1.7,
+          "answer_head": "- 课程学习能加速小模型收敛（提出，尚未验证）[M5]\n- 流式管道取代批处理管道成为数据接入最优解（提出，尚未验证）[M6]\n\n注：批处理管道为最优解的假设已被取代，不再成立 [M7]。"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "doubao-seed-2.1-pro",
+      "qid": "q4_history",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 1.5,
+          "answer_head": "- 你最初假设混合检索能把召回率提升 15 个百分点 [M3]。\n- 后续实验证实召回率实际提升了 16 个百分点，因此该假设已获得支持 [M4]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 1.7,
+          "answer_head": "- 你当初假设混合检索能把召回率提升 15 个百分点[M3]。\n- 后续实验证实实际提升为 16 个百分点，支持了该假设[M4]。\n- 因此该假设当前状态为「已支持」[M3]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 1.8,
+          "answer_head": "- 你最初假设混合检索能把召回率提升 15 个百分点，该假设当前状态为「已支持」[M3]。\n- 后续实验实测召回率提升 16 个百分点，验证并支持了该假设 [M4]。"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "qid": "q1_status",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 3.0,
+          "answer_head": "关于显存优化的假设，当前结论是**已被推翻，不成立**：\n\n- 你曾假设稀疏注意力能把长文本推理的显存占用降低 40% [M1]。\n- 该假设现已被推翻（status=refuted）[M1]；复现实验结果与此相反：实测降幅仅为 12%，而"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 3.0,
+          "answer_head": "关于显存优化的假设，当前结论如下：\n\n- 你曾假设稀疏注意力能把长文本推理的显存占用降低 40%，但**该假设已被推翻，不再成立** [M1]。\n- 推翻该假设的依据是：复现实验实测的降低幅度仅为 12%，而且在长序列下显存占用反而升高 ["
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "推翻",
+            "12"
+          ],
+          "cited": true,
+          "elapsed": 2.4,
+          "answer_head": "关于显存优化的假设，结论如下：\n\n- 原假设「稀疏注意力能把长文本推理显存占用降低 40%」**已被推翻，不再成立** [M1]。\n- 复现实验显示，实测仅降低 12%，且长序列下显存占用反而升高 [M2]。\n\n因此当前有效结论是：稀疏注意"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "qid": "q2_decision",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 4.3,
+          "answer_head": "**数据接入管道当前应采用流式管道方案**，但需注意该结论尚待验证。\n\n- 我原先假设「批处理管道是数据接入的最优解」[M7]，该假设**已被取代，不再成立**。\n- 随后我修正为：「流式管道取代批处理管道成为数据接入的最优解」[M6]。该"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 2.9,
+          "answer_head": "- 当前应采用**流式管道**：我已修正假设，认为流式管道取代批处理管道，成为数据接入的最优解 [M6]。\n- 需注意，该判断目前仍只是「已提出」的假设，记忆时间线中没有实验验证记录。\n- 原假设「批处理管道是最优解」已被取代，不再成立，不"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 3.6,
+          "answer_head": "- 按最新修正，数据接入应转向**流式管道**方案：我在 [M6] 提出「流式管道取代批处理管道成为数据接入最优解」，该假设当前状态为「提出」，尚未见验证结论 [M6]。\n- 原「批处理管道为最优解」的假设已被取代，不再作为当前有效结论 ["
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "qid": "q3_open",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 4.5,
+          "answer_head": "目前仍处于「提出」、尚未验证的假设有两条：\n\n1. **课程学习能加速小模型收敛**——该假设仅为提出状态，时间线中没有验证记录 [M5]。\n2. **流式管道取代批处理管道成为数据接入最优解**——这是对原假设的修正，同样处于提出状态，尚"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 4.7,
+          "answer_head": "目前记忆中处于「提出、尚未验证」状态的假设有两条：\n\n- **课程学习能加速小模型收敛**：状态为「提出」，尚未见到验证记录 [M5]。\n- **流式管道取代批处理管道成为数据接入最优解**：这是对原假设的修正，状态同为「提出」，尚无验证记"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "课程学习",
+            "流式"
+          ],
+          "cited": true,
+          "elapsed": 4.1,
+          "answer_head": "你有 2 个假设尚未验证（即仍处于“提出”状态）：\n\n1. **课程学习能加速小模型收敛**，目前状态为“提出”，即尚未验证 [M5]。\n2. **修正后的假设：流式管道取代批处理管道，成为数据接入最优解**，目前状态为“提出”，即尚未验证"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "qid": "q4_history",
+      "reps": [
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 2.1,
+          "answer_head": "混合检索的假设**已得到支持**：\n\n- 初假设认为混合检索能把召回率提升 15 个百分点 [M3]。\n- 实验实测提升 **16 个百分点**，支持该假设，当前仍为有效结论 [M4]。\n\n即：实际效果略高于原假设，方向正确，无需修正。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 2.2,
+          "answer_head": "混合检索的假设已验证并得到支持：\n\n- 当初假设：混合检索可把召回率提升 15 个百分点 [M3]。\n- 实验结果：召回率实际提升 16 个百分点，支持该假设 [M4]。\n\n即该假设目前成立，未被推翻或取代 [M3][M4]。"
+        },
+        {
+          "anchor_rate": 1.0,
+          "hits": [
+            "16",
+            "支持"
+          ],
+          "cited": true,
+          "elapsed": 2.0,
+          "answer_head": "- 你最初假设混合检索能把召回率提升 15 个百分点，当时处于「已支持」状态 [M3]。\n- 后续实验证实混合检索的召回率提升了 16 个百分点，实际表现略高于原假设，因此该假设成立 [M4]。\n- 这是时间线中状态为「已支持」的结论，未出"
+        }
+      ],
+      "anchor_rate_avg": 1.0,
+      "all_reps_full_hit": true,
+      "any_miss": false,
+      "n_err": 0
+    }
+  ]
+}

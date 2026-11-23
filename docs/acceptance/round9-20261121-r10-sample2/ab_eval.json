@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "base_url": "http://localhost:8101",
+    "paper_id": "p_1264458b503d",
+    "generated_at": "2026-11-23T05:56:11.456140+00:00",
+    "honest": "模拟语料 + 单 judge + 小样本（n=4 探针×2 口径），结果不外推",
+    "judge_model": "doubao-seed-2.1-lite"
+  },
+  "summary": {
+    "mem": {
+      "n": 5,
+      "anchor_rate_avg": 0.7,
+      "judge_score_avg": 1.6,
+      "stale_leak_count": 1,
+      "judge_stale_repeated_count": 0,
+      "m_citations_total": 11,
+      "avg_elapsed_s": 9.0
+    },
+    "base": {
+      "n": 5,
+      "anchor_rate_avg": 0.2,
+      "judge_score_avg": 1.0,
+      "stale_leak_count": 0,
+      "judge_stale_repeated_count": 0,
+      "m_citations_total": 0,
+      "avg_elapsed_s": 9.3
+    }
+  },
+  "results": [
+    {
+      "qid": "q1_status",
+      "mode": "mem",
+      "question": "我之前关于显存优化的假设，现在的结论是什么？",
+      "conversation_id": "ab_mem_aed5c096",
+      "elapsed_s": 7.0,
+      "gen_elapsed_s": 7.0,
+      "t_start": 1795413260.0,
+      "anchor_rate": 0.5,
+      "anchors": {
+        "推翻": true,
+        "12": false
+      },
+      "stale_leak": true,
+      "stale_terms": [
+        "降低 40%"
+      ],
+      "judge_score": 2,
+      "judge_stale_repeated": false,
+      "judge_reason": "命中假设已被推翻的核心结论，但未提及实测仅降12%、长序列显存反升的关键细节。",
+      "m_citations": 1,
+      "answer_chars": 80
+    },
+    {
+      "qid": "q1_status",
+      "mode": "base",
+      "question": "我之前关于显存优化的假设，现在的结论是什么？",
+      "conversation_id": "ab_base_d303463a",
+      "elapsed_s": 9.8,
+      "gen_elapsed_s": 9.8,
+      "t_start": 1795413269.2,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "推翻": false,
+        "12": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "回答未命中任何显存优化假设相关要点，未给出对应结论，仅说明未检索到相关依据。",
+      "m_citations": 0,
+      "answer_chars": 603
+    },
+    {
+      "qid": "q2_decision",
+      "mode": "mem",
+      "question": "数据接入管道现在应该采用什么方案？",
+      "conversation_id": "ab_mem_0129de0a",
+      "elapsed_s": 8.9,
+      "gen_elapsed_s": 8.9,
+      "t_start": 1795413281.0,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "流式": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中转向流式管道、批处理被取代的要点，未给出有效方案，泛泛称未找到依据。",
+      "m_citations": 0,
+      "answer_chars": 294
+    },
+    {
+      "qid": "q2_decision",
+      "mode": "base",
+      "question": "数据接入管道现在应该采用什么方案？",
+      "conversation_id": "ab_base_78b110fc",
+      "elapsed_s": 9.6,
+      "gen_elapsed_s": 9.6,
+      "t_start": 1795413292.0,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "流式": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中流式管道、批处理被取代的核心要点，未给出有效方案，仅泛称未找到依据。",
+      "m_citations": 0,
+      "answer_chars": 390
+    },
+    {
+      "qid": "q3_open",
+      "mode": "mem",
+      "question": "我还有哪些假设是没有被验证过的？",
+      "conversation_id": "ab_mem_b176b6fd",
+      "elapsed_s": 10.5,
+      "gen_elapsed_s": 10.5,
+      "t_start": 1795413303.3,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "课程学习": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 2,
+      "judge_stale_repeated": false,
+      "judge_reason": "命中课程学习加速小模型收敛未验证的要点，但额外编造了稀疏注意力降显存的未验证假设",
+      "m_citations": 2,
+      "answer_chars": 137
+    },
+    {
+      "qid": "q3_open",
+      "mode": "base",
+      "question": "我还有哪些假设是没有被验证过的？",
+      "conversation_id": "ab_base_f019cfed",
+      "elapsed_s": 9.7,
+      "gen_elapsed_s": 9.7,
+      "t_start": 1795413315.7,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "课程学习": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中课程学习加速小模型收敛的假设未验证的要点，仅称无相关依据，未给出有效信息。",
+      "m_citations": 0,
+      "answer_chars": 460
+    },
+    {
+      "qid": "q4_history",
+      "mode": "mem",
+      "question": "当初混合检索提升召回率的假设，后来验证得怎么样？",
+      "conversation_id": "ab_mem_4337543e",
+      "elapsed_s": 9.7,
+      "gen_elapsed_s": 9.7,
+      "t_start": 1795413328.0,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "16": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 2,
+      "judge_stale_repeated": false,
+      "judge_reason": "命中假设被支持成立的要点，但召回率提升数值为15个百分点，与标准的16个百分点不符",
+      "m_citations": 4,
+      "answer_chars": 78
+    },
+    {
+      "qid": "q4_history",
+      "mode": "base",
+      "question": "当初混合检索提升召回率的假设，后来验证得怎么样？",
+      "conversation_id": "ab_base_2f112825",
+      "elapsed_s": 7.3,
+      "gen_elapsed_s": 7.3,
+      "t_start": 1795413340.5,
+      "anchor_rate": 0.0,
+      "anchors": {
+        "16": false
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中召回率提升16个百分点、假设成立的要点，未给出有效验证结论",
+      "m_citations": 0,
+      "answer_chars": 575
+    },
+    {
+      "qid": "q5_followup",
+      "mode": "mem",
+      "question": "那当初为什么提出这个显存优化的假设？",
+      "conversation_id": "ab_mem_aed5c096",
+      "elapsed_s": 8.8,
+      "gen_elapsed_s": 8.8,
+      "t_start": 1795413349.1,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "显存": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中提出动机要点，仅称无相关记录，未结合长文本推理显存压力的上下文作答。",
+      "m_citations": 4,
+      "answer_chars": 127
+    },
+    {
+      "qid": "q5_followup",
+      "mode": "base",
+      "question": "那当初为什么提出这个显存优化的假设？",
+      "conversation_id": "ab_base_d303463a",
+      "elapsed_s": 10.3,
+      "gen_elapsed_s": 10.3,
+      "t_start": 1795413359.5,
+      "anchor_rate": 1.0,
+      "anchors": {
+        "显存": true
+      },
+      "stale_leak": false,
+      "stale_terms": [],
+      "judge_score": 1,
+      "judge_stale_repeated": false,
+      "judge_reason": "未命中显存优化假设动机相关要点，未结合上下文作答，仅泛泛说明未检索到相关依据。",
+      "m_citations": 0,
+      "answer_chars": 613
+    }
+  ]
+}
